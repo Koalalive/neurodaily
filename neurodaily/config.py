@@ -363,14 +363,14 @@ def DEFAULT_CONFIG() -> Config:
         ),
     ]
     sources = {
-        "journal":    {"enabled": True, "max_results": 500, "lookback_days": 1},
-        "arxiv":      {"enabled": True, "max_results": 500, "lookback_days": 1},
-        "pubmed":     {"enabled": True, "max_results": 500, "lookback_days": 1},
-        "biorxiv":    {"enabled": True, "max_results": 500, "lookback_days": 1},
-        "fda_drugs":  {"enabled": True, "max_results": 500, "lookback_days": 1},
-        "fda_devices":{"enabled": True, "max_results": 500, "lookback_days": 1},
-        "trials":     {"enabled": True, "max_results": 500, "lookback_days": 1},
-        "policy":     {"enabled": True, "max_results": 500, "lookback_days": 1},
+        "journal":    {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "arxiv":      {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "pubmed":     {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "biorxiv":    {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "fda_drugs":  {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "fda_devices":{"enabled": True, "max_results": 500, "lookback_days": 2},
+        "trials":     {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "policy":     {"enabled": True, "max_results": 500, "lookback_days": 2},
     }
     output = {
         "dir": DEFAULT_DIRS["output"],
