@@ -57,15 +57,15 @@
 <title>NeuroDaily — {{ result.config_profile }} | {{ today }}</title>
 <style>
   :root {
-    --bg: #0f1420; --panel: #171f2f; --panel2: #1d2740;
-    --accent: #38bdf8; --accent2: #818cf8; --text: #e2e8f0;
-    --muted: #94a3b8; --border: #2a3550; --ok: #34d399; --warn: #fbbf24;
+    --bg: #000000; --panel: #0d0d0d; --panel2: #141414;
+    --accent: #38bdf8; --accent2: #818cf8; --text: #e8e8e8;
+    --muted: #8a8a8a; --border: #222222; --ok: #34d399; --warn: #fbbf24;
   }
   * { box-sizing: border-box; }
   body { margin:0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
          background: var(--bg); color: var(--text); line-height: 1.55; }
   header { padding: 32px 24px 20px; border-bottom: 1px solid var(--border);
-           background: linear-gradient(120deg, #101827, #14203c); }
+           background: #000000; }
   .wrap { max-width: 1080px; margin: 0 auto; }
   h1 { margin:0; font-size: 1.9rem; letter-spacing:-.01em; }
   h1 .logo { background: linear-gradient(90deg, var(--accent), var(--accent2));
@@ -149,12 +149,12 @@
   .health th, .health td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
   .health th { color: var(--muted); font-weight:600; }
   .ok { color: var(--ok); } .bad { color: var(--warn); }
-  .prompt { background: #0b1220; border:1px solid var(--border); border-radius:12px;
+  .prompt { background: #0a0a0a; border:1px solid var(--border); border-radius:12px;
             padding:16px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
-            font-size:.78rem; white-space:pre-wrap; color:#cbd5e1; }
+            font-size:.78rem; white-space:pre-wrap; color:#c8c8c8; }
   footer { text-align:center; color: var(--muted); font-size:.75rem; padding: 24px; border-top:1px solid var(--border); }
   .toolbar { display:flex; gap:10px; margin-top:16px; align-items:center; flex-wrap:wrap; }
-  .btn { background: linear-gradient(90deg, var(--accent), var(--accent2)); color:#0b1220;
+  .btn { background: linear-gradient(90deg, var(--accent), var(--accent2)); color:#000000;
          border:none; border-radius:10px; padding:8px 18px; font-size:.88rem; font-weight:600;
          cursor:pointer; text-decoration:none; transition: filter .15s, transform .15s; }
   .btn:hover { filter:brightness(1.12); transform:translateY(-1px); }

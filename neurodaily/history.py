@@ -218,14 +218,14 @@ def render_history_page(limit: int = 200) -> str:
     return f"""<!DOCTYPE html><html><head><meta charset='utf-8'>
 <title>NeuroDaily — History</title>
 <style>
- body{{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f1420;color:#e2e8f0;margin:0}}
+ body{{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#000;color:#e8e8e8;margin:0}}
  .wrap{{max-width:1080px;margin:0 auto;padding:24px}}
  h2{{color:#38bdf8;margin:0 0 12px}}
  a{{color:#38bdf8;text-decoration:none}} a:hover{{text-decoration:underline}}
  table{{width:100%;border-collapse:collapse;font-size:.85rem}}
- th,td{{text-align:left;padding:8px;border-bottom:1px solid #2a3550}}
- th{{color:#94a3b8}} .src{{color:#94a3b8;font-size:.75rem}}
+ th,td{{text-align:left;padding:8px;border-bottom:1px solid #222}}
+ th{{color:#8a8a8a}} .src{{color:#8a8a8a;font-size:.75rem}}
  .ok{{color:#34d399}} .warn{{color:#fbbf24}} .bad{{color:#f87171}}
- .note{{color:#94a3b8;font-size:.75rem}}
- .empty{{color:#94a3b8;padding:12px;border:1px dashed #2a3550;border-radius:12px}}
+ .note{{color:#8a8a8a;font-size:.75rem}}
+ .empty{{color:#8a8a8a;padding:12px;border:1px dashed #222;border-radius:12px}}
 </style></head><body>{body}</body></html>"""

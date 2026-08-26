@@ -217,19 +217,19 @@ def _refresh_static_history() -> None:
 
 def _css() -> str:
     return ("<style>"
-            "body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1420;color:#e2e8f0;margin:0}"
+            "body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#000;color:#e8e8e8;margin:0}"
             ".wrap{max-width:1080px;margin:0 auto;padding:24px}"
-            "header.mini{padding:20px 24px;border-bottom:1px solid #2a3550;background:#101827}"
+            "header.mini{padding:20px 24px;border-bottom:1px solid #222;background:#000}"
             "header.mini h1{margin:0;font-size:1.3rem;color:#38bdf8}"
             "a{color:#38bdf8;text-decoration:none}a:hover{text-decoration:underline}"
             "table.hist{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:12px}"
-            "table.hist th,table.hist td{text-align:left;padding:8px;border-bottom:1px solid #2a3550}"
-            "table.hist th{color:#94a3b8} .hist-src{color:#94a3b8;font-size:.75rem}"
+            "table.hist th,table.hist td{text-align:left;padding:8px;border-bottom:1px solid #222}"
+            "table.hist th{color:#8a8a8a} .hist-src{color:#8a8a8a;font-size:.75rem}"
             ".ok{color:#34d399}.bad{color:#fbbf24}.warn{color:#fbbf24}"
-            ".empty{color:#94a3b8;padding:12px;border:1px dashed #2a3550;border-radius:12px}"
-            ".del{color:#f87171}.btn-danger{background:#7f1d1d;color:#fecaca;border:1px solid #b91c1c;"
+            ".empty{color:#8a8a8a;padding:12px;border:1px dashed #222;border-radius:12px}"
+            ".del{color:#f87171}.btn-danger{background:#1c0a0a;color:#fecaca;border:1px solid #b91c1c;"
             "border-radius:8px;padding:6px 14px;font-size:.8rem;cursor:pointer}"
-            ".btn-danger:hover{background:#991b1b}"
+            ".btn-danger:hover{background:#2a0f0f}"
             "</style>")
 
 
