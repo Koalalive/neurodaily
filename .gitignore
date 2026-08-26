@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.DS_Store
+
+# runtime output: generated reports, history DB, and logs are personal data
+output/
+
+# machine-generated config with local absolute paths (regenerate via `config init`)
+config/config.json
+scripts/*.plist

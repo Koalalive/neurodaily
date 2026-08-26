@@ -1,0 +1,325 @@
+{% macro tags_meta(it, badge_class) -%}
+<div class="meta">
+  <span class="badge {{ badge_class }}">{{ it.kind_label }}</span>
+  {% if "top-journal" in it.tags and it.source != "pubmed" and it.source != "arxiv" %}<span class="badge b-journal">★ {{ it.source }}</span>{% endif %}
+  {% if it.extra.get('journal') and it.extra.get('journal') != it.source %}<span class="tag tj">{{ it.extra.get('journal') }}</span>{% endif %}
+  <span class="tag t">{{ it.source }}</span>
+  {% if it.date_display %}<span class="tag t">{{ it.date_display }}</span>{% endif %}
+  {% if it.doi %}<span class="tag t">doi:{{ it.doi }}</span>{% endif %}
+  {% for t in it.tags[:4] if t != "top-journal" %}<span class="tag">{{ t }}</span>{% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro block_section(key, title, desc, badge_class) -%}
+<section>
+  <div class="sec-head">
+    <div>
+      <h2 class="sec-title"><span class="dot"></span>{{ title }}
+        <span class="count">({{ result.sections.get(key, [])|length }})</span></h2>
+      <p class="sec-desc">{{ desc }}</p>
+    </div>
+    <div class="sec-actions">
+      <button class="minibtn" onclick="toggleAll(this, true)" type="button">Expand</button>
+      <button class="minibtn" onclick="toggleAll(this, false)" type="button">Collapse</button>
+    </div>
+  </div>
+  {% set entries = result.sections.get(key, []) %}
+  {% if entries %}
+    {% for it in entries %}
+    <details class="card">
+      <summary>
+        <span class="chevron"></span>
+        <div class="card-main">
+          <h3>{% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>{% else %}{{ it.title }}{% endif %}</h3>
+          {{ tags_meta(it, badge_class) }}
+        </div>
+      </summary>
+      <div class="card-body">
+        {% if it.summary %}<p class="summary">{{ it.summary }}</p>{% endif %}
+        {% if it.author_display %}<div class="byline"><b>Authors:</b> {{ it.author_display }}{% if it.corresponding_display %} <span class="corr">✉ corresponding: {{ it.corresponding_display }}</span>{% endif %}</div>{% endif %}
+        {% if it.affiliation_display %}<div class="byline aff"><b>Affiliations:</b> {{ it.affiliation_display }}</div>{% endif %}
+        <div class="foot">
+          {% if it.url %} · <a class="ext" href="{{ it.url }}" target="_blank" rel="noopener">Read ↗</a>{% endif %}
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+  {% else %}
+    <div class="empty">No items retrieved for this category.</div>
+  {% endif %}
+</section>
+{%- endmacro %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroDaily — {{ result.config_profile }} | {{ today }}</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171f2f; --panel2: #1d2740;
+    --accent: #38bdf8; --accent2: #818cf8; --text: #e2e8f0;
+    --muted: #94a3b8; --border: #2a3550; --ok: #34d399; --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--text); line-height: 1.55; }
+  header { padding: 32px 24px 20px; border-bottom: 1px solid var(--border);
+           background: linear-gradient(120deg, #101827, #14203c); }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { margin:0; font-size: 1.9rem; letter-spacing:-.01em; }
+  h1 .logo { background: linear-gradient(90deg, var(--accent), var(--accent2));
+             -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); margin-top: 6px; font-size: .95rem; }
+  .chips { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+          padding: 4px 12px; font-size: .8rem; color: var(--accent); }
+  .stats { display:flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+  .stat { background: var(--panel); border:1px solid var(--border); border-radius: 12px;
+          padding: 10px 16px; min-width: 120px; }
+  .stat b { display:block; font-size: 1.4rem; color: var(--accent); }
+  .stat span { font-size:.75rem; color: var(--muted); text-transform: uppercase; letter-spacing:.05em; }
+
+  main { padding: 24px; }
+  section { margin-bottom: 40px; }
+  .sec-head { display:flex; justify-content: space-between; align-items:flex-start; gap:16px; margin-bottom: 4px; }
+  .sec-title { font-size: 1.15rem; margin: 0 0 4px; display:flex; align-items:center; gap:10px; }
+  .sec-title .dot { width:9px; height:9px; border-radius:50%; background: var(--accent); }
+  .sec-title .count { color: var(--muted); font-size:.85rem; font-weight: normal; }
+  .sec-desc { color: var(--muted); font-size:.85rem; margin: 0; }
+  .sec-actions { display:flex; gap: 6px; flex-shrink: 0; padding-top: 4px; }
+  .minibtn { background: var(--panel); color: var(--muted); border:1px solid var(--border);
+             border-radius: 8px; font-size:.75rem; padding: 4px 10px; cursor:pointer; transition: color .15s, border-color .15s; }
+  .minibtn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Collapsible cards */
+  .card { background: var(--panel); border:1px solid var(--border); border-radius: 12px;
+          margin-bottom: 12px; overflow:hidden; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .card > summary { list-style: none; cursor: pointer; display:flex; align-items:flex-start;
+                    gap: 12px; padding: 14px 18px; user-select: none; }
+  .card > summary::-webkit-details-marker { display: none; }
+  .card > summary .chevron { flex-shrink: 0; width: 12px; height: 12px; margin-top: 5px;
+      border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent);
+      transform: rotate(45deg); transition: transform .2s ease; }
+  .card[open] > summary .chevron { transform: rotate(225deg); }
+  .card-main { flex: 1; min-width: 0; }
+  .card h3 { margin:0 0 6px; font-size:1.02rem; }
+  .card h3 a { color: var(--text); text-decoration: none; }
+  .card h3 a:hover { color: var(--accent); }
+  .meta { display:flex; flex-wrap: wrap; gap: 8px; align-items:center; }
+  .badge { font-size:.68rem; padding:2px 8px; border-radius:999px; letter-spacing:.03em;
+           text-transform: uppercase; border:1px solid transparent; }
+  .b-doc      { background:#0e7490; }
+  .b-drug     { background:#7c3aed; }
+  .b-device   { background:#0f766e; }
+  .b-trial    { background:#b45309; }
+  .b-news     { background:#be185d; }
+  .b-policy   { background:#1d4ed8; }
+  .b-conference{background:#a21caf; }
+  .b-journal  { background:#b45309; color:#fff; font-weight:600; }
+  .tag { background: var(--panel2); color: var(--accent2); font-size:.72rem;
+         padding:2px 8px; border-radius:999px; }
+  .tag.t { color: var(--muted); }
+  .tag.tj { background:#38260a; color:#fbbf24; border:1px solid #5a3d12; }
+  .card-body { padding: 0 18px 14px 42px; }
+  .summary { color: var(--muted); font-size:.88rem; margin:0 0 8px; }
+  .byline { font-size:.8rem; color: var(--accent2); margin:0 0 4px; }
+  .byline b { color: var(--muted); font-weight:600; }
+  .byline.aff { color: var(--muted); }
+  .corr { color: var(--warn); font-weight:600; }
+  .foot { color: var(--muted); font-size:.75rem; }
+  a.ext { color: var(--accent); text-decoration:none; font-size:.82rem; }
+  a.ext:hover { text-decoration: underline; }
+  .empty { color: var(--muted); padding: 12px; border:1px dashed var(--border); border-radius: 12px; }
+
+  /* Journal grid */
+  .journals { display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap:12px; }
+  .journal { background: var(--panel); border:1px solid var(--border); border-radius:12px;
+             padding: 14px 16px; transition: border-color .15s, transform .15s; }
+  .journal:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .journal h4 { margin:0 0 4px; font-size:.98rem; }
+  .journal h4 a { color: var(--text); text-decoration:none; }
+  .journal h4 a:hover { color: var(--accent); }
+  .journal .cat { color: var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
+
+  .health { background: var(--panel); border:1px solid var(--border); border-radius:12px;
+            padding:16px; margin-top: 8px; }
+  .health table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  .health th, .health td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+  .health th { color: var(--muted); font-weight:600; }
+  .ok { color: var(--ok); } .bad { color: var(--warn); }
+  .prompt { background: #0b1220; border:1px solid var(--border); border-radius:12px;
+            padding:16px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+            font-size:.78rem; white-space:pre-wrap; color:#cbd5e1; }
+  footer { text-align:center; color: var(--muted); font-size:.75rem; padding: 24px; border-top:1px solid var(--border); }
+  .toolbar { display:flex; gap:10px; margin-top:16px; align-items:center; flex-wrap:wrap; }
+  .btn { background: linear-gradient(90deg, var(--accent), var(--accent2)); color:#0b1220;
+         border:none; border-radius:10px; padding:8px 18px; font-size:.88rem; font-weight:600;
+         cursor:pointer; text-decoration:none; transition: filter .15s, transform .15s; }
+  .btn:hover { filter:brightness(1.12); transform:translateY(-1px); }
+  .btn:disabled { opacity:.55; cursor:wait; }
+  .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent);
+               font-weight:500; }
+  .runmsg { font-size:.8rem; color:var(--muted); }
+  .runmsg.ok { color:var(--ok); }
+  @media (max-width: 640px) { .sec-head { flex-direction: column; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1><span class="logo">NeuroDaily</span> — neuroscience &amp; psychiatry digest</h1>
+    <div class="sub">Auto-aggregated {{ today }} · profile: {{ result.config_profile }}</div>
+    {% if result.config %}
+    <div class="chips">
+      {% for d in result.config.active_disciplines() %}<span class="chip">{{ d.name }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    <div class="stats">
+      <div class="stat"><b>{{ result.items|length }}</b><span>Items</span></div>
+      <div class="stat"><b>{{ result.sections.get('papers', [])|length }}</b><span>Papers</span></div>
+      <div class="stat"><b>{{ result.sections.get('industry', [])|length }}</b><span>Industry</span></div>
+      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|length }}</b><span>Trials / Conf</span></div>
+      <div class="stat"><b>{{ result.sections.get('policy', [])|length }}</b><span>Policy / News</span></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="runNow" type="button">▶ Run now</button>
+      <a class="btn ghost" id="histLink" href="/history">History</a>
+      <a class="btn ghost" id="promptLink" href="/api/prompt" target="_blank" rel="noopener">Focus prompt</a>
+      <span class="runmsg" id="runMsg"></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  {{ block_section('papers', '📄 Latest Papers', 'New PubMed, arXiv, and bioRxiv preprints matching your focus.', 'b-doc') }}
+  {{ block_section('industry', '💊 Commercial & Regulatory Progress', 'Recent FDA drug approvals and 510(k) device clearances.', 'b-drug') }}
+  {{ block_section('trials_conferences', '🧪 Trials & Conference Signals', 'New + updated clinical studies and event signals.', 'b-trial') }}
+  {{ block_section('policy', '🏛️ Policy, Funding & News', 'Institutional press, agency announcements, and news.', 'b-policy') }}
+
+  {% if result.config and result.config.journals %}
+  <section>
+    <h2 class="sec-title"><span class="dot"></span>Top Journals
+      <span class="count">({{ result.config.journals|length }})</span></h2>
+    <p class="sec-desc">Curated watch-list of leading journals — click to browse each site.</p>
+    <div class="journals">
+      {% for j in result.config.journals %}
+      <div class="journal">
+        <div class="cat">{{ j.category }}</div>
+        <h4>{% if j.url %}<a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.name }}</a>{% else %}{{ j.name }}{% endif %}</h4>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section>
+    <h2 class="sec-title"><span class="dot"></span>Source Health</h2>
+    <div class="health">
+      <table>
+        <thead><tr><th>Source</th><th>Status</th><th>Retrieved</th><th>Time</th></tr></thead>
+        <tbody>
+        {% for h in result.health %}
+          <tr>
+            <td>{{ h.source }}</td>
+            <td>{% if h.ok %}<span class="ok">✓ OK</span>{% else %}<span class="bad">✗ failed</span>{% endif %}</td>
+            <td>{{ h.count }}</td>
+            <td>{{ h.ms }} ms</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if result.config %}
+  <section id="prompt">
+    <h2 class="sec-title"><span class="dot"></span>Structured Focus Prompt</h2>
+    <div class="prompt">{{ result.config.to_prompt() }}</div>
+  </section>
+  {% endif %}
+
+  {% if result.errors %}
+  <section>
+    <h2 class="sec-title"><span class="dot"></span>Warnings</h2>
+    <div class="empty">
+      {% for e in result.errors %}<div>⚠ {{ e }}</div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</main>
+
+<script>
+// In file:// mode (report opened directly from disk) the FastAPI routes don't
+// exist, so remap History -> sibling history.html and Focus prompt -> the inline
+// prompt section; Run now can't work without a server, so show a hint.
+var IS_FILE = (location.protocol === 'file:');
+if (IS_FILE) {
+  var histLink = document.getElementById('histLink');
+  if (histLink) histLink.href = 'history.html';
+  var promptLink = document.getElementById('promptLink');
+  if (promptLink) {
+    promptLink.removeAttribute('target');
+    promptLink.href = '#prompt';
+  }
+}
+
+function toggleAll(btn, open) {
+  var section = btn.closest('section');
+  var cards = section.querySelectorAll('details.card');
+  cards.forEach(function (d) { d.open = open; });
+}
+
+var runBtn = document.getElementById('runNow');
+var runMsg = document.getElementById('runMsg');
+if (runBtn) {
+  runBtn.addEventListener('click', function () {
+    if (IS_FILE) {
+      runMsg.textContent = 'Run now needs the web app. Start it with: ' +
+        'python -m neurodaily serve --port 8031  (then open http://127.0.0.1:8031)';
+      runMsg.className = 'runmsg bad';
+      return;
+    }
+    runBtn.disabled = true;
+    runMsg.textContent = 'Searching (dedup-aware: skips if same query already ran today)…';
+    runMsg.className = 'runmsg';
+    fetch('/api/run', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        runMsg.textContent = 'Search started at ' + d.started_at.slice(0, 19).replace('T', ' ') +
+          '. Refreshing when done…';
+        pollUntilDone(d.started_at);
+      })
+      .catch(function (e) {
+        runBtn.disabled = false;
+        runMsg.textContent = 'Error: ' + e;
+        runMsg.className = 'runmsg bad';
+      });
+  });
+}
+
+function pollUntilDone(startedAt) {
+  var tries = 0;
+  var timer = setInterval(function () {
+    tries += 1;
+    fetch('/api/status').then(function (r) { return r.json(); }).then(function (s) {
+      if (s.last_run && s.last_run >= startedAt) {
+        clearInterval(timer);
+        runMsg.textContent = 'Done — ' + s.item_count + ' items. Reloading…';
+        runMsg.className = 'runmsg ok';
+        window.location.reload();
+      } else if (tries > 120) {
+        clearInterval(timer);
+        runBtn.disabled = false;
+        runMsg.textContent = 'Timed out waiting for the search; check /history.';
+        runMsg.className = 'runmsg bad';
+      }
+    }).catch(function () { /* keep polling */ });
+  }, 2000);
+}
+</script>
+
+<footer>Generated automatically by NeuroDaily · {{ result.generated_at }}</footer>
+</body>
+</html>
