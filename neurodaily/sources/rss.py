@@ -108,6 +108,16 @@ def fetch(config, logger=None) -> list[Item]:
         seen.add(it.url)
         deduped.append(it)
 
+    # Same-day filter: RSS feeds carry many historical items (weeks old), so
+    # keep only entries published today when lookback_days=1.
+    from datetime import datetime, timedelta
+    if lookback <= 1:
+        today = datetime.now().strftime("%Y-%m-%d")
+        deduped = [it for it in deduped if it.date.startswith(today)]
+    else:
+        cutoff = (datetime.now() - timedelta(days=lookback)).strftime("%Y-%m-%d")
+        deduped = [it for it in deduped if it.date >= cutoff]
+
     deduped.sort(key=lambda i: i.date or "0000-00-00", reverse=True)
     deduped = deduped[:max_results]
 

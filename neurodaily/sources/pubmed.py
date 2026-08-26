@@ -100,9 +100,20 @@ def _parse_article(pubmed_article) -> Item | None:
                     affiliations.append(v)
 
     pmid = _text(pubmed_article.find("MedlineCitation/PMID"), ".")
-    pubdate = _text(medline, "Journal/JournalIssue/PubDate/Year") or _text(
-        medline, "Journal/JournalIssue/PubDate/MedlineDate")
-    pubdate = parse_date_any(pubdate)
+    # Full date: PubMed PubDate has <Year><Month><Day>; fall back to MedlineDate
+    # when day-level granularity is absent.
+    pd = medline.find("Journal/JournalIssue/PubDate")
+    year = _text(pd, "Year") if pd is not None else ""
+    month = _text(pd, "Month") if pd is not None else ""
+    day = _text(pd, "Day") if pd is not None else ""
+    if year and month and day:
+        months = {"Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05",
+                  "Jun": "06", "Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10",
+                  "Nov": "11", "Dec": "12"}
+        m = months.get(month[:3], "01")
+        pubdate = f"{year}-{m}-{int(day):02d}"
+    else:
+        pubdate = parse_date_any(_text(pd, "MedlineDate") if pd is not None else "") or year
 
     return Item(
         title=title,
@@ -163,4 +174,9 @@ def fetch(config, logger=None) -> list[Item]:
             item = _parse_article(pa)
             if item:
                 items.append(item)
+
+    # Strict same-day filter ("last N days"[dp] can include yesterday's entries).
+    if lookback <= 1:
+        today = datetime.now().strftime("%Y-%m-%d")
+        items = [it for it in items if it.date.startswith(today)]
     return items

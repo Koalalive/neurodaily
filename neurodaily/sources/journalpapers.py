@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 
 from .http import get, parse_date_any, strip_html
 from ..models import Item
@@ -132,5 +133,14 @@ def fetch(config, logger=None) -> list[Item]:
         if it.url:
             seen.add(it.url)
         deduped.append(it)
+    # Strict same-day filter: journal feeds return dozens of historical articles,
+    # so keep only entries published today (lookback_days=1 == today).
+    if lookback <= 1:
+        today = datetime.now().strftime("%Y-%m-%d")
+        deduped = [it for it in deduped if it.date.startswith(today)]
+    else:
+        cutoff = datetime.now() - timedelta(days=lookback)
+        cutoff_s = cutoff.strftime("%Y-%m-%d")
+        deduped = [it for it in deduped if it.date >= cutoff_s]
     deduped.sort(key=lambda i: i.date or "0000-00-00", reverse=True)
     return deduped[:max_results]
