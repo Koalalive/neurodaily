@@ -151,7 +151,7 @@ def expand_llm(limit: int | None = None, model: str | None = None,
                     cache[_key(e.get("year"), e.get("title"))] = body
                     done += 1
                     print(f"[deepen] {done}/{len(todo)} {e.get('year')} {e.get('title')} ({len(body)} 字)", flush=True)
-                    if done % 10 == 0:
+                    if done % 5 == 0:
                         save_cache(cache)
                 except Exception as exc:
                     print(f"[deepen] FAILED {e.get('year')} {e.get('title')}: {exc}", flush=True)
