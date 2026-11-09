@@ -42,11 +42,12 @@ def _inject_on_this_day(html: str, result: DigestResult) -> str:
     section = render_section_html(events)
     if not section:
         return html
-    if "</main>" in html:
-        return html.replace("</main>", section + "\n</main>", 1)
+    for marker in ('<main class="wrap">', "<main>", "<main "):
+        if marker in html:
+            return html.replace(marker, marker + "\n" + section, 1)
     if "</body>" in html:
         return html.replace("</body>", section + "\n</body>", 1)
-    return html + section
+    return section + html
 
 
 _GRAPH_JS = r"""
