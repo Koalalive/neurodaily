@@ -86,6 +86,22 @@ class Config:
 
     # --------------------------------------------------------------- load
     @staticmethod
+    def from_dict(data: dict) -> "Config":
+        """Build a Config from a plain dict (used by the settings GUI to save)."""
+        if not data.get("disciplines"):
+            raise ValueError("config must define at least one discipline")
+        return Config(
+            profile=data.get("profile", "neuro"),
+            disciplines=[Discipline.from_dict(d) for d in data.get("disciplines", [])],
+            global_keywords=list(data.get("global_keywords", [])),
+            sources=dict(data.get("sources", {})),
+            output=dict(data.get("output", {})),
+            scheduled=dict(data.get("scheduled", {})),
+            policy_feeds=list(data.get("policy_feeds", [])),
+            journals=[Journal.from_dict(j) for j in data.get("journals", [])],
+        )
+
+    @staticmethod
     def load(path: str | None = None) -> "Config":
         """Load from a JSON file; if absent, return DEFAULT_CONFIG."""
         p = path or os.path.join(DEFAULT_DIRS["config"], "config.json")

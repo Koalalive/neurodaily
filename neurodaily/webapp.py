@@ -14,14 +14,16 @@ Routes:
 from __future__ import annotations
 
 import os
+import subprocess
 from datetime import datetime
 
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Config, DEFAULT_CONFIG
 from .digest import run as run_digest, render_html_for
+from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
 from . import history as hist
 
 
@@ -46,7 +48,8 @@ def create_app() -> FastAPI:
                                                      "trials_conferences": [], "policy": []},
                                   health=[], generated_at=datetime.now().isoformat(),
                                   config_profile=cfg.profile, config=cfg)
-        return render_html_for(result)
+        html = render_html_for(result)
+        return html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1)
 
     @app.post("/api/run")
     def api_run(background_tasks: BackgroundTasks, force: bool = False):
@@ -105,6 +108,93 @@ def create_app() -> FastAPI:
         if not os.path.exists(path):
             return HTMLResponse("<h3>report not found</h3>", status_code=404)
         return FileResponse(path, media_type="text/html")
+
+    @app.get("/settings", response_class=HTMLResponse)
+    def settings_page():
+        return SETTINGS_HTML
+
+    @app.get("/api/config")
+    def api_config_get():
+        return JSONResponse(Config.load().to_dict())
+
+    @app.post("/api/config")
+    async def api_config_post(request: Request):
+        try:
+            data = await request.json()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": f"invalid json: {e}"}, status_code=400)
+        if not isinstance(data, dict) or not data.get("disciplines"):
+            return JSONResponse({"ok": False, "error": "disciplines 不能为空"}, status_code=400)
+        try:
+            cfg = Config.from_dict(data)
+            path = cfg.save()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        return JSONResponse({"ok": True, "path": path})
+
+    @app.post("/api/config/reset")
+    def api_config_reset():
+        try:
+            path = DEFAULT_CONFIG().save()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        return JSONResponse({"ok": True, "path": path})
+
+    def _launchd_label() -> str:
+        cfg = Config.load()
+        sched = cfg.scheduled or {}
+        return ((sched.get("launchd") or {}).get("label")) or "com.neurodaily.daily"
+
+    @app.get("/api/launchd/status")
+    def api_launchd_status():
+        cfg = Config.load()
+        sched = cfg.scheduled or {}
+        label = _launchd_label()
+        dest = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
+        loaded = False
+        try:
+            out = subprocess.run(["launchctl", "list"], capture_output=True, text=True, timeout=10).stdout
+            loaded = label in out
+        except Exception:
+            pass
+        return JSONResponse({
+            "installed": os.path.exists(dest),
+            "loaded": loaded,
+            "label": label,
+            "schedule": f"{int(sched.get('hour', 8)):02d}:{int(sched.get('minute', 0)):02d}",
+        })
+
+    @app.post("/api/launchd/install")
+    def api_launchd_install():
+        try:
+            from .cli import _plist_content
+            cfg = Config.load()
+            pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            label = _launchd_label()
+            content = _plist_content(cfg, pkg_root)
+            plist_path = os.path.join(pkg_root, "scripts", f"{label}.plist")
+            os.makedirs(os.path.dirname(plist_path), exist_ok=True)
+            with open(plist_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            dest = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
+            subprocess.run(["cp", plist_path, dest], check=False)
+            subprocess.run(["launchctl", "unload", dest], check=False)
+            subprocess.run(["launchctl", "load", "-w", dest], check=False)
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        return JSONResponse({"ok": True})
+
+    @app.post("/api/launchd/uninstall")
+    def api_launchd_uninstall():
+        try:
+            label = _launchd_label()
+            dest = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
+            subprocess.run(["launchctl", "unload", dest], check=False)
+            if os.path.exists(dest):
+                os.remove(dest)
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        return JSONResponse({"ok": True})
 
     # ------------------------------------------------------------- history
     @app.get("/history", response_class=HTMLResponse)
