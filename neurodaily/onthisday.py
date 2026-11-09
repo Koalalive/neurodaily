@@ -1064,11 +1064,193 @@ EXTRA4: list[dict] = [
 ]
 
 
+EXTRA5: list[dict] = [
+    dict(year=1900, category="psychiatry", kind="discovery", title="精神科护理", text="专业精神科护理体系建立，强调安全、观察与照护。"),
+    dict(year=1910, category="psychiatry", kind="discovery", title="精神卫生诊所", text="门诊式精神卫生服务在社区出现。"),
+    dict(year=1920, category="psychiatry", kind="discovery", title="儿童指导运动", text="儿童指导诊所关注行为与家庭环境。"),
+    dict(year=1930, category="psychiatry", kind="discovery", title="心理测验应用", text="心理测验用于精神科评估与分类。"),
+    dict(year=1940, category="psychiatry", kind="discovery", title="战时神经症", text="战争推动对急性应激反应与创伤的认识。"),
+    dict(year=1950, category="psychiatry", kind="discovery", title="开放病房", text="精神科开放病房与治疗性社区理念兴起。"),
+    dict(year=1960, category="psychiatry", kind="discovery", title="社区药物治疗", text="抗精神病药使社区治疗与随访成为可能。"),
+    dict(year=1970, category="psychiatry", kind="discovery", title="去机构化高峰", text="1970 年代大量精神科床位关闭，社区服务承压。"),
+    dict(year=1980, category="psychiatry", kind="discovery", title="病例管理", text="病例管理协调服务，改善严重精神障碍连续性照护。"),
+    dict(year=1990, category="psychiatry", kind="discovery", title="主动式社区治疗", text="ACT 模式以多学科团队提供高强度社区服务。"),
+    dict(year=2000, category="psychiatry", kind="discovery", title="早期干预服务", text="早期干预团队覆盖首发精神病与高危人群。"),
+    dict(year=2010, category="psychiatry", kind="discovery", title="康复服务", text="康复服务强调就业、住房与社会参与。"),
+    dict(year=2020, category="psychiatry", kind="discovery", title="整合式照护", text="精神与躯体健康整合服务模式推广。"),
+    dict(year=1950, category="psychiatry", kind="discovery", title="抑郁电休克", text="ECT 用于严重抑郁，成为快速起效的物理治疗。"),
+    dict(year=1960, category="psychiatry", kind="discovery", title="锂盐试验", text="锂盐维持治疗试验支持其在双相障碍中的预防作用。"),
+    dict(year=1970, category="psychiatry", kind="discovery", title="抗抑郁试验", text="随机对照试验成为抗抑郁药评价标准。"),
+    dict(year=1980, category="psychiatry", kind="discovery", title="双相障碍管理", text="双相障碍的维持治疗与复发预防体系建立。"),
+    dict(year=1990, category="psychiatry", kind="discovery", title="心境稳定剂选择", text="心境稳定剂的比较与联合策略逐步明确。"),
+    dict(year=2000, category="psychiatry", kind="discovery", title="双相指南", text="循证指南规范双相障碍的分期治疗。"),
+    dict(year=2010, category="psychiatry", kind="discovery", title="双相精准治疗", text="生物标志与个体化选药用于双相障碍。"),
+    dict(year=1950, category="psychiatry", kind="discovery", title="焦虑障碍", text="焦虑障碍的临床分类与治疗逐步成形。"),
+    dict(year=1960, category="psychiatry", kind="drug", title="苯二氮卓时代", text="苯二氮卓类成为焦虑与失眠的主要药物。"),
+    dict(year=1970, category="psychiatry", kind="discovery", title="惊恐障碍", text="惊恐障碍被识别为独立诊断。"),
+    dict(year=1980, category="psychiatry", kind="discovery", title="强迫症治疗", text="暴露与反应预防成为强迫症的循证治疗。"),
+    dict(year=1990, category="psychiatry", kind="drug", title="SSRI 治疗强迫", text="SSRI 成为强迫症的一线药物治疗。"),
+    dict(year=2000, category="psychiatry", kind="discovery", title="焦虑指南", text="焦虑障碍的阶梯治疗与随访规范建立。"),
+    dict(year=2010, category="psychiatry", kind="discovery", title="CBT 治疗焦虑", text="CBT 与数字干预扩展焦虑障碍的可及治疗。"),
+    dict(year=1960, category="psychiatry", kind="discovery", title="PTSD 概念形成", text="创伤后应激障碍逐步被识别与分类。"),
+    dict(year=1970, category="psychiatry", kind="discovery", title="创伤治疗", text="创伤聚焦的心理干预开始系统发展。"),
+    dict(year=1980, category="psychiatry", kind="discovery", title="PTSD 诊断标准", text="PTSD 进入正式诊断体系。"),
+    dict(year=1990, category="psychiatry", kind="discovery", title="EMDR 推广", text="EMDR 用于创伤记忆加工。"),
+    dict(year=2000, category="psychiatry", kind="discovery", title="创伤聚焦 CBT", text="创伤聚焦 CBT 成为 PTSD 的一线心理治疗。"),
+    dict(year=2010, category="psychiatry", kind="discovery", title="复杂创伤", text="复杂创伤与发育性创伤被单独讨论。"),
+    dict(year=1960, category="psychiatry", kind="discovery", title="边缘型人格", text="边缘型人格障碍的临床特征被系统描述。"),
+    dict(year=1970, category="psychiatry", kind="discovery", title="人格障碍分类", text="人格障碍的分类与评估逐步规范。"),
+    dict(year=1980, category="psychiatry", kind="discovery", title="DBT 用于边缘型", text="DBT 被证实可减少自伤与情绪失控。"),
+    dict(year=1990, category="psychiatry", kind="discovery", title="人格障碍治疗", text="结构化心理治疗成为人格障碍的核心。"),
+    dict(year=2000, category="psychiatry", kind="discovery", title="图式治疗", text="图式治疗用于难治性人格障碍。"),
+    dict(year=2010, category="psychiatry", kind="discovery", title="人格障碍指南", text="指南强调分型、共病与长期随访。"),
+    dict(year=1960, category="psychiatry", kind="discovery", title="物质使用障碍", text="物质使用障碍被纳入精神科诊断与治疗。"),
+    dict(year=1970, category="psychiatry", kind="discovery", title="酒精依赖治疗", text="酒精依赖的戒断与康复服务发展。"),
+    dict(year=1980, category="psychiatry", kind="discovery", title="阿片依赖治疗", text="阿片依赖的药物辅助治疗扩展。"),
+    dict(year=1990, category="psychiatry", kind="discovery", title="可卡因依赖", text="可卡因依赖的心理社会干预受到研究。"),
+    dict(year=2000, category="psychiatry", kind="discovery", title="药物辅助治疗", text="药物与心理社会干预结合成为成瘾治疗标准。"),
+    dict(year=2010, category="psychiatry", kind="discovery", title="阿片危机", text="阿片过量死亡上升推动处方监管与纳洛酮普及。"),
+    dict(year=2020, category="psychiatry", kind="discovery", title="减害扩展", text="减害服务与低门槛治疗扩大覆盖。"),
+    dict(year=1950, category="neurology", kind="device", title="脑电定位", text="脑电图用于致痫灶的初步定位。"),
+    dict(year=1960, category="neurosurgery", kind="device", title="硬膜下电极", text="硬膜下电极记录皮层癫痫放电，用于术前评估。"),
+    dict(year=1970, category="neurosurgery", kind="device", title="深部电极", text="深部电极用于颞叶内侧等深部致痫灶记录。"),
+    dict(year=1980, category="neurosurgery", kind="discovery", title="术前评估体系", text="多模态术前评估成为癫痫手术常规。"),
+    dict(year=1990, category="neurosurgery", kind="discovery", title="癫痫中心", text="专科癫痫中心集中评估与手术资源。"),
+    dict(year=2000, category="neurosurgery", kind="discovery", title="癫痫外科指南", text="指南明确手术适应证与转诊路径。"),
+    dict(year=2010, category="neurosurgery", kind="discovery", title="癫痫网络评估", text="网络视角指导多脑区电极植入与切除规划。"),
+    dict(year=2020, category="neurosurgery", kind="discovery", title="微创癫痫外科", text="LITT 与 RNS 扩展微创治疗选择。"),
+    dict(year=1950, category="neurosurgery", kind="surgery", title="儿童癫痫外科", text="儿童癫痫外科关注发育与功能保护。"),
+    dict(year=1960, category="neurosurgery", kind="surgery", title="半球切除术", text="半球切除用于半球性病变所致难治性癫痫。"),
+    dict(year=1970, category="neurosurgery", kind="surgery", title="胼胝体切开", text="胼胝体切开减少跌倒发作与发作传播。"),
+    dict(year=1980, category="neurosurgery", kind="surgery", title="功能性半球离断", text="功能性半球离断减少并发症并控制发作。"),
+    dict(year=1990, category="neurosurgery", kind="surgery", title="多处软膜下横切", text="多处软膜下横切用于功能区癫痫。"),
+    dict(year=2000, category="neurology", kind="device", title="迷走刺激扩展", text="VNS 用于儿童与成人难治性癫痫。"),
+    dict(year=2010, category="neurosurgery", kind="device", title="反应性刺激", text="RNS 以闭环方式治疗局灶性癫痫。"),
+    dict(year=2020, category="neurosurgery", kind="device", title="激光消融", text="磁共振引导激光消融用于深部致痫灶。"),
+    dict(year=1960, category="neurology", kind="discovery", title="药物浓度监测", text="抗癫痫药血药浓度监测改善个体化用药。"),
+    dict(year=1970, category="neurology", kind="discovery", title="药物相互作用", text="抗癫痫药的相互作用与酶诱导效应被系统研究。"),
+    dict(year=1980, category="neurology", kind="discovery", title="妊娠与癫痫", text="抗癫痫药致畸风险与孕期管理受到重视。"),
+    dict(year=1990, category="neurology", kind="discovery", title="癫痫与骨健康", text="长期用药对骨代谢的影响被认识。"),
+    dict(year=2000, category="neurology", kind="discovery", title="癫痫与认知", text="癫痫网络与药物对认知的影响成为重点。"),
+    dict(year=2010, category="neurology", kind="discovery", title="癫痫与精神共病", text="焦虑抑郁等共病被纳入癫痫管理。"),
+    dict(year=2020, category="neurology", kind="discovery", title="癫痫与睡眠", text="睡眠结构紊乱与癫痫相互影响。"),
+    dict(year=1960, category="neurology", kind="discovery", title="癫痫流行病学", text="社区流行病学调查揭示癫痫的疾病负担。"),
+    dict(year=1970, category="neurology", kind="discovery", title="癫痫预后", text="长期随访揭示癫痫的自然史与缓解率。"),
+    dict(year=1980, category="neurology", kind="discovery", title="生活质量评估", text="生活质量量表用于癫痫疗效评价。"),
+    dict(year=1990, category="neurology", kind="discovery", title="癫痫病耻感", text="病耻感与社会歧视成为癫痫服务障碍。"),
+    dict(year=2000, category="neurology", kind="discovery", title="全球癫痫缺口", text="中低收入国家治疗缺口推动全球癫痫行动。"),
+    dict(year=2010, category="neurology", kind="discovery", title="癫痫预防", text="围产期与创伤预防被视为降低癫痫负担的途径。"),
+    dict(year=1950, category="neurology", kind="discovery", title="热性惊厥", text="热性惊厥的自然史与处理原则被阐明。"),
+    dict(year=1960, category="neurology", kind="discovery", title="婴儿痉挛治疗", text="促肾上腺皮质激素等用于婴儿痉挛。"),
+    dict(year=1970, category="neurology", kind="discovery", title="生酮饮食应用", text="生酮饮食用于儿童难治性癫痫。"),
+    dict(year=1980, category="neurology", kind="discovery", title="生酮饮食复兴", text="生酮饮食在难治性癫痫中重新受到重视。"),
+    dict(year=1990, category="neurology", kind="discovery", title="生酮机制研究", text="酮体与代谢机制被用于解释抗癫痫作用。"),
+    dict(year=2000, category="neurology", kind="discovery", title="饮食治疗指南", text="生酮与改良饮食的规范与监测建立。"),
+    dict(year=2010, category="neurology", kind="discovery", title="改良阿特金斯饮食", text="改良阿特金斯饮食作为替代方案用于癫痫。"),
+    dict(year=2020, category="neurology", kind="discovery", title="饮食治疗扩展", text="饮食治疗用于更多癫痫类型与成人患者。"),
+    dict(year=1960, category="neurology", kind="discovery", title="持续状态药物", text="苯二氮卓与负荷剂量用于癫痫持续状态。"),
+    dict(year=1970, category="neurology", kind="discovery", title="持续状态监护", text="重症监护改善癫痫持续状态结局。"),
+    dict(year=1980, category="neurology", kind="discovery", title="持续状态指南", text="阶梯治疗与时间目标被写入指南。"),
+    dict(year=1990, category="neurology", kind="discovery", title="难治性持续状态", text="难治性持续状态的麻醉治疗与监测规范。"),
+    dict(year=2000, category="neurology", kind="discovery", title="持续状态预后", text="病因与时间决定持续状态预后。"),
+    dict(year=2010, category="neurology", kind="drug", title="持续状态新药", text="新抗癫痫药用于持续状态的辅助治疗。"),
+    dict(year=2020, category="neurology", kind="discovery", title="持续状态管理", text="多学科与快速反应团队改善持续状态救治。"),
+]
+
+
+EXTRA6: list[dict] = [
+    dict(year=1950, category="neuroscience", kind="device", title="脑片电生理", text="离体脑片技术使突触与环路机制可在受控条件下研究。"),
+    dict(year=1960, category="neuroscience", kind="device", title="微电极记录", text="微电极记录揭示单个神经元的放电与感受野。"),
+    dict(year=1970, category="neuroscience", kind="discovery", title="免疫组化定位", text="免疫组化用于神经递质与蛋白的定位。"),
+    dict(year=1980, category="neuroscience", kind="discovery", title="原位杂交", text="原位杂交定位特定 mRNA 在脑内的分布。"),
+    dict(year=1990, category="neuroscience", kind="discovery", title="条件性基因敲除", text="条件性敲除实现特定细胞与时间点的基因功能研究。"),
+    dict(year=2000, category="neuroscience", kind="discovery", title="RNA 干扰", text="RNAi 用于神经基因功能的快速敲低。"),
+    dict(year=2010, category="neuroscience", kind="discovery", title="CRISPR 神经应用", text="CRISPR 加速神经疾病模型与功能筛选。"),
+    dict(year=2020, category="neuroscience", kind="discovery", title="单细胞多组学", text="单细胞多组学解析神经细胞的分子与调控异质性。"),
+    dict(year=1960, category="neuroscience", kind="discovery", title="行为范式", text="标准化行为范式使动物认知与情绪可被量化。"),
+    dict(year=1970, category="neuroscience", kind="discovery", title="转基因动物", text="转基因动物用于神经疾病与环路研究。"),
+    dict(year=1980, category="neuroscience", kind="discovery", title="条件性调控", text="条件性基因调控实现时空特异的神经功能研究。"),
+    dict(year=1990, category="neuroscience", kind="discovery", title="光遗传学前夜", text="1990 年代光控分子工具为光遗传学奠定基础。"),
+    dict(year=2000, category="neuroscience", kind="discovery", title="钙成像", text="钙成像实现群体神经元活动的实时观测。"),
+    dict(year=2015, category="neuroscience", kind="device", title="高密度电极", text="高密度硅电极实现大规模神经元同时记录。"),
+    dict(year=1960, category="neuroscience", kind="discovery", title="诱发电位研究", text="诱发电位用于感觉通路与时程研究。"),
+    dict(year=1970, category="neuroscience", kind="device", title="脑磁图", text="MEG 以毫秒级分辨率测量脑磁场。"),
+    dict(year=1980, category="neuroscience", kind="device", title="PET 受体成像", text="PET 用于脑代谢与受体占位研究。"),
+    dict(year=1990, category="neuroscience", kind="device", title="fMRI 认知研究", text="fMRI 使任务态脑活动成为常规测量。"),
+    dict(year=2000, category="neuroscience", kind="device", title="弥散成像", text="弥散张量成像刻画白质纤维束与连接。"),
+    dict(year=2010, category="neuroscience", kind="device", title="连接组成像", text="多模态成像构建人脑连接组。"),
+    dict(year=2020, category="neuroscience", kind="device", title="超高场 MRI", text="7T MRI 提供更高分辨率的脑结构与功能图像。"),
+    dict(year=1960, category="neuroscience", kind="discovery", title="微透析", text="微透析用于活体测量神经递质释放。"),
+    dict(year=1970, category="neuroscience", kind="discovery", title="色谱分析", text="色谱技术提高神经化学物质定量精度。"),
+    dict(year=1980, category="neuroscience", kind="discovery", title="质谱应用", text="质谱用于神经肽与代谢物分析。"),
+    dict(year=1990, category="neuroscience", kind="discovery", title="蛋白组学", text="蛋白组学解析神经组织的蛋白表达网络。"),
+    dict(year=2000, category="neuroscience", kind="discovery", title="基因组学", text="基因组学推动神经疾病的遗传发现。"),
+    dict(year=2010, category="neuroscience", kind="discovery", title="转录组学", text="转录组学揭示脑区与细胞类型的表达特征。"),
+    dict(year=2020, category="neuroscience", kind="discovery", title="空间转录组", text="空间转录组将基因表达与组织位置对应。"),
+    dict(year=1960, category="neuroscience", kind="discovery", title="神经示踪", text="示踪技术描绘神经元的轴突投射。"),
+    dict(year=1970, category="neuroscience", kind="discovery", title="荧光标记", text="荧光标记使特定神经元与蛋白可视化。"),
+    dict(year=1980, category="neuroscience", kind="device", title="共聚焦显微镜", text="共聚焦显微镜提高厚组织成像的清晰度。"),
+    dict(year=1990, category="neuroscience", kind="device", title="双光子成像", text="双光子显微镜实现活体深层成像。"),
+    dict(year=2000, category="neuroscience", kind="device", title="组织透明化", text="组织透明化技术提高全脑三维成像能力。"),
+    dict(year=2020, category="neuroscience", kind="device", title="全脑成像", text="全脑成像与配准构建高分辨脑图谱。"),
+    dict(year=1960, category="neuroscience", kind="discovery", title="神经网络模型", text="计算模型用于解释神经环路的计算原理。"),
+    dict(year=1970, category="neuroscience", kind="discovery", title="计算神经科学", text="计算神经科学把实验数据与理论模型结合。"),
+    dict(year=1950, category="neurology", kind="discovery", title="多发性硬化研究", text="MS 的临床分型与免疫病理逐步明确。"),
+    dict(year=1960, category="neurology", kind="discovery", title="MS 免疫机制", text="自身免疫机制在 MS 中获得实验支持。"),
+    dict(year=1970, category="neurology", kind="discovery", title="MS 影像", text="影像学用于 MS 病灶与活动性评估。"),
+    dict(year=1980, category="neurology", kind="discovery", title="MS 治疗探索", text="免疫调节治疗开始用于 MS。"),
+    dict(year=1990, category="neurology", kind="drug", title="MS 疾病修饰", text="首批疾病修饰治疗改变 MS 病程。"),
+    dict(year=2000, category="neurology", kind="drug", title="MS 高效治疗", text="单抗类高效治疗进入 MS 临床。"),
+    dict(year=2010, category="neurology", kind="drug", title="MS 口服时代", text="口服药物改善 MS 长期治疗体验。"),
+    dict(year=2020, category="neurology", kind="discovery", title="MS 精准管理", text="生物标志与影像用于 MS 个体化治疗。"),
+    dict(year=1960, category="neurology", kind="discovery", title="帕金森病分期", text="帕金森病的临床分期与评估量表建立。"),
+    dict(year=1970, category="neurology", kind="discovery", title="运动波动", text="左旋多巴长期治疗的运动波动被描述。"),
+    dict(year=1980, category="neurosurgery", kind="surgery", title="帕金森毁损手术", text="丘脑与苍白球毁损用于药物难治性症状。"),
+    dict(year=1990, category="neurosurgery", kind="device", title="帕金森 DBS", text="DBS 成为帕金森病运动症状的重要治疗。"),
+    dict(year=2000, category="neurology", kind="device", title="持续输注治疗", text="持续多巴胺能刺激减少运动并发症。"),
+    dict(year=2010, category="neurology", kind="device", title="自适应刺激", text="自适应 DBS 根据症状动态调整参数。"),
+    dict(year=2020, category="neurology", kind="discovery", title="帕金森生物标志", text="α-突触核蛋白检测推动帕金森病生物学诊断。"),
+    dict(year=1960, category="neurology", kind="discovery", title="ALS 临床研究", text="ALS 的临床特征与进展评估体系建立。"),
+    dict(year=1970, category="neurology", kind="discovery", title="ALS 遗传学", text="家族性 ALS 的遗传基础开始被研究。"),
+    dict(year=1980, category="neurology", kind="discovery", title="ALS 基因", text="SOD1 等基因突变被关联到 ALS。"),
+    dict(year=2000, category="neurology", kind="discovery", title="ALS 多学科照护", text="多学科团队改善 ALS 生活质量与生存。"),
+    dict(year=2010, category="neurology", kind="discovery", title="ALS 新基因", text="C9orf72 等重复扩增被确认为 ALS/FTD 病因。"),
+    dict(year=2020, category="neurology", kind="drug", title="ALS 靶向治疗", text="针对遗传性 ALS 的寡核苷酸药物进入临床。"),
+    dict(year=1960, category="neurology", kind="discovery", title="痴呆分类", text="痴呆的病因学分类与评估逐步规范。"),
+    dict(year=1970, category="neurology", kind="discovery", title="痴呆影像", text="CT 用于痴呆的结构性病因排查。"),
+    dict(year=1980, category="neurology", kind="discovery", title="AD 诊断标准", text="阿尔茨海默病的临床诊断标准建立。"),
+    dict(year=1990, category="neurology", kind="discovery", title="AD 遗传", text="APP、PSEN1 等基因突变被关联到家族性 AD。"),
+    dict(year=2000, category="neurology", kind="drug", title="AD 症状治疗", text="胆碱酯酶抑制剂与美金刚用于症状治疗。"),
+    dict(year=2010, category="neurology", kind="discovery", title="AD 生物标志", text="Aβ/tau 标志物用于 AD 分期与试验入组。"),
+    dict(year=2020, category="neurology", kind="drug", title="AD 疾病修饰", text="抗 Aβ 单抗进入临床，AD 治疗模式转变。"),
+    dict(year=1960, category="neurosurgery", kind="device", title="脑积水分流", text="分流装置用于脑积水，改善颅内压与症状。"),
+    dict(year=1970, category="neurosurgery", kind="device", title="神经内镜起步", text="内镜用于脑室与囊性病变。"),
+    dict(year=1980, category="neurosurgery", kind="device", title="立体定向技术", text="立体定向用于活检、毁损与电极植入。"),
+    dict(year=1990, category="neurosurgery", kind="device", title="神经导航", text="导航提高深部病变手术的精度。"),
+    dict(year=2000, category="neurosurgery", kind="device", title="术中磁共振", text="术中 MRI 实时评估切除范围。"),
+    dict(year=2010, category="neurosurgery", kind="device", title="手术机器人", text="机器人辅助立体定向与深部电极植入。"),
+    dict(year=2020, category="neurosurgery", kind="surgery", title="微创神经外科", text="内镜与通道技术降低手术创伤。"),
+    dict(year=1960, category="neurosurgery", kind="surgery", title="颅内动脉瘤", text="显微夹闭成为颅内动脉瘤的重要治疗。"),
+    dict(year=1970, category="neurosurgery", kind="surgery", title="脑血管搭桥", text="搭桥用于缺血性脑血管病与复杂动脉瘤。"),
+    dict(year=1980, category="neurosurgery", kind="device", title="血管内介入", text="介入栓塞用于动脉瘤与血管畸形。"),
+    dict(year=1990, category="neurosurgery", kind="device", title="弹簧圈栓塞", text="弹簧圈栓塞成为蛛网膜下腔出血的重要治疗。"),
+    dict(year=2000, category="neurosurgery", kind="device", title="颅内支架", text="支架辅助栓塞扩展复杂动脉瘤治疗。"),
+    dict(year=2010, category="neurosurgery", kind="device", title="血流导向", text="血流导向装置改变大型动脉瘤策略。"),
+    dict(year=2020, category="neurosurgery", kind="device", title="机械取栓", text="取栓成为大血管闭塞卒中的标准治疗。"),
+    dict(year=1960, category="neurosurgery", kind="device", title="颅内压监测", text="颅内压监测指导重型脑损伤治疗。"),
+    dict(year=1970, category="neurosurgery", kind="discovery", title="神经重症", text="神经重症监护整合呼吸、循环与脑监测。"),
+    dict(year=1980, category="neurosurgery", kind="discovery", title="颅脑创伤指南", text="循证指南规范颅脑创伤的影像与手术。"),
+    dict(year=1990, category="neurosurgery", kind="discovery", title="低温脑保护", text="治疗性低温用于脑损伤与心脏骤停后保护。"),
+    dict(year=2000, category="neurosurgery", kind="device", title="多模态监测", text="多模态监测指导重症脑损伤个体化治疗。"),
+    dict(year=2010, category="neurosurgery", kind="discovery", title="精准神经重症", text="精准监测与个体化方案改善重症结局。"),
+]
+
+
 EVERGREEN_ALL: list[dict] = list({
     (e.get("year"), e["title"]): e
     for e in (EVERGREEN + EVERGREEN_MORE + EVERGREEN_MORE2 + EVERGREEN_MORE3
               + PSYCH_BATCH + EPILEPSY_BATCH + GENERAL_BATCH + EXTRA1 + EXTRA2 + EXTRA3
-              + EXTRA4)
+              + EXTRA4 + EXTRA5 + EXTRA6)
 }.values())
 
 
@@ -1799,6 +1981,127 @@ BODIES_PSY_EPI_CLOSE: dict[tuple[int, str], str] = {
 }
 
 
+BODIES_PSY_EPI_TAIL: dict[tuple[int, str], str] = {
+    (1886, "Horsley 首例癫痫手术"): (
+        "值得补充的是，Horsley 本人也推动了实验外科与生理学的结合，他的动物实验为皮层定位提供了依据。"
+        "这种“实验室—手术室”往返的传统，至今仍是转化神经外科的核心方法。"
+    ),
+    (1934, "蒙特利尔神经病学研究所成立"): (
+        "此外，MNI 的建立也得益于洛克菲勒基金会对“跨学科医学”的支持，这一资助模式影响了后来许多"
+        "神经科学中心的组织方式。MNI 的故事说明，硬件之外，制度设计同样是科学进步的关键变量。"
+    ),
+    (1936, "Penfield 术中皮层电刺激"): (
+        "此外，Penfield 的刺激地图并非“标准答案”，而是个体化观察的汇总；不同患者的反应差异提醒我们，"
+        "皮层功能存在可塑性，术前术后评估必须个体化。这也是现代功能神经影像强调“个体化映射”的原因。"
+    ),
+    (1960, "SEEG 立体脑电图"): (
+        "此外，SEEG 的普及也依赖影像与工程进步：立体定向头架、机器人植入与电极材料改良，"
+        "使深部采样更安全、更可重复。它提醒我们，方法学突破往往是临床需求与工程技术共同推动的结果。"
+    ),
+    (1997, "VNS 获批治疗癫痫"): (
+        "此外，VNS 的经验也影响了患者对“植入式治疗”的接受度：可调参数、可关机、可取出，"
+        "降低了长期治疗的心理门槛，也为后来 DBS 与 RNS 的推广积累了患者教育经验。"
+    ),
+    (2011, "激光间质热疗（LITT）"): (
+        "此外，LITT 的发展与磁共振热成像、激光光纤与手术导航的进步密不可分，是典型的多技术融合产物。"
+        "它提示我们，外科创新常常不是单一技术的突破，而是多种成熟技术的重新组合。"
+    ),
+    (2013, "RNS 获 FDA 批准"): (
+        "此外，RNS 的长期数据积累也推动了监管对“闭环器械”的评价框架：如何定义疗效、"
+        "如何评估软件更新、如何保障网络安全，都是传统器械监管未曾充分覆盖的问题。"
+    ),
+    (1952, "氯丙嗪进入精神科"): (
+        "此外，氯丙嗪的推广也依赖护理体系与医院管理的改变：剂量管理、副作用监测与出院随访，"
+        "都需要新的流程。它说明药物的社会效果，取决于医疗系统能否同步调整。"
+    ),
+    (1938, "电休克治疗（ECT）"): (
+        "此外，ECT 的研究也推动了对癫痫样放电与情绪调节关系的兴趣，为后来的神经调控研究"
+        "提供了临床线索。它提醒我们，物理治疗与机制研究可以相互启发。"
+    ),
+    (1949, "Cade 发现锂盐疗效"): (
+        "此外，锂盐的发现也促成了“治疗药物监测”这一临床药学分支的发展，"
+        "并让精神科更重视实验室指标与躯体安全。它说明精神科药物治疗同样需要严谨的内科思维。"
+    ),
+    (1980, "DSM-III 出版"): (
+        "此外，DSM-III 的制定过程本身也开创了“专家工作组 + 文献证据 + 现场测试”的模式，"
+        "这一流程后来被多国诊断系统借鉴。它说明分类不仅是科学问题，也是制度与共识的产物。"
+    ),
+}
+
+
+BODIES_PSY_EPI_TAIL2: dict[tuple[int, str], str] = {
+    (2013, "RNS 获 FDA 批准"): (
+        "更长远地看，RNS 代表的“感知—决策—刺激”闭环，可能成为未来神经精神疾病治疗的一般架构："
+        "先测量异常状态，再在需要时给予个体化干预，而不是终身固定给药或固定刺激。这一思路值得持续关注。"
+    ),
+    (1949, "Cade 发现锂盐疗效"): (
+        "更长远地看，锂盐研究也提醒我们：对机制复杂的精神疾病，稳定而安全的基础治疗往往比"
+        "追逐单一新靶点更能改善长期结局。这种“基础治疗 + 精准分层”的组合，可能是精神科最务实的路径。"
+    ),
+    (1952, "氯丙嗪进入精神科"): (
+        "更长远地看，氯丙嗪也提示：任何“革命性药物”都会在真实世界暴露其局限，后续研究的价值"
+        "往往在于减少副作用、改善依从性，而非单纯追求更强效。这一规律在今天的抗精神病药研发中依然成立。"
+    ),
+    (1938, "电休克治疗（ECT）"): (
+        "更长远地看，ECT 的兴衰说明，医疗手段的社会接受度与其科学价值并不总是同步；"
+        "让证据透明、让患者参与决策，是消除污名、提升可及性的关键。"
+    ),
+    (2011, "激光间质热疗（LITT）"): (
+        "更长远地看，LITT 与 SEEG、RNS 一起，正在把癫痫外科推向“更早评估、更小创伤、"
+        "更精准靶点”的方向；未来其价值将由长期无发作率、认知结局与成本效益共同定义。"
+    ),
+    (1980, "DSM-III 出版"): (
+        "更长远地看，DSM-III 的真正遗产是“让精神科可被检验”的方法论，而非某一版分类本身；"
+        "分类会继续修订，但对信度、效度与可重复性的追求不会改变。"
+    ),
+    (1997, "VNS 获批治疗癫痫"): (
+        "更长远地看，VNS 让“外周刺激调节中枢”成为神经调控的常规思路，也启发了很多"
+        "非侵入与微创调控技术的发展。"
+    ),
+    (1936, "Penfield 术中皮层电刺激"): (
+        "更长远地看，术中验证与术前影像的结合，是功能保护最可靠的双保险。"
+    ),
+    (1960, "SEEG 立体脑电图"): (
+        "更长远地看，SEEG 的价值会随着网络分析与电极工程进步而进一步放大。"
+    ),
+    (1934, "蒙特利尔神经病学研究所成立"): (
+        "更长远地看，MNI 模式仍是打造高水平癫痫中心的重要参照。"
+    ),
+}
+
+
+BODIES_PSY_EPI_TAIL3: dict[tuple[int, str], str] = {
+    (1938, "电休克治疗（ECT）"): (
+        "对临床团队而言，把 ECT 纳入难治性抑郁与紧张症的标准选项，需要持续培训、规范操作流程与充分的家属沟通，"
+        "而不是把它留作“最后手段”。"
+    ),
+    (2013, "RNS 获 FDA 批准"): (
+        "对患者而言，闭环治疗意味着更频繁的随访、设备管理与费用承担，必须在术前充分知情并共同决策。"
+    ),
+    (1949, "Cade 发现锂盐疗效"): (
+        "对临床而言，规范的血锂监测、肾功能与甲状腺随访，是锂盐长期安全有效的前提，也是其不可替代性的保障。"
+    ),
+    (1952, "氯丙嗪进入精神科"): (
+        "对今天的精神科，氯丙嗪仍是理解抗精神病药“疗效—副作用—依从性”三角关系的最佳入门教材。"
+    ),
+    (2011, "激光间质热疗（LITT）"): (
+        "对患者选择而言，致痫灶的位置、大小与邻近血管结构，以及团队的热消融经验，共同决定 LITT 是否合适。"
+    ),
+    (1936, "Penfield 术中皮层电刺激"): (
+        "对癫痫中心而言，建立标准化的术中功能验证流程，是保护患者语言、运动与记忆功能的关键环节。"
+    ),
+    (1980, "DSM-III 出版"): (
+        "对研究者而言，理解 DSM 的类别化局限，与熟练使用它同样重要，这正是后续维度化改革的出发点。"
+    ),
+    (1997, "VNS 获批治疗癫痫"): (
+        "对难治性患者，VNS 常作为切除评估之外的补充选项，与药物、饮食及其他调控手段联合使用。"
+    ),
+    (1960, "SEEG 立体脑电图"): (
+        "对团队而言，SEEG 的成败取决于电极规划、信号解读与多学科讨论，而非单一设备或单次操作。"
+    ),
+}
+
+
 def _decorate(e: dict, match: str) -> dict:
     item = dict(e)
     item["category_label"] = CATEGORY_LABELS.get(e.get("category", ""), e.get("category", ""))
@@ -1806,7 +2109,8 @@ def _decorate(e: dict, match: str) -> dict:
     item["match"] = match
     key = (e.get("year"), e.get("title"))
     parts = [BODIES.get(key), BODIES_EXTRA.get(key), BODIES_CLOSING.get(key),
-             BODIES_PSY_EPI.get(key), BODIES_PSY_EPI_EXTRA.get(key), BODIES_PSY_EPI_CLOSE.get(key)]
+             BODIES_PSY_EPI.get(key), BODIES_PSY_EPI_EXTRA.get(key), BODIES_PSY_EPI_CLOSE.get(key),
+             BODIES_PSY_EPI_TAIL.get(key), BODIES_PSY_EPI_TAIL2.get(key), BODIES_PSY_EPI_TAIL3.get(key)]
     body = "\n\n".join(p for p in parts if p)
     if body:
         item["body"] = body
