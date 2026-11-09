@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -24,6 +25,7 @@ class DigestResult:
     config_profile: str = "neuro"
     config: object = None          # the Config used (so renderer can show prompt)
     errors: list[str] = field(default_factory=list)
+    on_this_day: list = field(default_factory=list)   # 中文“历史上的今天”条目
     history_id: int = 0            # id in search_history (0 = not recorded)
     skipped: bool = False          # True if this run was deduped (not executed)
     skipped_reason: str = ""
@@ -82,24 +84,54 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     all_items: list[Item] = []
     health: list[dict] = []
 
-    for name, fn in REGISTRY.items():
-        opts = config.source_opts(name)
-        if opts.get("enabled", True) is False:
-            continue
+    enabled = [(n, f) for n, f in REGISTRY.items()
+               if config.source_opts(n).get("enabled", True) is not False]
+
+    def _fetch(name: str, fn):
         t0 = time.time()
         try:
             got = fn(config, logger=logger)
-            health.append({
-                "source": name,
-                "ok": True,
-                "count": len(got),
-                "ms": int((time.time() - t0) * 1000),
-            })
-            all_items.extend(got)
+            return name, list(got), None, int((time.time() - t0) * 1000)
         except Exception as e:  # noqa: BLE001
-            errors.append(f"{name}: {e}")
-            health.append({"source": name, "ok": False, "count": 0,
-                           "ms": int((time.time() - t0) * 1000), "error": str(e)})
+            return name, [], str(e), int((time.time() - t0) * 1000)
+
+    def _fetch_all_sources():
+        items: list[Item] = []
+        heal: list[dict] = []
+        errs: list[str] = []
+        if not enabled:
+            return items, heal, errs
+        with ThreadPoolExecutor(max_workers=min(8, len(enabled))) as ex:
+            futures = [ex.submit(_fetch, n, f) for n, f in enabled]
+            for fut in as_completed(futures):
+                name, got, err, ms = fut.result()
+                if err:
+                    errs.append(f"{name}: {err}")
+                    heal.append({"source": name, "ok": False, "count": 0,
+                                 "ms": ms, "error": err})
+                else:
+                    heal.append({"source": name, "ok": True, "count": len(got), "ms": ms})
+                    items.extend(got)
+        heal.sort(key=lambda h: h["source"])
+        return items, heal, errs
+
+    all_items, health, errors = _fetch_all_sources()
+
+    if not all_items and enabled:
+        import copy
+        original_sources = copy.deepcopy(config.sources)
+        try:
+            for name, opts in list(config.sources.items()):
+                if isinstance(opts, dict):
+                    cur = int(opts.get("lookback_days", 2) or 2)
+                    opts["lookback_days"] = max(cur, 7)
+            all_items, health, errors = _fetch_all_sources()
+        finally:
+            config.sources = original_sources
+        if not all_items:
+            errors.append("本次未抓取到新条目（可能是上游当日无更新或网络限流）；"
+                          "可将各源 lookback_days 调大后重试。")
+
 
     # Tag with discipline/keyword focus
     all_items = tag_items(all_items, config)
@@ -136,6 +168,12 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         if sec in sections:
             sections[sec].append(it)
 
+    try:
+        from .onthisday import today_events, is_enabled as _otd_enabled
+        on_this_day = today_events() if _otd_enabled(config) else []
+    except Exception:
+        on_this_day = []
+
     final = DigestResult(
         items=deduped,
         sections=sections,
@@ -144,6 +182,7 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         config_profile=config.profile,
         config=config,
         errors=errors,
+        on_this_day=on_this_day,
         fingerprint=fingerprint,
     )
     if record:

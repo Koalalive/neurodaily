@@ -204,6 +204,10 @@
     "enabled": true,
     "hour": 8,
     "minute": 0,
+    "on_this_day": {
+      "enabled": true,
+      "notify": true
+    },
     "launchd": {
       "label": "com.neurodaily.daily",
       "stdout": "~/neurodaily/output/launchd_stdout.log",

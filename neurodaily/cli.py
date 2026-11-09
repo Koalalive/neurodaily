@@ -54,6 +54,14 @@ def cmd_run(args) -> int:
         print("[neurodaily] ⚠ source errors:")
         for e in result.errors:
             print(f"    - {e}")
+    try:
+        from .onthisday import should_notify as _should_notify, is_enabled as _otd_enabled, day_label
+        from .notify import notify_on_this_day
+        if _otd_enabled(cfg) and _should_notify(cfg) and result.on_this_day:
+            evs = result.on_this_day
+            notify_on_this_day(evs, day_label(evs))
+    except Exception:
+        pass
     if cfg.output.get("open_on_finish", True) and args.no_open is False:
         try:
             subprocess.run(["open", path], check=False)

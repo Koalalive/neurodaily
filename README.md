@@ -6,6 +6,13 @@ Your **focus areas (disciplines), keywords, and journal watch-list are stored as
 
 ---
 
+## 📖 Operations manual & Settings GUI
+
+- **Full start/stop/configure/schedule/troubleshooting guide:** [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
+- **Settings GUI:** start the web app and open <http://127.0.0.1:8031/settings> to edit every setting (disciplines, keywords, sources, output, schedule, policy feeds, journals) in the browser, then **Save** — no JSON hand-editing required.
+
+---
+
 ## What it aggregates
 
 | Source | Type | Endpoint |
