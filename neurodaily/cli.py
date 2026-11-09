@@ -187,6 +187,20 @@ def cmd_launchd(args) -> int:
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
+def cmd_deepen(args) -> int:
+    from . import deepen
+    if args.status:
+        import json
+        print(json.dumps(deepen.status(), ensure_ascii=False, indent=2))
+        return 0
+    if args.backend == "template":
+        deepen.expand_template(limit=args.limit)
+    else:
+        deepen.expand_llm(limit=args.limit, model=args.model, base_url=args.base_url,
+                          api_key=args.api_key, concurrency=args.concurrency)
+    return 0
+
+
 def cmd_history(args) -> int:
     from . import history as hist
     runs = hist.list_runs(limit=args.limit)
@@ -234,6 +248,16 @@ def build_parser() -> argparse.ArgumentParser:
     ld_sub.add_parser("show")
     ld_p.add_argument("--dry-run", action="store_true")
     ld_p.set_defaults(func=cmd_launchd)
+
+    deepen_p = sub.add_parser("deepen", help="bulk-generate long-form on-this-day bodies")
+    deepen_p.add_argument("--status", action="store_true")
+    deepen_p.add_argument("--backend", choices=["llm", "template"], default="llm")
+    deepen_p.add_argument("--limit", type=int, default=None)
+    deepen_p.add_argument("--model", default=None)
+    deepen_p.add_argument("--base-url", default=None)
+    deepen_p.add_argument("--api-key", default=None)
+    deepen_p.add_argument("--concurrency", type=int, default=4)
+    deepen_p.set_defaults(func=cmd_deepen)
 
     hist_p = sub.add_parser("history", help="list past search runs")
     hist_p.add_argument("--limit", type=int, default=100)

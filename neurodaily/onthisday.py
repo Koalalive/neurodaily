@@ -19,6 +19,20 @@ from __future__ import annotations
 
 from datetime import date as _date
 
+def _load_deep_cache() -> dict:
+    import json
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "onthisday_deep.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+_DEEP_CACHE = _load_deep_cache()
+
+
 CATEGORY_LABELS = {
     "neurosurgery": "神经外科",
     "neurology": "神经病学",
@@ -2273,6 +2287,8 @@ _BODY_DICTS = (
 
 
 def _has_body(year, title) -> bool:
+    if _DEEP_CACHE.get(f"{year}|{title}"):
+        return True
     k = (year, title)
     return any(d.get(k) for d in _BODY_DICTS)
 
@@ -2453,7 +2469,8 @@ def _decorate(e: dict, match: str) -> dict:
              BODIES_PSY_EPI.get(key), BODIES_PSY_EPI_EXTRA.get(key), BODIES_PSY_EPI_CLOSE.get(key),
              BODIES_PSY_EPI_TAIL.get(key), BODIES_PSY_EPI_TAIL2.get(key),
              BODIES_PSY_EPI_TAIL3.get(key), BODIES_DEEP.get(key), BODIES_DEEP_EXTRA.get(key),
-             BODIES_DEEP_TAIL.get(key), BODIES_DEEP_TAIL2.get(key)]
+             BODIES_DEEP_TAIL.get(key), BODIES_DEEP_TAIL2.get(key),
+             _DEEP_CACHE.get(f"{key[0]}|{key[1]}")]
     body = "\n\n".join(p for p in parts if p)
     if body:
         item["body"] = body

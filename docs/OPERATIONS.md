@@ -202,6 +202,27 @@ launchctl load  -w ~/Library/LaunchAgents/com.neurodaily.daily.plist    # 恢复
 # 打开 output/ 下最新的 neurodaily_<时间>.html，检查顶部「历史上的今天」与条目底部「🕸 图谱」
 ```
 
+### 6.4 深读池（长文）扩写
+
+每日展示会优先从「深读池」（有长文的条目）中轮换，保证当天看到的是完整长文。
+
+```bash
+# 查看进度：总条目 / 已缓存 / 待扩写
+.venv/bin/python -m neurodaily deepen --status
+
+# 方式 A：用 LLM 批量扩写（质量最好，需 OpenAI 兼容 key）
+export OPENAI_API_KEY=sk-...
+export OPENAI_BASE_URL=https://api.openai.com/v1   # 可选
+.venv/bin/python -m neurodaily deepen --limit 50 --model gpt-4o-mini --concurrency 4
+
+# 方式 B：离线模板扩写（无需 key，但文风模板化、信息密度低，仅作兜底）
+.venv/bin/python -m neurodaily deepen --backend template --limit 50
+```
+
+- 生成结果缓存在 `neurodaily/data/onthisday_deep.json`，渲染时自动读取；新增条目无需改代码。
+- LLM 提示词已强制「不得编造日期/数字/人名/试验名称」，只依据已给出的事实扩写。
+- 也可以像 `scripts/seed_deep_batch1.py` 那样**手工分批**写入缓存（质量最高）。
+
 ---
 
 ## 7. 上传到 GitHub
