@@ -89,22 +89,35 @@ def _prompt_for(e: dict) -> str:
 
 
 def _call_llm(client, model: str, e: dict) -> str:
-    resp = client.post(
-        "/chat/completions",
-        json={
-            "model": model,
-            "temperature": 0.6,
-            "max_tokens": 2000,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": _prompt_for(e)},
-            ],
-        },
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return (data["choices"][0]["message"]["content"] or "").strip()
+    import time
+    last = None
+    for attempt in range(3):
+        try:
+            resp = client.post(
+                "/chat/completions",
+                json={
+                    "model": model,
+                    "temperature": 0.6,
+                    "max_tokens": 2000,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": _prompt_for(e)},
+                    ],
+                },
+                timeout=180,
+            )
+            if resp.status_code == 429:
+                raise RuntimeError("429 rate limited")
+            resp.raise_for_status()
+            data = resp.json()
+            text = (data["choices"][0]["message"]["content"] or "").strip()
+            if len(text) < 200:
+                raise ValueError("too short")
+            return text
+        except Exception as exc:
+            last = exc
+            time.sleep(2 * (attempt + 1))
+    raise last
 
 
 def expand_llm(limit: int | None = None, model: str | None = None,
@@ -137,11 +150,11 @@ def expand_llm(limit: int | None = None, model: str | None = None,
                         raise ValueError("too short")
                     cache[_key(e.get("year"), e.get("title"))] = body
                     done += 1
-                    print(f"[deepen] {done}/{len(todo)} {e.get('year')} {e.get('title')} ({len(body)} 字)")
+                    print(f"[deepen] {done}/{len(todo)} {e.get('year')} {e.get('title')} ({len(body)} 字)", flush=True)
                     if done % 10 == 0:
                         save_cache(cache)
                 except Exception as exc:
-                    print(f"[deepen] FAILED {e.get('year')} {e.get('title')}: {exc}")
+                    print(f"[deepen] FAILED {e.get('year')} {e.get('title')}: {exc}", flush=True)
     save_cache(cache)
     print(f"[deepen] 写入 {done} 条 → {CACHE_PATH}")
     return done
