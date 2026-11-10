@@ -322,10 +322,10 @@ gh auth login -h github.com      # 交互式重新登录（推荐）
 2. 重写全部历史（21 个 commit）：
    ```bash
    cat > /tmp/replacements.txt <<'RE'
-   you@sjtu.edu.cn==>you@sjtu.edu.cn
-   you@example.com==>you@example.com
-   friend@example.com==>friend@example.com
-   you@example.com==>you@example.com
+   <old-sjtu-address>==>you@sjtu.edu.cn
+   <old-qq-address-1>==>you@example.com
+   <old-qq-address-2>==>friend@example.com
+   <old-qq-address-3>==>you@example.com
    RE
    .venv/bin/git-filter-repo --replace-text /tmp/replacements.txt --force
    git remote add origin https://github.com/Koalalive/neurodaily.git
