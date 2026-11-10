@@ -11,3 +11,6 @@ output/
 # machine-generated config with local absolute paths (regenerate via `config init`)
 config/config.json
 scripts/*.plist
+
+# personal email config (may reference credentials)
+config/email.json

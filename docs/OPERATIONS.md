@@ -223,6 +223,38 @@ export OPENAI_BASE_URL=https://api.openai.com/v1   # 可选
 - LLM 提示词已强制「不得编造日期/数字/人名/试验名称」，只依据已给出的事实扩写。
 - 也可以像 `scripts/seed_deep_batch1.py` 那样**手工分批**写入缓存（质量最高）。
 
+### 6.5 每天早上自动邮件推送
+
+每日 08:00 的 `neurodaily run` 完成后，会自动把当天结果渲染成 HTML 邮件并发送（若已配置密码）。
+
+配置：`config/email.json`（从 `config/email.example.json` 复制；该文件已 gitignore）
+```json
+{
+  "enabled": true,
+  "smtp_host": "smtp.sjtu.edu.cn", "smtp_port": 465, "use_ssl": true,
+  "username": "you@sjtu.edu.cn",
+  "from": "you@sjtu.edu.cn",
+  "to": ["you@example.com"],
+  "password_file": "~/.neurodaily_smtp",
+  "max_papers": 40, "max_other": 15
+}
+```
+
+**密码只放本地文件（0600），不要写进仓库：**
+```bash
+printf '%s' '你的SMTP授权码' > ~/.neurodaily_smtp && chmod 600 ~/.neurodaily_smtp
+```
+
+命令：
+```bash
+.venv/bin/python -m neurodaily mail --test            # 发测试邮件
+.venv/bin/python -m neurodaily mail --preview /tmp/mail.html   # 只渲染预览
+.venv/bin/python -m neurodaily mail --send            # 立即跑一次并发送
+```
+
+> SJTU 邮箱通常需要在网页版邮箱设置里**开启 SMTP** 并使用「客户端专用密码/授权码」，而不是网页登录密码。
+> 收件方（QQ 邮箱）若未收到，请检查垃圾邮件并加入白名单。
+
 ---
 
 ## 7. 上传到 GitHub

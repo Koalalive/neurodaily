@@ -55,6 +55,12 @@ def cmd_run(args) -> int:
         for e in result.errors:
             print(f"    - {e}")
     try:
+        from .mailer import send_digest
+        if send_digest(result):
+            print("[neurodaily] 📧 email sent")
+    except Exception as e:
+        print(f"[neurodaily] ⚠ email not sent: {e}")
+    try:
         from .onthisday import should_notify as _should_notify, is_enabled as _otd_enabled, day_label
         from .notify import notify_on_this_day
         if _otd_enabled(cfg) and _should_notify(cfg) and result.on_this_day:
@@ -201,6 +207,30 @@ def cmd_deepen(args) -> int:
     return 0
 
 
+def cmd_mail(args) -> int:
+    from .mailer import render_email, send_digest, send_test
+    if args.test:
+        send_test()
+        print("[neurodaily] 📧 test email sent")
+        return 0
+    from .config import Config
+    from .digest import run as run_digest
+    cfg = Config.load(args.config)
+    print("[neurodaily] running digest to build the email ...")
+    result = run_digest(cfg, check_duplicate=False, record=False, force=True)
+    subject, html, text = render_email(result)
+    if args.preview:
+        with open(args.preview, "w", encoding="utf-8") as f:
+            f.write(html)
+        print(f"[neurodaily] preview written → {args.preview} ({len(html)} bytes)")
+    if args.send:
+        send_digest(result)
+        print(f"[neurodaily] 📧 sent: {subject}")
+    if not args.preview and not args.send and not args.test:
+        print("[neurodaily] nothing to do: use --test, --preview PATH, or --send")
+    return 0
+
+
 def cmd_history(args) -> int:
     from . import history as hist
     runs = hist.list_runs(limit=args.limit)
@@ -258,6 +288,12 @@ def build_parser() -> argparse.ArgumentParser:
     deepen_p.add_argument("--api-key", default=None)
     deepen_p.add_argument("--concurrency", type=int, default=4)
     deepen_p.set_defaults(func=cmd_deepen)
+
+    mail_p = sub.add_parser("mail", help="send / preview today's digest as email")
+    mail_p.add_argument("--test", action="store_true", help="send a tiny test email")
+    mail_p.add_argument("--preview", metavar="PATH", help="write the email HTML to PATH")
+    mail_p.add_argument("--send", action="store_true", help="send today's digest")
+    mail_p.set_defaults(func=cmd_mail)
 
     hist_p = sub.add_parser("history", help="list past search runs")
     hist_p.add_argument("--limit", type=int, default=100)
