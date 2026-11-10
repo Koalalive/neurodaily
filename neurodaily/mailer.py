@@ -20,6 +20,7 @@ from email.utils import formataddr, formatdate
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG_PATH = os.path.join(ROOT, "config", "email.json")
+LAST_PATH = os.path.join(os.path.expanduser("~"), "neurodaily", "output", "last_email.json")
 
 _WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 
@@ -42,6 +43,7 @@ DEFAULT_CFG = {
     "max_other": 15,
     "summary_papers": 12,
     "summary_chars": 420,
+    "attach_max_mb": 8,
 }
 
 
@@ -174,7 +176,7 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
 
     if cfg.get("attach_report", True):
         parts.append('<div style="margin-top:14px;color:#888;font-size:12px">'
-                     "完整交互式报告见附件 HTML。</div>")
+                     "完整交互式报告见附件 HTML（若附件缺失则因体积超限）。</div>")
     parts.append(
         '<div style="margin-top:18px;padding-top:12px;border-top:1px solid #eeeeee;color:#999;font-size:11px">'
         "本邮件由 NeuroDaily 自动生成。</div></div></div>"
@@ -214,8 +216,11 @@ def _build_message(cfg: dict, subject: str, html: str, text: str,
     alt.attach(MIMEText(html, "html", "utf-8"))
     msg.attach(alt)
 
+    max_mb = float(cfg.get("attach_max_mb", 8))
     for path in attachments or []:
         try:
+            if os.path.getsize(path) > max_mb * 1024 * 1024:
+                continue
             with open(path, "rb") as f:
                 part = MIMEBase("text", "html")
                 part.set_payload(f.read())
@@ -289,3 +294,22 @@ def send_test(cfg: dict | None = None) -> None:
             '<h2 style="color:#0369a1">NeuroDaily 邮件配置成功 ✅</h2>'
             '<p>如果你收到这封邮件，说明 SMTP 与收件人配置可用。</p></div>')
     send_with_retry(subject, html, "NeuroDaily 邮件配置成功", cfg)
+
+
+def save_last(subject: str, html: str, text: str, attachment: str | None = None) -> None:
+    """Remember the last rendered email so `mail --send-latest` can resend it."""
+    try:
+        os.makedirs(os.path.dirname(LAST_PATH), exist_ok=True)
+        with open(LAST_PATH, "w", encoding="utf-8") as f:
+            json.dump({"subject": subject, "html": html, "text": text,
+                       "attachment": attachment or ""}, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def load_last() -> dict | None:
+    try:
+        with open(LAST_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None

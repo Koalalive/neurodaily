@@ -250,6 +250,7 @@ printf '%s' '你的SMTP授权码' > ~/.neurodaily_smtp && chmod 600 ~/.neurodail
 .venv/bin/python -m neurodaily mail --test            # 发测试邮件
 .venv/bin/python -m neurodaily mail --preview /tmp/mail.html   # 只渲染预览
 .venv/bin/python -m neurodaily mail --send            # 立即跑一次并发送
+.venv/bin/python -m neurodaily mail --send-latest     # 复用上次渲染的邮件重发（不跑检索）
 ```
 
 > SJTU 邮箱通常需要在网页版邮箱设置里**开启 SMTP** 并使用「客户端专用密码/授权码」，而不是网页登录密码。

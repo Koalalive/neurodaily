@@ -55,10 +55,13 @@ def cmd_run(args) -> int:
         for e in result.errors:
             print(f"    - {e}")
     try:
-        from .mailer import load_cfg as _mail_cfg, send_digest
+        from .mailer import _password, load_cfg as _mail_cfg, render_email, save_last, send_with_retry
         _mc = _mail_cfg()
         _atts = [path] if _mc.get("attach_report", True) else None
-        if send_digest(result, attachments=_atts):
+        _subj, _html, _text = render_email(result, _mc)
+        save_last(_subj, _html, _text, path if _atts else None)
+        if _mc.get("enabled", True) and _password(_mc):
+            send_with_retry(_subj, _html, _text, _mc, _atts)
             print("[neurodaily] 📧 email sent")
     except Exception as e:
         print(f"[neurodaily] ⚠ email not sent: {e}")
@@ -222,7 +225,17 @@ def cmd_mail(args) -> int:
         if args.remove:
             argv += ["--remove", args.remove]
         return mail_tui.main(argv)
-    from .mailer import render_email, send_digest, send_test, send_with_retry
+    from .mailer import load_last, render_email, save_last, send_digest, send_test, send_with_retry
+    if getattr(args, "send_latest", False):
+        last = load_last()
+        if not last:
+            print("[neurodaily] no cached email yet; run 'mail --send' first")
+            return 1
+        att = last.get("attachment") or ""
+        atts = [att] if att and os.path.exists(att) else None
+        send_with_retry(last["subject"], last["html"], last["text"], attachments=atts)
+        print(f"[neurodaily] 📧 resent: {last['subject']}")
+        return 0
     if args.test:
         send_test()
         print("[neurodaily] 📧 test email sent")
@@ -246,6 +259,7 @@ def cmd_mail(args) -> int:
         from .mailer import load_cfg as _mail_cfg
         atts = [report_path] if _mail_cfg().get("attach_report", True) else None
         send_with_retry(subject, html, text, attachments=atts)
+        save_last(subject, html, text, report_path if atts else None)
         print(f"[neurodaily] 📧 sent: {subject}")
     if not args.preview and not args.send and not args.test:
         print("[neurodaily] nothing to do: use --test, --preview PATH, or --send")
@@ -314,6 +328,8 @@ def build_parser() -> argparse.ArgumentParser:
     mail_p.add_argument("--test", action="store_true", help="send a tiny test email")
     mail_p.add_argument("--preview", metavar="PATH", help="write the email HTML to PATH")
     mail_p.add_argument("--send", action="store_true", help="send today's digest")
+    mail_p.add_argument("--send-latest", dest="send_latest", action="store_true",
+                        help="resend the last rendered email (no new digest run)")
     mail_p.add_argument("--tui", action="store_true", help="interactive recipients manager")
     mail_p.add_argument("--list", dest="list_recipients", action="store_true",
                         help="print current recipients")

@@ -96,7 +96,10 @@ def _run_tui() -> None:
     def draw(stdscr):
         nonlocal sel, status, dirty
         stdscr.keypad(True)
-        curses.curs_set(0)
+        try:
+            curses.curs_set(0)
+        except Exception:
+            pass
         try:
             curses.start_color()
             curses.use_default_colors()
@@ -106,6 +109,14 @@ def _run_tui() -> None:
         while True:
             stdscr.erase()
             h, w = stdscr.getmaxyx()
+            if h < 8 or w < 40:
+                stdscr.erase()
+                stdscr.addstr(0, 0, "Terminal too small - enlarge and press any key (q to quit)")
+                stdscr.refresh()
+                ch = stdscr.getch()
+                if ch == ord("q"):
+                    return
+                continue
             title = " NeuroDaily - Email Recipients "
             try:
                 stdscr.addstr(0, 2, title, curses.A_BOLD | curses.color_pair(1))
@@ -207,7 +218,10 @@ def _input(stdscr, prompt: str, initial: str = "") -> str:
     import curses
     h, w = stdscr.getmaxyx()
     buf = list(initial)
-    curses.curs_set(1)
+    try:
+        curses.curs_set(1)
+    except Exception:
+        pass
     while True:
         stdscr.move(h - 1, 0)
         stdscr.clrtoeol()
@@ -216,10 +230,16 @@ def _input(stdscr, prompt: str, initial: str = "") -> str:
         stdscr.refresh()
         ch = stdscr.getch()
         if ch in (10, 13):
-            curses.curs_set(0)
+            try:
+                curses.curs_set(0)
+            except Exception:
+                pass
             return "".join(buf).strip()
         if ch == 27:
-            curses.curs_set(0)
+            try:
+                curses.curs_set(0)
+            except Exception:
+                pass
             return ""
         if ch in (curses.KEY_BACKSPACE, 127, 8):
             if buf:

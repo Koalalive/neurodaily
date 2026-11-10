@@ -220,10 +220,18 @@ def save_report(result: DigestResult, output_path: str) -> str:
 
 
 def _prune_reports(outdir: str, keep: int = 60) -> None:
+    """Keep the newest `keep` reports plus any still referenced by history."""
     import glob
+    try:
+        referenced = {os.path.basename(r.get("report_path") or "")
+                      for r in hist.list_runs(limit=5000)}
+    except Exception:
+        referenced = set()
     files = sorted(glob.glob(os.path.join(outdir, "neurodaily_*.html")),
                    key=os.path.getmtime, reverse=True)
     for f in files[max(1, keep):]:
+        if os.path.basename(f) in referenced:
+            continue
         try:
             os.remove(f)
         except Exception:
