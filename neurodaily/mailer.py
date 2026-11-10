@@ -236,6 +236,8 @@ def _build_message(cfg: dict, subject: str, html: str, text: str,
 def send(subject: str, html: str, text: str, cfg: dict | None = None,
          attachments: list[str] | None = None) -> None:
     cfg = cfg or load_cfg()
+    if not cfg.get("to"):
+        raise RuntimeError("没有收件人：请用 `neurodaily mail --tui` 添加，或设置 config/email.json 的 to。")
     pw = _password(cfg)
     if not pw:
         raise RuntimeError(
