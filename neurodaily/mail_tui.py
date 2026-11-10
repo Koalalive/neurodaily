@@ -44,6 +44,35 @@ def valid(email: str) -> bool:
     return bool(EMAIL_RE.match(email.strip()))
 
 
+def password_file(cfg: dict | None = None) -> str:
+    cfg = cfg or load_cfg()
+    return os.path.expanduser(cfg.get("password_file") or "~/.neurodaily_smtp")
+
+
+def has_password(cfg: dict | None = None) -> bool:
+    from .mailer import _password
+    return bool(_password(cfg or load_cfg()))
+
+
+def set_password(pw: str, cfg: dict | None = None) -> str:
+    path = password_file(cfg)
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(pw.strip())
+    os.chmod(path, 0o600)
+    return path
+
+
+def clear_password(cfg: dict | None = None) -> bool:
+    try:
+        os.remove(password_file(cfg))
+        return True
+    except Exception:
+        return False
+
+
 def add_recipient(email: str) -> tuple[bool, str]:
     email = email.strip()
     if not valid(email):
@@ -125,7 +154,8 @@ def _run_tui() -> None:
             info = f" From: {cfg.get('from','')}   SMTP: {cfg.get('smtp_host','')}:{cfg.get('smtp_port','')}"
             send = "ON" if cfg.get("enabled", True) else "OFF"
             stdscr.addstr(1, 2, info[: max(0, w - 3)])
-            stdscr.addstr(2, 2, f" Daily email: {send}   Recipients: {len(to)}"
+            auth = "set" if has_password(cfg) else "MISSING"
+            stdscr.addstr(2, 2, f" Daily email: {send}   auth: {auth}   Recipients: {len(to)}"
                                 f"   max_papers={cfg.get('max_papers',40)}"
                                 f" max_other={cfg.get('max_other',15)}")
             stdscr.addstr(3, 0, "-" * max(0, w - 1))
@@ -145,8 +175,8 @@ def _run_tui() -> None:
                     stdscr.addstr(y, 1, line[: max(0, w - 2)], attr)
 
             stdscr.addstr(h - 3, 0, "-" * max(0, w - 1))
-            stdscr.addstr(h - 2, 2, "a add | d delete | e edit | t toggle email | "
-                                    "l limits | s save | q quit")
+            stdscr.addstr(h - 2, 2, "a add | d del | e edit | t toggle | p passwd | x clear | "
+                                    "c smtp | l limits | T test | s save | q quit")
             stdscr.addstr(h - 1, 2, f"status: {status}"[: max(0, w - 3)])
             stdscr.refresh()
 
@@ -205,6 +235,45 @@ def _run_tui() -> None:
                     status = "modified (press s to save)"
                 except ValueError:
                     status = "numbers only"
+            elif ch == ord("p"):
+                pw = _input_secret(stdscr, "SMTP password (hidden): ")
+                if pw:
+                    try:
+                        path = set_password(pw, cfg)
+                        status = f"password saved (600) -> {path}"
+                    except Exception as exc:
+                        status = f"save failed: {exc}"
+            elif ch == ord("x"):
+                if _confirm(stdscr, "Clear saved SMTP password? (y/n)"):
+                    status = "password cleared" if clear_password(cfg) else "no password file"
+            elif ch == ord("c"):
+                host = _input(stdscr, "SMTP host: ", initial=str(cfg.get("smtp_host", "")))
+                port = _input(stdscr, "SMTP port: ", initial=str(cfg.get("smtp_port", 587)))
+                sslf = _input(stdscr, "Use SSL? (y/N): ", initial=("y" if cfg.get("use_ssl") else "n"))
+                user = _input(stdscr, "username: ", initial=str(cfg.get("username", "")))
+                frm = _input(stdscr, "from: ", initial=str(cfg.get("from", "")))
+                if host:
+                    cfg["smtp_host"] = host
+                if port:
+                    try:
+                        cfg["smtp_port"] = int(port)
+                    except ValueError:
+                        status = "bad port"
+                if sslf:
+                    cfg["use_ssl"] = sslf.lower().startswith("y")
+                if user:
+                    cfg["username"] = user
+                if frm:
+                    cfg["from"] = frm
+                dirty = True
+                status = "modified (press s to save)"
+            elif ch == ord("T"):
+                try:
+                    from .mailer import send_test
+                    send_test(cfg)
+                    status = "test email sent"
+                except Exception as exc:
+                    status = f"test failed: {exc}"
             elif ch == ord("s"):
                 cfg["to"] = to
                 save_cfg(cfg)
@@ -235,6 +304,39 @@ def _input(stdscr, prompt: str, initial: str = "") -> str:
             except Exception:
                 pass
             return "".join(buf).strip()
+        if ch == 27:
+            try:
+                curses.curs_set(0)
+            except Exception:
+                pass
+            return ""
+        if ch in (curses.KEY_BACKSPACE, 127, 8):
+            if buf:
+                buf.pop()
+        elif 32 <= ch < 127:
+            buf.append(chr(ch))
+
+
+def _input_secret(stdscr, prompt: str) -> str:
+    import curses
+    h, w = stdscr.getmaxyx()
+    buf = []
+    try:
+        curses.curs_set(1)
+    except Exception:
+        pass
+    while True:
+        stdscr.move(h - 1, 0)
+        stdscr.clrtoeol()
+        stdscr.addstr(h - 1, 1, (prompt + "*" * len(buf))[: max(0, w - 3)])
+        stdscr.refresh()
+        ch = stdscr.getch()
+        if ch in (10, 13):
+            try:
+                curses.curs_set(0)
+            except Exception:
+                pass
+            return "".join(buf)
         if ch == 27:
             try:
                 curses.curs_set(0)

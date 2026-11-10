@@ -33,7 +33,7 @@ DEFAULT_CFG = {
     "username": "you@sjtu.edu.cn",
     "from": "you@sjtu.edu.cn",
     "from_name": "NeuroDaily",
-    "to": ["you@example.com", "friend@example.com"],
+    "to": [],
     "password_env": "NEURODAILY_SMTP_PASSWORD",
     "password_file": "~/.neurodaily_smtp",
     "subject_template": "神经病专家的厕所读物-{date} {weekday}",

@@ -258,11 +258,17 @@ printf '%s' '你的SMTP授权码' > ~/.neurodaily_smtp && chmod 600 ~/.neurodail
 
 **收件人管理（TUI / 命令行）**
 ```bash
-.venv/bin/python -m neurodaily mail --tui        # 全屏 TUI：↑↓选择 a增 d删 e改 t开关 l条数 s保存 q退出
+.venv/bin/python -m neurodaily mail --tui        # 全屏 TUI（见下方按键）
 .venv/bin/python -m neurodaily mail --list       # 打印当前收件人
 .venv/bin/python -m neurodaily mail --add a@b.com
 .venv/bin/python -m neurodaily mail --remove a@b.com
 ```
+
+TUI 按键：
+`↑/↓` 选择 · `a` 增 · `d` 删 · `e` 改 · `t` 开关发送 · `p` 设置/更新授权码（隐藏输入，写入 600 权限文件）·
+`x` 清除授权码 · `c` 配置 SMTP（host/port/SSL/账号/发件人）· `l` 条数上限 · `T` 发送测试邮件 · `s` 保存 · `q` 退出
+
+> TUI 从不显示已保存的密码，只显示 `auth: set / MISSING`。
 
 **邮件形态**（`config/email.json`）
 ```json
