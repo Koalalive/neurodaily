@@ -343,3 +343,16 @@ gh auth login -h github.com      # 交互式重新登录（推荐）
 
 **今后规则**：任何含真实地址/凭据的文件（`config/email.json`、`~/.neurodaily_smtp`）不得提交；提交前用
 `git grep -nE '@|sk-' -- .` 自查。
+
+### 提交前钩子（防再犯）
+
+```bash
+sh scripts/install_git_hooks.sh
+```
+
+安装本地 `.git/hooks/pre-commit`，阻断：
+- 任何 `@qq.com` 地址；
+- 非占位符的 `@sjtu.edu.cn`（允许 `you@` / `example@`）；
+- `sk-` 开头的 API Key。
+
+新克隆仓库后需执行一次（钩子不随仓库同步）。
