@@ -55,8 +55,10 @@ def cmd_run(args) -> int:
         for e in result.errors:
             print(f"    - {e}")
     try:
-        from .mailer import send_digest
-        if send_digest(result):
+        from .mailer import load_cfg as _mail_cfg, send_digest
+        _mc = _mail_cfg()
+        _atts = [path] if _mc.get("attach_report", True) else None
+        if send_digest(result, attachments=_atts):
             print("[neurodaily] 📧 email sent")
     except Exception as e:
         print(f"[neurodaily] ⚠ email not sent: {e}")
@@ -208,7 +210,19 @@ def cmd_deepen(args) -> int:
 
 
 def cmd_mail(args) -> int:
-    from .mailer import render_email, send_digest, send_test
+    from . import mail_tui
+    if args.tui or args.list_recipients or args.add or args.remove:
+        argv = []
+        if args.tui:
+            argv.append("--tui")
+        if args.list_recipients:
+            argv.append("--list")
+        if args.add:
+            argv += ["--add", args.add]
+        if args.remove:
+            argv += ["--remove", args.remove]
+        return mail_tui.main(argv)
+    from .mailer import render_email, send_digest, send_test, send_with_retry
     if args.test:
         send_test()
         print("[neurodaily] 📧 test email sent")
@@ -224,7 +238,14 @@ def cmd_mail(args) -> int:
             f.write(html)
         print(f"[neurodaily] preview written → {args.preview} ({len(html)} bytes)")
     if args.send:
-        send_digest(result)
+        from .digest import save_report
+        from datetime import datetime
+        fmt = cfg.output.get("filename_format", "neurodaily_%Y-%m-%d.html")
+        report_path = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
+        save_report(result, report_path)
+        from .mailer import load_cfg as _mail_cfg
+        atts = [report_path] if _mail_cfg().get("attach_report", True) else None
+        send_with_retry(subject, html, text, attachments=atts)
         print(f"[neurodaily] 📧 sent: {subject}")
     if not args.preview and not args.send and not args.test:
         print("[neurodaily] nothing to do: use --test, --preview PATH, or --send")
@@ -293,6 +314,11 @@ def build_parser() -> argparse.ArgumentParser:
     mail_p.add_argument("--test", action="store_true", help="send a tiny test email")
     mail_p.add_argument("--preview", metavar="PATH", help="write the email HTML to PATH")
     mail_p.add_argument("--send", action="store_true", help="send today's digest")
+    mail_p.add_argument("--tui", action="store_true", help="interactive recipients manager")
+    mail_p.add_argument("--list", dest="list_recipients", action="store_true",
+                        help="print current recipients")
+    mail_p.add_argument("--add", metavar="EMAIL", help="add a recipient")
+    mail_p.add_argument("--remove", metavar="EMAIL", help="remove a recipient")
     mail_p.set_defaults(func=cmd_mail)
 
     hist_p = sub.add_parser("history", help="list past search runs")

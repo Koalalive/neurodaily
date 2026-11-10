@@ -255,6 +255,27 @@ printf '%s' '你的SMTP授权码' > ~/.neurodaily_smtp && chmod 600 ~/.neurodail
 > SJTU 邮箱通常需要在网页版邮箱设置里**开启 SMTP** 并使用「客户端专用密码/授权码」，而不是网页登录密码。
 > 收件方（QQ 邮箱）若未收到，请检查垃圾邮件并加入白名单。
 
+**收件人管理（TUI / 命令行）**
+```bash
+.venv/bin/python -m neurodaily mail --tui        # 全屏 TUI：↑↓选择 a增 d删 e改 t开关 l条数 s保存 q退出
+.venv/bin/python -m neurodaily mail --list       # 打印当前收件人
+.venv/bin/python -m neurodaily mail --add a@b.com
+.venv/bin/python -m neurodaily mail --remove a@b.com
+```
+
+**邮件形态**（`config/email.json`）
+```json
+{
+  "subject_template": "神经病专家的厕所读物-{date} {weekday}",
+  "body_mode": "summary",        // summary=正文只放摘要；full=正文放全部条目
+  "attach_report": true,         // 附带完整 HTML 报告
+  "summary_papers": 12,          // 摘要里展示的论文数
+  "summary_chars": 420,          // 历史上今天的摘要字数
+  "smtp_timeout": 120
+}
+```
+> 若附件导致投递失败，把 `attach_report` 设为 `false`，或把 `body_mode` 设为 `full` 去掉附件。
+
 ---
 
 ## 7. 上传到 GitHub

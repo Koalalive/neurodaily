@@ -7,10 +7,17 @@
   "from": "you@sjtu.edu.cn",
   "from_name": "NeuroDaily",
   "to": [
-    "you@example.com"
+    "you@example.com",
+    "friend@example.com"
   ],
   "password_env": "NEURODAILY_SMTP_PASSWORD",
   "password_file": "~/.neurodaily_smtp",
   "max_papers": 40,
-  "max_other": 15
+  "max_other": 15,
+  "smtp_timeout": 120,
+  "subject_template": "神经病专家的厕所读物-{date} {weekday}",
+  "body_mode": "summary",
+  "attach_report": true,
+  "summary_papers": 12,
+  "summary_chars": 420
 }

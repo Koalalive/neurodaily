@@ -17,20 +17,40 @@ we never claim an event happened "today" when it did not.
 """
 from __future__ import annotations
 
+import json
+import os
 from datetime import date as _date
 
+
+def _cache_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "onthisday_deep.json")
+
+
 def _load_deep_cache() -> dict:
-    import json
-    import os
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "onthisday_deep.json")
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(_cache_path(), encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {}
 
 
-_DEEP_CACHE = _load_deep_cache()
+_DEEP_CACHE: dict = {}
+_DEEP_CACHE_MTIME: float = -1.0
+
+
+def _refresh_deep_cache() -> None:
+    """Re-read the body cache when the file changes (long-running processes see updates)."""
+    global _DEEP_CACHE, _DEEP_CACHE_MTIME
+    try:
+        mtime = os.path.getmtime(_cache_path())
+    except OSError:
+        mtime = 0.0
+    if mtime != _DEEP_CACHE_MTIME:
+        _DEEP_CACHE = _load_deep_cache()
+        _DEEP_CACHE_MTIME = mtime
+
+
+_refresh_deep_cache()
 
 
 CATEGORY_LABELS = {
@@ -2287,6 +2307,7 @@ _BODY_DICTS = (
 
 
 def _has_body(year, title) -> bool:
+    _refresh_deep_cache()
     if _DEEP_CACHE.get(f"{year}|{title}"):
         return True
     k = (year, title)
@@ -2460,6 +2481,7 @@ BODIES_DEEP_TAIL2: dict[tuple[int, str], str] = {
 
 
 def _decorate(e: dict, match: str) -> dict:
+    _refresh_deep_cache()
     item = dict(e)
     item["category_label"] = CATEGORY_LABELS.get(e.get("category", ""), e.get("category", ""))
     item["kind_label"] = KIND_LABELS.get(e.get("kind", ""), "历史事件")

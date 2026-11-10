@@ -210,7 +210,24 @@ def save_report(result: DigestResult, output_path: str) -> str:
         rel = os.path.basename(output_path)
         hist.set_report_path(result.history_id, rel)
     _write_static_history(os.path.dirname(output_path))
+    keep = 60
+    try:
+        keep = int((getattr(result, "config", None).output or {}).get("keep_reports", 60))
+    except Exception:
+        pass
+    _prune_reports(os.path.dirname(output_path), keep)
     return output_path
+
+
+def _prune_reports(outdir: str, keep: int = 60) -> None:
+    import glob
+    files = sorted(glob.glob(os.path.join(outdir, "neurodaily_*.html")),
+                   key=os.path.getmtime, reverse=True)
+    for f in files[max(1, keep):]:
+        try:
+            os.remove(f)
+        except Exception:
+            pass
 
 
 def _write_static_history(outdir: str) -> None:

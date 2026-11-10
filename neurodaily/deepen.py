@@ -52,15 +52,16 @@ def save_cache(cache: dict) -> None:
 
 
 def targets() -> list[dict]:
-    """Milestones that still have no long-form body."""
+    """Milestones that still have no long-form body (reads the cache fresh)."""
     from .onthisday import EVERGREEN_ALL, EVENTS, _has_body
+    cache = load_cache()
     seen, out = set(), []
     for e in list(EVERGREEN_ALL) + [x for v in EVENTS.values() for x in v]:
         k = (e.get("year"), e.get("title"))
         if k in seen:
             continue
         seen.add(k)
-        if _has_body(*k):
+        if f"{k[0]}|{k[1]}" in cache or _has_body(*k):
             continue
         out.append(e)
     return out
@@ -91,7 +92,7 @@ def _prompt_for(e: dict) -> str:
 def _call_llm(client, model: str, e: dict) -> str:
     import time
     last = None
-    for attempt in range(3):
+    for attempt in range(4):
         try:
             resp = client.post(
                 "/chat/completions",
@@ -116,7 +117,8 @@ def _call_llm(client, model: str, e: dict) -> str:
             return text
         except Exception as exc:
             last = exc
-            time.sleep(2 * (attempt + 1))
+            import random
+            time.sleep(min(20, (2 ** attempt) + random.random() * 2))
     raise last
 
 
@@ -154,7 +156,8 @@ def expand_llm(limit: int | None = None, model: str | None = None,
                     if done % 5 == 0:
                         save_cache(cache)
                 except Exception as exc:
-                    print(f"[deepen] FAILED {e.get('year')} {e.get('title')}: {exc}", flush=True)
+                    _msg = str(exc) or type(exc).__name__
+                    print(f"[deepen] FAILED {e.get('year')} {e.get('title')}: {_msg}", flush=True)
     save_cache(cache)
     print(f"[deepen] 写入 {done} 条 → {CACHE_PATH}")
     return done
