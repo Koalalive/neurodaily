@@ -27,8 +27,8 @@ CFG_PATH = os.path.join(ROOT, "config", "email.json")
 DEFAULT_CFG = {
     "enabled": True,
     "smtp_host": "smtp.sjtu.edu.cn",
-    "smtp_port": 465,
-    "use_ssl": True,
+    "smtp_port": 587,
+    "use_ssl": False,
     "username": "you@sjtu.edu.cn",
     "from": "you@sjtu.edu.cn",
     "from_name": "NeuroDaily",

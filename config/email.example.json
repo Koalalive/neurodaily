@@ -1,12 +1,14 @@
 {
   "enabled": true,
   "smtp_host": "smtp.sjtu.edu.cn",
-  "smtp_port": 465,
-  "use_ssl": true,
+  "smtp_port": 587,
+  "use_ssl": false,
   "username": "you@sjtu.edu.cn",
   "from": "you@sjtu.edu.cn",
   "from_name": "NeuroDaily",
-  "to": ["you@example.com"],
+  "to": [
+    "you@example.com"
+  ],
   "password_env": "NEURODAILY_SMTP_PASSWORD",
   "password_file": "~/.neurodaily_smtp",
   "max_papers": 40,
