@@ -356,3 +356,63 @@ sh scripts/install_git_hooks.sh
 - `sk-` 开头的 API Key。
 
 新克隆仓库后需执行一次（钩子不随仓库同步）。
+
+---
+
+## 9. 每日自动化总览
+
+```mermaid
+flowchart TD
+  A["08:00 launchd<br/>com.neurodaily.daily"] --> B["python -m neurodaily run"]
+  B --> C{"并行抓取（线程池）"}
+  C --> C1["journal RSS"]
+  C --> C2["arXiv"]
+  C --> C3["PubMed"]
+  C --> C4["bioRxiv"]
+  C --> C5["openFDA 药物/器械"]
+  C --> C6["ClinicalTrials.gov"]
+  C --> C7["policy / news RSS"]
+  C1 --> D
+  C2 --> D
+  C3 --> D
+  C4 --> D
+  C5 --> D
+  C6 --> D
+  C7 --> D["标签 → 去重 → 排序"]
+  D --> E{"抓到 0 条？"}
+  E -- 是 --> E1["放宽 lookback 重试一次"]
+  E1 --> F
+  E -- 否 --> F["构建板块"]
+  F --> G["历史上的今天<br/>深读池按日轮换"]
+  G --> H["渲染 HTML<br/>板块置顶 + 🕸 图谱注入"]
+  H --> I["保存报告<br/>裁剪保留 60 份"]
+  H --> J["写入 search_history.db"]
+  H --> K["邮件：摘要正文 + 完整 HTML 附件"]
+  K --> L["SMTP 587 STARTTLS → 收件人"]
+  K --> M["桌面通知"]
+```
+
+### 行为与降级
+
+| 环节 | 成功 | 失败时 |
+|---|---|---|
+| 单个数据源 | 计入结果 | 记为 `failed`，其余照常，报告底部显示 Source Health |
+| 全部数据源为空 | — | 自动放宽 `lookback_days` 重试一次；仍空则报告注明"上游无更新/限流" |
+| 历史上的今天 | 精确日 / 深读池轮换 | 永不为空（有深读池兜底） |
+| 报告 | 写入 `output/` 并裁剪 | 不覆盖已存在报告（去重跳过时） |
+| 邮件 | 发送摘要 + 附件 | **失败不影响报告**，仅打印警告；无收件人/无密码时明确报错 |
+| 附件 | ≤ `attach_max_mb`（默认 8MB） | 超限自动不附，正文注明 |
+
+### 相关后台任务（非每日）
+
+| 任务 | 命令 | 说明 |
+|---|---|---|
+| 深读池扩写 | `scripts/deepen_until_done.py` | 循环补齐长文，跑完自动渲染+提交+推送 |
+| 查看进度 | `neurodaily deepen --status` | total / cached / remaining |
+| 收件人/凭据 | `neurodaily mail --tui` | 增删收件人、设置授权码、SMTP、测试发送 |
+
+### 日志位置
+
+- 定时任务：`output/launchd_stdout.log`、`output/launchd_stderr.log`
+- 深读扩写：`/tmp/deepen_until_done.log`
+- 完成校验：`/tmp/neurodaily_final_check.txt`（由 watcher 生成）
