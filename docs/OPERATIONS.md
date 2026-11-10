@@ -308,3 +308,38 @@ gh auth login -h github.com      # 交互式重新登录（推荐）
 ### 6.3 提交内容说明
 - 会被提交：源码 `neurodaily/`、`docs/`、`README.md`、`pyproject.toml`、`config.example.json` 等。
 - **不会**被提交（`.gitignore` 已排除）：`output/`（报告/历史库/日志——个人数据）、`config/config.json`（含本地绝对路径）、`.venv/`、`scripts/*.plist`。
+
+---
+
+## 8. 维护记录
+
+### 2026-11-11 · 清除仓库中的个人邮箱（历史重写）
+
+**原因**：早期提交把真实邮箱写进了 `neurodaily/mailer.py` 默认值、`config/email.example.json` 与文档。
+
+**处理步骤**
+1. 先在 HEAD 用占位符替换：`you@sjtu.edu.cn` / `you@example.com` / `friend@example.com`
+2. 重写全部历史（21 个 commit）：
+   ```bash
+   cat > /tmp/replacements.txt <<'RE'
+   you@sjtu.edu.cn==>you@sjtu.edu.cn
+   you@example.com==>you@example.com
+   friend@example.com==>friend@example.com
+   you@example.com==>you@example.com
+   RE
+   .venv/bin/git-filter-repo --replace-text /tmp/replacements.txt --force
+   git remote add origin https://github.com/Koalalive/neurodaily.git
+   git push --force origin main
+   git reflog expire --expire=now --all && git gc --prune=now
+   git branch --set-upstream-to=origin/main main
+   ```
+3. 验证：`git log -p --all | grep -cE '旧地址'` → `0`
+
+**影响**
+- 所有 commit hash 变更（`699580e` → `f9ae9e2`）。
+- 其他机器上的旧克隆必须重新同步：`git fetch origin && git reset --hard origin/main`。
+- 真实邮箱只存在于本机被 gitignore 的 `config/email.json`；SMTP 授权码只在 `~/.neurodaily_smtp`（0600）。
+- GitHub 可能短暂保留未被引用的旧对象（通常自动 GC）。
+
+**今后规则**：任何含真实地址/凭据的文件（`config/email.json`、`~/.neurodaily_smtp`）不得提交；提交前用
+`git grep -nE '@|sk-' -- .` 自查。
