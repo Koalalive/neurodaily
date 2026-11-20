@@ -14,3 +14,6 @@ scripts/*.plist
 
 # personal email config (may reference credentials)
 config/email.json
+
+# competition submission materials (private, never commit)
+competition/
