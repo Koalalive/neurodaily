@@ -35,8 +35,8 @@ def profile_path(name: str) -> str:
 
 def deep_merge(base, patch):
     """RFC-7386-like merge: dicts merge, lists/scalars replace, null deletes."""
-    if isinstance(base, dict) and isinstance(patch, dict):
-        out = copy.deepcopy(base)
+    if isinstance(patch, dict):
+        out = copy.deepcopy(base) if isinstance(base, dict) else {}
         for k, v in patch.items():
             if v is None:
                 out.pop(k, None)
@@ -93,7 +93,7 @@ def new_profile(name: str, from_path: str | None = None) -> str:
         data = DEFAULT_CONFIG().to_dict()
     path = profile_path(name)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "x", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return path
 
