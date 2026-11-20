@@ -91,6 +91,11 @@ def _inject_ai_summary(html: str, result: DigestResult) -> str:
     text = (getattr(result, "ai_summary", "") or "").strip()
     if not text:
         return html
+    try:
+        from .ai_summary import _clean_summary
+        text = _clean_summary(text, getattr(result, 'ai_summary_refs', {}) or {})
+    except Exception:
+        pass
     import html as _html
     meta = getattr(result, "ai_summary_meta", {}) or {}
     model = _html.escape(str(meta.get("model", "AI")))

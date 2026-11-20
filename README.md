@@ -142,7 +142,7 @@ docker compose up --build
 需要用户自己的 OpenAI 兼容 API key（默认 DeepSeek）：
 
 ```bash
-printf '%s' 'sk-...' > ~/.neurodaily_llm && chmod 600 ~/.neurodaily_llm
+printf '%s' 'sk-...' > ~/.neurodaily_deepseek && chmod 600 ~/.neurodaily_deepseek
 cp config/ai_summary.example.json config/ai_summary.json
 .venv/bin/python -m neurodaily ai-summary --demo --force --save   # 预览
 ```
@@ -385,7 +385,7 @@ No-CLI flow: open the report → **⚙ Настройки** → изменить
 ### AI overview (optional)
 
 ```bash
-printf '%s' 'sk-...' > ~/.neurodaily_llm && chmod 600 ~/.neurodaily_llm
+printf '%s' 'sk-...' > ~/.neurodaily_deepseek && chmod 600 ~/.neurodaily_deepseek
 cp config/ai_summary.example.json config/ai_summary.json
 .venv/bin/python -m neurodaily ai-summary --force --save
 ```
@@ -464,7 +464,7 @@ docker run -d --name neurodaily -p 8031:8031 \
 ### ИИ-обзор (опционально)
 
 ```bash
-printf '%s' 'sk-...' > ~/.neurodaily_llm && chmod 600 ~/.neurodaily_llm
+printf '%s' 'sk-...' > ~/.neurodaily_deepseek && chmod 600 ~/.neurodaily_deepseek
 cp config/ai_summary.example.json config/ai_summary.json
 .venv/bin/python -m neurodaily ai-summary --force --save
 ```

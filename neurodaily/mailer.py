@@ -150,6 +150,11 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
                   "ru": "📅 В этот день"}.get(_lang, "📅 历史上的今天")
     ai = (getattr(result, "ai_summary", "") or "").strip()
     if ai:
+        try:
+            from .ai_summary import _clean_summary
+            ai = _clean_summary(ai, getattr(result, 'ai_summary_refs', {}) or {})
+        except Exception:
+            pass
         from .render import render_ai_inline
         _allowed = {it.url for it in (getattr(result, "items", None) or []) if getattr(it, "url", None)}
         _refs = getattr(result, "ai_summary_refs", {}) or {}
@@ -246,6 +251,8 @@ def email_safe_html(html: str) -> str:
             "", html, flags=re.I,
         )
     html = re.sub(r'<div class="toolbar">\s*</div>', "", html, flags=re.I)
+    html = re.sub(r'<div class="sec-actions">[\s\S]*?</div>', "", html, flags=re.I)
+    html = re.sub(r'<button\b[\s\S]*?</button>', "", html, flags=re.I)
     toc = (
         '<div style="margin:14px 0;padding:10px 14px;background:#f6f8fa;'
         'border:1px solid #e5e7eb;border-radius:8px;'

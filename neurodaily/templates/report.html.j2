@@ -55,6 +55,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="nd-base" content="">
 <title>NeuroDaily — {{ result.config_profile }} | {{ today }}</title>
 <style>
   :root {
@@ -180,6 +181,10 @@
     .toc .toc-title{display:none}
     .toc a{white-space:nowrap;padding:6px 10px}
   }
+
+  .sec-toggle{margin-left:8px}
+  h2.sec-title + .sec-toggle{display:inline-block;vertical-align:middle;margin:0 0 10px 10px}
+  .sec-body[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -297,7 +302,22 @@ if (IS_FILE) {
   var histLink = document.getElementById('histLink');
   if (histLink) histLink.href = 'history.html';
   var settingsLink = document.getElementById('settingsLink');
-  if (settingsLink) settingsLink.href = 'http://127.0.0.1:8031/settings';
+  var ndMeta = document.querySelector('meta[name="nd-base"]');
+  var ND_BASE = (ndMeta && ndMeta.content) ? ndMeta.content.replace(/\/$/, '') : 'http://127.0.0.1:8031';
+  if (settingsLink) settingsLink.href = ND_BASE + '/settings';
+
+  window.gotoServer = async function(path){
+    var base = ND_BASE;
+    try {
+      await fetch(base + '/api/status', {cache: 'no-store'});
+      location.href = base + path;
+    } catch (e) {
+      alert('服务未启动：请双击 scripts/启动 NeuroDaily.command，或运行 scripts/start.sh');
+    }
+  };
+  if (settingsLink) settingsLink.addEventListener('click', function(e){
+    e.preventDefault(); window.gotoServer('/settings');
+  });
   var promptLink = document.getElementById('promptLink');
   if (promptLink) {
     promptLink.removeAttribute('target');
@@ -315,8 +335,8 @@ var runBtn = document.getElementById('runNow');
 var runMsg = document.getElementById('runMsg');
 if (runBtn) {
   runBtn.addEventListener('click', function () {
-    var base = IS_FILE ? 'http://127.0.0.1:8031' : '';
-    location.href = base + '/settings?next=run';
+    if (IS_FILE) { window.gotoServer('/settings?next=run'); return; }
+    location.href = '/settings?next=run';
   });
 }
 
@@ -342,5 +362,51 @@ function pollUntilDone(startedAt) {
 </script>
 
 <footer>Generated automatically by NeuroDaily · {{ result.generated_at }}</footer>
+<script>
+// Make every top-level section collapsible (AI summary, papers, trials, ...).
+(function initCollapsibleSections(){
+  function toggleButton(body, btn){
+    var hide = !body.hidden;
+    body.hidden = hide;
+    btn.textContent = hide ? 'Expand' : 'Collapse';
+    btn.setAttribute('aria-expanded', hide ? 'false' : 'true');
+  }
+  document.querySelectorAll('main.wrap > section, main > section').forEach(function(sec){
+    if (sec.dataset.collapsible) return;
+    var head = sec.querySelector(':scope > .sec-head');
+    var h2 = sec.querySelector(':scope > h2.sec-title');
+    var anchor = head || h2;
+    if (!anchor) return;
+    var body = document.createElement('div');
+    body.className = 'sec-body';
+    var node = anchor.nextSibling;
+    while (node) { var next = node.nextSibling; body.appendChild(node); node = next; }
+    sec.appendChild(body);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'minibtn sec-toggle';
+    btn.textContent = 'Collapse';
+    btn.setAttribute('aria-expanded', 'true');
+    btn.addEventListener('click', function(){ toggleButton(body, btn); });
+    var actions = head && head.querySelector('.sec-actions');
+    if (actions) actions.insertBefore(btn, actions.firstChild);
+    else if (head) head.appendChild(btn);
+    else { btn.style.marginLeft = '10px'; h2.insertAdjacentElement('afterend', btn); }
+    sec.dataset.collapsible = '1';
+  });
+  document.querySelectorAll('.toc a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(){
+      var t = document.querySelector(a.getAttribute('href'));
+      if (!t) return;
+      var body = t.querySelector(':scope > .sec-body');
+      if (body && body.hidden) {
+        body.hidden = false;
+        var b = t.querySelector('.sec-toggle');
+        if (b) { b.textContent = 'Collapse'; b.setAttribute('aria-expanded', 'true'); }
+      }
+    });
+  });
+})();
+</script>
 </body>
 </html>

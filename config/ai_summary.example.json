@@ -1,10 +1,11 @@
 {
   "enabled": true,
   "base_url": "https://api.deepseek.com/v1",
-  "model": "deepseek-chat",
-  "api_key_env": "NEURODAILY_LLM_API_KEY",
-  "api_key_file": "~/.neurodaily_llm",
+  "model": "deepseek-flash",
+  "api_key_env": "DEEPSEEK_API_KEY",
+  "api_key_file": "~/.neurodaily_deepseek",
   "max_papers": 30,
   "max_other": 8,
-  "max_input_chars": 16000
+  "max_input_chars": 16000,
+  "max_tokens": 8000
 }

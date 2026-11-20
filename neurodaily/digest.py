@@ -259,7 +259,9 @@ def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int 
         hours = max(1, int(hours_by_kind.get(it.kind, other_hours)))
         cutoff = datetime.now() - timedelta(hours=hours)
         try:
-            dtv = datetime.fromisoformat(it.date if len(it.date) > 10 else it.date + "T00:00:00")
+            # date-only sources: treat as end of day so a 36h window still
+            # includes yesterday's news/papers instead of dropping them at 00:00.
+            dtv = datetime.fromisoformat(it.date if len(it.date) > 10 else it.date + "T23:59:59")
         except Exception:
             out.append(it)
             continue

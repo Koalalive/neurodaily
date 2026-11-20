@@ -7,8 +7,9 @@ pay twice, and any failure just leaves the report unchanged.
 
 Config: config/ai_summary.json (gitignored)
     {"enabled": true, "base_url": "https://api.deepseek.com/v1",
-     "model": "deepseek-chat", "api_key_env": "NEURODAILY_LLM_API_KEY",
-     "api_key_file": "~/.neurodaily_llm", "max_papers": 30, "max_other": 8}
+     "model": "deepseek-flash", "api_key_env": "DEEPSEEK_API_KEY",
+     "api_key_file": "~/.neurodaily_deepseek", "max_tokens": 8000,
+     "max_papers": 30, "max_other": 8}
 """
 from __future__ import annotations
 
@@ -26,15 +27,16 @@ CFG_PATH = os.path.join(ROOT, "config", "ai_summary.json")
 DEFAULT_CFG = {
     "enabled": True,
     "base_url": "https://api.deepseek.com/v1",
-    "model": "deepseek-chat",
-    "api_key_env": "NEURODAILY_LLM_API_KEY",
-    "api_key_file": "~/.neurodaily_llm",
+    "model": "deepseek-flash",
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "api_key_file": "~/.neurodaily_deepseek",
     "max_papers": 30,
     "max_other": 8,
     "max_input_chars": 16000,
+    "max_tokens": 8000,
 }
 
-PROMPT_VERSION = 7
+PROMPT_VERSION = 11
 MIN_SUMMARY_LINKS = 3
 
 SYSTEM_PROMPT = (
@@ -43,8 +45,8 @@ SYSTEM_PROMPT = (
     "一、今日研究进展；二、临床与监管；三、产业与创投；四、值得关注的大事件。"
     "要求：不得编造材料中没有的日期、数字、机构或结论；材料不足时明确写“今日材料有限”。"
     "语言专业、克制，不要营销腔，不要使用 Markdown 标题符号。"
-    "材料中每个条目以 R1、R2… 编号开头；提到某条目时，用 Markdown 行内链接引用其编号："
-    "[具体词句](R1)。只可使用材料中出现的编号，不得编造；没有编号的条目不链接。"
+    "正文不要插入任何链接、Markdown 链接、括号引用或 R# 编号；引用由后处理统一添加，"
+    "你只需写干净的纯文本。"
     "至少为 6 个不同条目加上这样的行内链接，链接文字要具体（如论文结论、药物名、试验名），"
     "不要只写“这篇论文”“该研究”。不要单独列出参考文献，也不要输出裸 URL。"
 )
@@ -153,7 +155,7 @@ def _extract_links(text: str, refs: dict, cfg: dict, key: str,
         return []
     listing = "\n".join(f'{rid}. {v.get("title", "")}' for rid, v in refs.items())
     prompt = (
-        "From the Text, choose 8-15 specific phrases that mention the referenced works. "
+        "From the Text, choose 10-20 specific phrases that mention the referenced works. "
         "Each phrase MUST be an exact substring of Text (copy verbatim), 6-40 characters, "
         "and must name the work's topic, journal, drug, trial or result — not a generic word. "
         'Return ONLY a JSON array of {"phrase":"...","ref":"R1"} objects.\n\n'
@@ -183,40 +185,207 @@ def _extract_links(text: str, refs: dict, cfg: dict, key: str,
         rid = str(it.get("ref", "")).strip()
         if rid in refs and len(phrase) >= 4 and phrase in text:
             out.append({"phrase": phrase, "ref": rid})
-    return out[:15]
+    return out[:20]
 
 
 def _apply_links(text: str, links: list[dict], refs: dict) -> str:
+    """Apply phrase links without touching text already inside a Markdown link."""
+    protected: list[str] = []
+
+    def stash(m):
+        protected.append(m.group(0))
+        return f"\x00{len(protected) - 1}\x00"
+
+    tmp = re.sub(r"\[[^\]]*\]\([^)]*\)", stash, text)
     used = set()
     for item in sorted(links, key=lambda x: -len(x["phrase"])):
         phrase, rid = item["phrase"], item["ref"]
-        if phrase in used or phrase not in text:
+        if not phrase or phrase in used or "\x00" in phrase:
             continue
-        text = text.replace(phrase, f"[{phrase}]({rid})", 1)
+        if phrase not in tmp:
+            continue
+        tmp = tmp.replace(phrase, f"[{phrase}]({rid})", 1)
         used.add(phrase)
-    return text
+    for i, original in enumerate(protected):
+        tmp = tmp.replace(f"\x00{i}\x00", original)
+    return tmp
 
 
-def _clean_summary(text: str) -> str:
+_CITATION_HINTS = (
+    "研究", "综述", "试验", "报道", "图谱", "机制", "通路", "分析", "队列",
+    "模型", "装置", "疗法", "药物", "论文", "汇总", "评论", "观点", "结果",
+)
+
+
+def _is_citation(inner: str) -> bool:
+    """Heuristic: is this parenthetical a work citation (not a year/count/note)?"""
+    inner = (inner or "").strip()
+    if len(inner) < 4:
+        return False
+    if re.fullmatch(r"[\d\s.,%+\-–—]+", inner):
+        return False
+    if re.search(r"[，。；：、,.;:!?！？]", inner):
+        return False
+    if inner.startswith(("共", "若", "注", "约", "截至", "其中", "显示", "数据", "样本")):
+        return False
+    if re.search(r"[A-Za-z]", inner):
+        return True
+    if any(h in inner for h in _CITATION_HINTS):
+        return True
+    return len(inner) >= 6 and not re.search(r"\s", inner)
+
+
+def _split_sentences(text: str) -> list[str]:
+    return [x for x in re.split(r"(?<=[。！？；])", text or "") if x.strip()]
+
+
+def _best_ref(sentence: str, refs: dict) -> str | None:
+    for rid, v in (refs or {}).items():
+        j = (v.get("journal") or "").strip()
+        if len(j) >= 4 and j in sentence:
+            return rid
+        for tok in re.findall(r"[A-Za-z][A-Za-z0-9\-]{4,}", v.get("title", "") or ""):
+            if tok in sentence:
+                return rid
+    return None
+
+
+def _short_label(title: str) -> str:
+    t = (title or "").strip()
+    for sep in (" receives ", " gets ", " wins "):
+        if sep in t:
+            t = t.split(sep)[0]
+            break
+    return (t[:36] + "…") if len(t) > 36 else t
+
+
+def _insert_citations(text: str, mapping: dict, refs: dict) -> str:
+    out = []
+    for i, sent in enumerate(_split_sentences(text)):
+        rid = mapping.get(i) or mapping.get(str(i)) or _best_ref(sent, refs)
+        if rid in (refs or {}):
+            v = refs[rid]
+            label = str(v.get("journal") or "").strip()
+            if not label or re.fullmatch(r"[a-z0-9_]+", label):
+                label = _short_label(str(v.get("title") or "来源"))
+            m = re.match(r"^(.*?)([。！？；]?)$", sent.strip(), re.S)
+            body, punct = m.group(1), m.group(2)
+            sent = f"{body}（[{label}]({rid})）{punct}"
+        out.append(sent)
+    return "".join(out)
+
+
+def _cite_sentences(text: str, refs: dict, cfg: dict, key: str,
+                    base_url: str, model: str) -> str:
+    sentences = _split_sentences(text)
+    if not sentences or not refs:
+        return text
+    listing = "\n".join(f'{rid}. {v.get("title", "")}' for rid, v in refs.items())
+    numbered = "\n".join(f"{i}. {x}" for i, x in enumerate(sentences))
+    prompt = (
+        "For each numbered sentence, choose exactly ONE best reference id from References "
+        '(e.g. "R3"), or "" for a heading/overview sentence with no specific work. '
+        'Return ONLY a JSON array like [{"index":0,"ref":"R1"}] covering every sentence. '
+        "Do not invent ids.\n\nReferences:\n" + listing + "\n\nSentences:\n" + numbered
+    )
+    try:
+        r = httpx.post(
+            base_url.rstrip("/") + "/chat/completions",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "model": model,
+                "temperature": 0.1,
+                "max_tokens": int(cfg.get("max_tokens", 8000)),
+                "messages": [
+                    {"role": "system", "content": "Return JSON only."},
+                    {"role": "user", "content": prompt},
+                ],
+            },
+            timeout=90,
+        )
+        r.raise_for_status()
+        raw = (r.json()["choices"][0]["message"]["content"] or "").strip()
+        m = re.search(r"\[[\s\S]*\]", raw)
+        arr = json.loads(m.group(0)) if m else []
+        mapping = {}
+        for it in arr if isinstance(arr, list) else []:
+            try:
+                idx = int(it.get("index"))
+            except Exception:
+                continue
+            rid = str(it.get("ref", "")).strip()
+            if rid in refs:
+                mapping[idx] = rid
+        return _insert_citations(text, mapping, refs)
+    except Exception:
+        return _insert_citations(text, {}, refs)
+
+
+def _clean_summary(text: str, refs: dict | None = None) -> str:
     """Remove empty/unlinked parentheses and stray citation markers."""
     text = text or ""
-    # parentheses that only wrap a markdown link -> keep the link
-    text = re.sub(r"[（(]\s*(\[[^\]]+\]\(R\d+\))\s*[)）]", r"\1", text)
+    _protected = []
+
+    def _stash(m):
+        _protected.append(m.group(0))
+        return f"\x00{len(_protected) - 1}\x00"
+
+    text = re.sub(r"\[[^\]]*\]\([^)]*\)", _stash, text)
+    # R# markers -> linked parenthetical citations (including （R6） / R6)
+    _SOURCE_WORDS = {
+        "fda_devices", "fda_drugs", "trials", "policy", "pubmed", "biorxiv",
+        "arxiv", "journal", "neuro_vc_bci", "neuro_vc_startups", "medtech_dive",
+        "crunchbase_news",
+    }
+
+    def _ref_label(v):
+        label = str(v.get("journal") or "").strip()
+        if not label or label.lower() in _SOURCE_WORDS or re.fullmatch(r"[a-z0-9_]+", label):
+            label = _short_label(str(v.get("title") or "来源"))
+        return label
+
+    def _ref_link(rid):
+        v = (refs or {}).get(rid) or {}
+        if not v:
+            return ""
+        return f"（[{_ref_label(v)}]({rid})）"
+
+    text = re.sub(r"(?<!\])[（(]\s*(R\d+)\s*[)）]", lambda m: _ref_link(m.group(1)), text)
+    text = re.sub(r"(?<![（(\[A-Za-z])R(\d+)(?![）)\]A-Za-z])",
+                  lambda m: _ref_link("R" + m.group(1)), text)
+    # collapse accidental double parentheses from nested citations
+    text = text.replace("（（", "（").replace("））", "）")
     # empty parentheses
     text = re.sub(r"[（(]\s*[)）]", "", text)
     # bare citation markers
     text = re.sub(r"(?<!\])[（(]\s*R\d+\s*[)）]", "", text)
     text = re.sub(r"\[\s*R\d+\s*\]", "", text)
     # strip parentheses around citation-like phrases (no punctuation inside)
+    def _find_ref(inner):
+        for rid, v in (refs or {}).items():
+            j = (v.get("journal") or "").strip()
+            if len(j) >= 4 and j in inner:
+                return rid
+            for tok in re.findall(r"[A-Za-z][A-Za-z0-9\-]{4,}", v.get("title", "") or ""):
+                if tok in inner:
+                    return rid
+        return None
+
     def _paren(m):
         inner = m.group(1).strip()
         if "]" in inner or "http" in inner:
             return m.group(0)
-        if len(inner) >= 4 and not re.search(r"[，。；：、,.;:!?！？]", inner):
+        if _is_citation(inner):
+            rid = _find_ref(inner)
+            if rid:
+                return f"（[{inner}]({rid})）"
             return inner
         return m.group(0)
     text = re.sub(r"[（(]([^（）()]{4,80})[)）]", _paren, text)
-    return text.replace("**", "")
+    text = text.replace("**", "")
+    for _i, _orig in enumerate(_protected):
+        text = text.replace(f"\x00{_i}\x00", _orig)
+    return text
 
 
 def _count_links(text: str) -> int:
@@ -322,7 +491,7 @@ def _call_llm(text: str, cfg: dict, key: str, base_url: str, model: str) -> str:
                 json={
                     "model": model,
                     "temperature": 0.4,
-                    "max_tokens": 1600,
+                    "max_tokens": int(cfg.get("max_tokens", 8000)),
                     "messages": [
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": text},
@@ -363,17 +532,8 @@ def generate(result, cfg: dict | None = None, force: bool = False,
     text, refs = build_context(result, cfg)
     out = _call_llm(text, cfg, key, base, mdl)
     out = _strip_links(out)
-    try:
-        links = _extract_links(out, refs, cfg, key, base, mdl)
-        out = _apply_links(out, links, refs)
-    except Exception:
-        pass
-    out = _entity_fallback(out, refs)
-    if _count_links(out) < MIN_SUMMARY_LINKS:
-        out = _journal_fallback(out, refs)
-    if _count_links(out) < MIN_SUMMARY_LINKS:
-        out = _append_sources(out, refs, MIN_SUMMARY_LINKS - _count_links(out))
-    out = _clean_summary(out)
+    out = _cite_sentences(out, refs, cfg, key, base, mdl)
+    out = _clean_summary(out, refs)
     result.ai_summary_refs = refs
     _write_cache(path, out, mdl, refs)
     return out

@@ -18,7 +18,7 @@
 | `config/ai_summary.json` | AI 摘要（provider、模型、上限） | 否 |
 | `config/webhooks.json` | 飞书/企微 webhook | 否 |
 | `~/.neurodaily_smtp` | SMTP 授权码（600） | 否 |
-| `~/.neurodaily_llm` | LLM API key（600） | 否 |
+| `~/.neurodaily_deepseek` | LLM API key（600） | 否 |
 
 模板：`config.example.json`、`config/email.example.json`、`config/ai_summary.example.json`、`config/webhooks.example.json`。
 
@@ -222,10 +222,10 @@ neurodaily --profile oncology run --no-open
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `enabled` | `true` | 是否生成 |
-| `base_url` | `https://api.deepseek.com/v1` | OpenAI 兼容地址 |
-| `model` | `deepseek-chat` | 模型名 |
-| `api_key_env` | `NEURODAILY_LLM_API_KEY` | 环境变量名 |
-| `api_key_file` | `~/.neurodaily_llm` | key 文件（600） |
+| `base_url` | `https://api.deepseek.com/v1` | DeepSeek 官方 OpenAI 兼容地址 |
+| `model` | `deepseek-flash` | DeepSeek 官方模型名 |
+| `api_key_env` | `DEEPSEEK_API_KEY` | 环境变量名 |
+| `api_key_file` | `~/.neurodaily_deepseek` | key 文件（600） |
 | `max_papers` | `30` | 输入里包含的论文数 |
 | `max_other` | `8` | 每个其他板块的条数 |
 | `max_input_chars` | `8000` | 输入截断 |

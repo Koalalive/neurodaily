@@ -14,7 +14,7 @@
 | `config/ai_summary.json` | Провайдер/модель/лимиты LLM | Нет |
 | `config/webhooks.json` | Feishu / WeCom | Нет |
 | `~/.neurodaily_smtp` | Пароль приложения SMTP (600) | Нет |
-| `~/.neurodaily_llm` | Ключ LLM (600) | Нет |
+| `~/.neurodaily_deepseek` | Ключ LLM (600) | Нет |
 
 ## 2. Основной конфиг (фрагмент)
 

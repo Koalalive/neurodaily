@@ -14,7 +14,7 @@ Every field has a default; **all new fields are optional**, old configs keep wor
 | `config/ai_summary.json` | LLM provider/model/limits | No |
 | `config/webhooks.json` | Feishu / WeCom webhooks | No |
 | `~/.neurodaily_smtp` | SMTP app password (mode 600) | No |
-| `~/.neurodaily_llm` | LLM API key (mode 600) | No |
+| `~/.neurodaily_deepseek` | LLM API key (mode 600) | No |
 
 ## 2. Main config (excerpt)
 

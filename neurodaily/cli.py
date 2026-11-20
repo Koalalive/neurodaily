@@ -127,6 +127,11 @@ def cmd_serve(args) -> int:
         os.environ["NEURODAILY_DEMO"] = "1"
     app = create_app(args.config)
     host = getattr(args, "host", "127.0.0.1")
+    base_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    try:
+        app.state.base_url = f"http://{base_host}:{args.port}"
+    except Exception:
+        pass
     print(f"[neurodaily] web app → http://{host}:{args.port}")
     if getattr(args, "open", False):
         import threading, webbrowser

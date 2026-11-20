@@ -81,6 +81,16 @@ def create_app(config_path: str | None = None) -> FastAPI:
             path = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
             save_report(result, path)
             app.state.last_report_path = path
+            base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
+            try:
+                with open(path, encoding="utf-8") as _f:
+                    _html = _f.read()
+                _html = _html.replace('<meta name="nd-base" content="">',
+                                      f'<meta name="nd-base" content="{base}">')
+                with open(path, "w", encoding="utf-8") as _f:
+                    _f.write(_html)
+            except Exception:
+                pass
             try:
                 from .mailer import (_password, load_cfg as _mail_cfg,
                                      render_email, save_last, send_with_retry)
@@ -101,13 +111,14 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 if cfg.output.get("open_on_finish", True) and os.environ.get("NEURODAILY_NO_OPEN") != "1":
                     import subprocess
                     import sys
-                    print("[neurodaily] opening report:", path, flush=True)
+                    url = base.rstrip("/") + "/report/latest"
+                    print("[neurodaily] opening report:", url, flush=True)
                     if sys.platform == "darwin":
-                        subprocess.run(["open", path], check=False)
+                        subprocess.run(["open", url], check=False)
                     else:
                         import webbrowser
-                        webbrowser.open("file://" + os.path.abspath(path))
-                    print("[neurodaily] opened report:", path, flush=True)
+                        webbrowser.open(url)
+                    print("[neurodaily] opened report:", url, flush=True)
             except Exception:
                 pass
             return result
