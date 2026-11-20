@@ -51,22 +51,19 @@ def init_db() -> None:
         conn.commit()
 
 
-def compute_fingerprint(config) -> str:
-    """Deterministic fingerprint of the query configuration (for dedup).
-
-    Includes active disciplines (name+mesh+keywords+arxiv cats), global keywords,
-    source enabled/max_results/lookback, and journals with RSS. Order-insensitive
-    (sorted) so reordering config keys doesn't create false duplicates.
-    """
-    parts = []
-    for d in config.active_disciplines():
-        parts.append("|".join(sorted([d.name, *d.mesh_terms, *d.keywords, *d.arxiv_cats])))
-    parts.append("|".join(sorted(config.global_keywords)))
-    for name, opts in sorted(config.sources.items()):
-        en = opts.get("enabled", True)
-        parts.append(f"{name}:{en}:{opts.get('max_results', 20)}:{opts.get('lookback_days', 7)}")
-    parts.append("|".join(sorted(j.name for j in config.journals if j.rss)))
-    raw = "\n".join(parts)
+def compute_fingerprint(config, mode: str = "manual") -> str:
+    """Fingerprint the profile and the inputs that determine search results."""
+    query = {
+        "profile": config.profile,
+        "mode": mode,
+        "disciplines": [d.to_dict() for d in config.disciplines],
+        "global_keywords": config.global_keywords,
+        "sources": config.sources,
+        "windows": config.windows,
+        "policy_feeds": config.policy_feeds,
+        "journals": [(j.name, j.rss) for j in config.journals if j.rss],
+    }
+    raw = json.dumps(query, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 

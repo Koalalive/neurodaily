@@ -163,6 +163,10 @@ class SchemaTests(unittest.TestCase):
 
 
 class ConfigOpsTests(unittest.TestCase):
+    def test_nested_null_deletes_key_in_new_object(self):
+        self.assertEqual(config_ops.deep_merge({}, {"new": {"removed": None}}),
+                         {"new": {}})
+
     def test_merge_semantics(self):
         base = {"a": {"b": 1}, "l": [1, 2], "keep": 1}
         patch = {"a": {"c": 2}, "l": [3], "keep": None}
@@ -222,6 +226,27 @@ class ProfileTests(unittest.TestCase):
         path = config_ops.new_profile("oncology")
         self.assertTrue(os.path.exists(path))
         self.assertIn("oncology", config_ops.list_profiles())
+
+    def test_new_profile_keeps_existing_config(self):
+        path = config_ops.new_profile("oncology")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write('{"profile": "custom"}')
+        with self.assertRaises(FileExistsError):
+            config_ops.new_profile("oncology")
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {"profile": "custom"})
+
+    def test_cli_rejects_missing_profile_before_run(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+        from neurodaily import cli
+        err = StringIO()
+        with mock.patch.object(cli, "cmd_run") as run, redirect_stderr(err):
+            with self.assertRaises(SystemExit) as failure:
+                cli.main(["--profile", "missing", "run"])
+        self.assertEqual(failure.exception.code, 2)
+        self.assertIn("profile not found: missing", err.getvalue())
+        run.assert_not_called()
 
 
 class ExportTests(unittest.TestCase):
@@ -421,6 +446,16 @@ class JournalMetricsTests(unittest.TestCase):
 
 
 class WindowTests(unittest.TestCase):
+    def test_time_window_accepts_utc_offset(self):
+        from datetime import datetime, timedelta, timezone
+        from neurodaily.digest import _filter_by_windows
+        from neurodaily.models import Item
+
+        now = datetime.now(timezone.utc)
+        recent = Item(title="recent", date=(now - timedelta(hours=1)).isoformat(), kind="paper")
+        old = Item(title="old", date=(now - timedelta(hours=3)).isoformat(), kind="paper")
+        self.assertEqual(_filter_by_windows([recent, old], {"paper": 2}), [recent])
+
     def test_paper_window_filters_old_papers(self):
         from neurodaily.digest import _filter_papers_by_window
         from neurodaily.models import Item
@@ -716,6 +751,17 @@ class LabelProtectionTests(unittest.TestCase):
 
 
 class RunNowTests(unittest.TestCase):
+    def test_fingerprint_tracks_window_mode_and_feed(self):
+        from neurodaily.history import compute_fingerprint
+        from neurodaily.webapp import _cfg_with_hours
+
+        cfg = DEFAULT_CONFIG()
+        original = compute_fingerprint(cfg)
+        self.assertNotEqual(original, compute_fingerprint(_cfg_with_hours(cfg, 12)))
+        self.assertNotEqual(original, compute_fingerprint(cfg, mode="daily"))
+        next(j for j in cfg.journals if j.rss).rss = "https://example.org/replacement.rss"
+        self.assertNotEqual(original, compute_fingerprint(cfg))
+
     def test_hours_override_is_copy(self):
         from neurodaily.webapp import _cfg_with_hours
         from neurodaily.config import DEFAULT_CONFIG

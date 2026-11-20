@@ -63,7 +63,7 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     """Run a digest. Optionally skip if an identical query ran recently (dedup),
     and record the run into search_history."""
     config = config or DEFAULT_CONFIG()
-    fingerprint = hist.compute_fingerprint(config)
+    fingerprint = hist.compute_fingerprint(config, mode=mode)
     started_at = datetime.now().isoformat()
 
     # Duplicate check: refuse to re-run the same query config within the window.
@@ -251,13 +251,14 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
 def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int = 7 * 24) -> list[Item]:
     """Keep each kind within its own window; undated items are kept."""
     from datetime import timedelta
+    now = datetime.now()
     out = []
     for it in items:
         if not it.date:
             out.append(it)
             continue
         hours = max(1, int(hours_by_kind.get(it.kind, other_hours)))
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = now - timedelta(hours=hours)
         try:
             # date-only sources: treat as end of day so a 36h window still
             # includes yesterday's news/papers instead of dropping them at 00:00.
@@ -265,6 +266,8 @@ def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int 
         except Exception:
             out.append(it)
             continue
+        if dtv.tzinfo is not None:
+            cutoff = cutoff.astimezone()
         if dtv < cutoff:
             continue
         out.append(it)

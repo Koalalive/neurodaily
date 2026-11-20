@@ -48,7 +48,7 @@ jobs:
           if [ "${{ inputs.demo }}" = "true" ]; then
             .venv/bin/python -m neurodaily demo --no-open
           else
-            .venv/bin/python -m neurodaily run --no-open
+            .venv/bin/python -m neurodaily run --mode daily --no-open
           fi
       - uses: actions/upload-artifact@v4
         with:

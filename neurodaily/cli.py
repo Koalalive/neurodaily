@@ -466,7 +466,11 @@ def cmd_profile(args) -> int:
         print("\n".join(names) if names else "(no profiles yet)")
         return 0
     if act == "new":
-        path = new_profile(args.name, args.from_path)
+        try:
+            path = new_profile(args.name, args.from_path)
+        except FileExistsError:
+            print(f"[neurodaily] profile already exists: {args.name}", file=sys.stderr)
+            return 1
         print(f"[neurodaily] created profile → {path}")
         return 0
     if act == "path":
@@ -635,6 +639,8 @@ def main(argv: list[str] | None = None) -> int:
     if profile:
         from .config_ops import profile_path
         args.config = profile_path(profile)
+        if not os.path.isfile(args.config):
+            parser.error(f"profile not found: {profile}")
     return args.func(args)
 
 

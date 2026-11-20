@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "identifier": "com.neurodaily.app",
   "build": {
-    "frontendDist": "../dist"
+    "frontendDist": "../frontend"
   },
   "app": {
     "windows": [
@@ -28,6 +28,11 @@
     "targets": "all",
     "category": "Productivity",
     "shortDescription": "Neuroscience daily digest",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      }
+    },
     "longDescription": "NeuroDaily aggregates neuroscience, psychiatry and oncology literature, trials, funding and policy news into a daily report with AI overview.",
     "icon": [
       "icons/icon.icns",
