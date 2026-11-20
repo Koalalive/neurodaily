@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-set-update-token"
+description = "Allow saving or removing the private update token"
+commands.allow = ["set_update_token"]

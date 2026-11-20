@@ -15,6 +15,7 @@ use tauri_plugin_opener::OpenerExt;
 
 #[cfg(target_os = "macos")]
 mod macos_quit;
+mod updates;
 
 struct Sidecar(Mutex<Option<Child>>);
 
@@ -173,7 +174,10 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![updates::set_update_token])
         .manage(QuitState::default())
+        .manage(updates::UpdateCheck::default())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             macos_quit::install(app.handle())?;
@@ -195,6 +199,7 @@ fn main() {
             let stdout = child.stdout.take();
             let stderr = child.stderr.take();
             app.manage(Sidecar(Mutex::new(Some(child))));
+            updates::start(app.handle())?;
 
             let handle = app.handle().clone();
             std::thread::spawn(move || {
