@@ -22,41 +22,56 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
 </style></head><body>
 <main>
   <h1>本次检索范围</h1>
-  <p>只影响这一次运行，不会修改每日/定时设置。</p>
-  <label for="hours">时间范围（小时）</label>
-  <input id="hours" type="number" min="1" max="8760" value="36" autofocus>
-  <small>例如 36 = 最近 36 小时；168 = 最近 7 天。论文、临床试验、Funding、新闻都按此范围。</small>
+  <p>确认后开始检索，完成后自动打开本次日报。</p>
+  <label for="hours">临时覆盖时间范围（小时，可选）</label>
+  <input id="hours" type="number" min="1" max="8760" placeholder="留空使用已保存的设置">
+  <small>例如填 36，把本次论文、试验、融资和新闻的窗口设为最近 36 小时。</small>
   <div class="row">
-    <button id="cancel" type="button">取消</button>
-    <button id="go" type="button">开始检索并推送</button>
+    <button id="cancel" type="button">返回设置</button>
+    <button id="go" type="button">开始检索</button>
   </div>
-  <div id="msg"></div>
+  <div id="msg" role="status"></div>
 </main>
 <script>
 (function(){
   var msg=document.getElementById('msg');
+  var go=document.getElementById('go');
   function set(t,ok){msg.textContent=t;msg.className=ok===true?'ok':(ok===false?'bad':'');}
-  document.getElementById('cancel').onclick=function(){location.href='/';};
-  document.getElementById('go').onclick=async function(){
-    var h=parseInt(document.getElementById('hours').value||'36',10);
-    if(!h||h<1||h>8760){set('请输入 1–8760 小时',false);return;}
+  function failed(message){go.disabled=false;set(message,false);}
+  async function poll(start,tries){
+    try{
+      var response=await fetch('/api/status',{cache:'no-store'});
+      if(response.ok){
+        var run=(await response.json()).search;
+        if(run && run.started_at===start){
+          if(run.status==='completed'){
+            set('完成（'+run.item_count+' 条），正在打开报告…',true);
+            location.href='/report/latest';
+            return;
+          }
+          if(run.status==='failed'||run.status==='skipped'){
+            failed(run.error||'本次检索未生成报告');
+            return;
+          }
+        }
+      }
+    }catch(e){}
+    if(tries>=240){failed('等待超时，请在运行历史中查看结果');return;}
+    setTimeout(function(){poll(start,tries+1);},3000);
+  }
+  document.getElementById('cancel').onclick=function(){location.href='/settings';};
+  go.onclick=async function(){
+    var value=document.getElementById('hours').value;
+    var h=Number(value);
+    if(value&&(!Number.isInteger(h)||h<1||h>8760)){failed('请输入 1–8760 的整数小时');return;}
+    go.disabled=true;
     set('已启动，正在检索…');
     try{
-      var r=await fetch('/api/run?force=1&hours='+h,{method:'POST'});
+      var r=await fetch('/api/run?force=1'+(value?'&hours='+h:''),{method:'POST'});
       var d=await r.json();
       if(!r.ok){throw new Error(d.detail||d.error||'启动失败');}
-      var start=d.started_at, tries=0;
-      var t=setInterval(async function(){
-        tries++;
-        try{
-          var s=await (await fetch('/api/status',{cache:'no-store'})).json();
-          if(s.last_run&&start&&s.last_run>=start){
-            clearInterval(t);set('✅ 完成（'+s.item_count+' 条），正在打开报告…',true);
-            setTimeout(function(){location.href='/report/latest';},500);
-          }else if(tries>240){clearInterval(t);set('超时，请到 History 查看',false);}
-        }catch(e){}
-      },3000);
-    }catch(e){set('❌ '+e.message,false);}
+      poll(d.started_at,0);
+    }catch(e){failed('❌ '+e.message);}
   };
 })();
 </script>

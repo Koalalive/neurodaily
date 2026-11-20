@@ -19,10 +19,12 @@ jobs:
         include:
           - os: macos-15
             target: aarch64-apple-darwin
-            bundles: app,dmg
+            bundles: app
+            dmg_arch: aarch64
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            bundles: app,dmg
+            bundles: app
+            dmg_arch: x64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: nsis,msi
@@ -91,6 +93,17 @@ jobs:
       - name: Build app
         working-directory: desktop/tauri
         run: npm run build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --ci
+
+      - name: Create and verify macOS disk image
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          BUNDLE_DIR: desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle
+          DMG_ARCH: ${{ matrix.dmg_arch }}
+        run: |
+          version=$(node -p "require('./desktop/tauri/src-tauri/tauri.conf.json').version")
+          image="$BUNDLE_DIR/dmg/NeuroDaily_${version}_${DMG_ARCH}.dmg"
+          bash desktop/build_dmg.sh "$BUNDLE_DIR/macos/NeuroDaily.app" "$image"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

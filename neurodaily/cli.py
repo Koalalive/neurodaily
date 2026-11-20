@@ -63,7 +63,7 @@ def cmd_run(args) -> int:
             print(f"[neurodaily] ⚠ AI summary skipped: {e}")
     # default filename from config
     from datetime import datetime
-    fmt = cfg.output.get("filename_format", "neurodaily_%Y-%m-%d.html")
+    fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d.html"
     default_name = datetime.now().strftime(fmt)
     outdir = cfg.output_dir()
     out_path = args.output or os.path.join(outdir, default_name)
@@ -350,7 +350,7 @@ def cmd_mail(args) -> int:
     if args.send:
         from .digest import save_report
         from datetime import datetime
-        fmt = cfg.output.get("filename_format", "neurodaily_%Y-%m-%d.html")
+        fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d.html"
         report_path = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
         save_report(result, report_path)
         from .mailer import load_cfg as _mail_cfg
@@ -381,7 +381,7 @@ def cmd_ai_summary(args) -> int:
     if getattr(args, "save", False):
         result.ai_summary = txt
         result.ai_summary_meta = {"model": args.model or ai_summary.load_cfg().get("model", "")}
-        fmt = cfg.output.get("filename_format", "neurodaily_%Y-%m-%d.html")
+        fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d.html"
         out = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
         save_report(result, out)
         print(f"[neurodaily] report with AI summary → {out}")

@@ -35,6 +35,8 @@ input:focus{outline:none;border-color:var(--accent)}
 .inline input[type=number]{width:80px}
 button{background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:.82rem;cursor:pointer}
 button:hover{border-color:var(--accent)}
+button[aria-pressed=true]{border-color:var(--accent);background:#172334}
+button:disabled{opacity:.6;cursor:default}
 button.del{color:#f87171;border-color:#3a1a1a;padding:6px 9px}
 button.primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#04121c;border:none;font-weight:700;padding:9px 22px}
 button.warn{border-color:#7a2b2b;color:#fca5a5}
@@ -51,6 +53,11 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
 <body>
 <header><h1>⚙ NeuroDaily Settings</h1><a href="/">← Back to dashboard</a><span class="mini" id="cfgpath"></span></header>
 <main>
+  <section>
+    <h2>Research presets</h2>
+    <div id="research_presets" class="inline" role="group" aria-label="Research presets"></div>
+    <p class="hint" id="preset_status" role="status">A preset fills the research fields. Review them before saving.</p>
+  </section>
   <section>
     <h2>General</h2>
     <div class="row"><input id="profile" placeholder="profile (e.g. neuro)"></div>
@@ -104,7 +111,7 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
       <input type="number" id="sch_minute" min="0" max="59">
     </div>
     <div class="inline" style="margin-top:10px">
-      <label><input type="checkbox" id="otd_enabled"> Include "On This Day"</label>
+      <label><input type="checkbox" id="otd_enabled"> Include "On This Day" (neuroscience history)</label>
       <label><input type="checkbox" id="otd_notify"> Desktop notification daily</label>
     </div>
     <div class="inline" style="margin-top:10px">
@@ -117,10 +124,12 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
     </div>
     <div class="inline" style="margin-top:12px">
       <span class="pill" id="ldstat">Scheduler: …</span>
-      <button onclick="launchd('install')">Install / update schedule</button>
-      <button class="warn" onclick="launchd('uninstall')">Uninstall schedule</button>
+      <span id="launchd_controls" hidden>
+        <button onclick="launchd('install')">Install / update schedule</button>
+        <button class="warn" onclick="launchd('uninstall')">Uninstall schedule</button>
+      </span>
     </div>
-    <p class="hint">After changing the time, click Install / update schedule to apply.</p>
+    <p class="hint" id="schedule_hint"></p>
   </section>
 
   <section>
@@ -138,7 +147,7 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
 
   <section>
     <h2>Push settings (email / webhook)</h2>
-    <p class="desc">After saving, click "Save & run now" at the bottom to fetch and push.</p>
+    <p class="desc">Save these settings before starting a search. Delivery is optional.</p>
     <div class="inline"><label><input type="checkbox" id="push_email_enabled"> Enable email</label>
       <label><input type="checkbox" id="push_attach" checked> Attach full HTML</label></div>
     <div style="margin-top:8px"><label>Recipients (comma or newline separated)</label>
@@ -166,17 +175,30 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
   </section>
 </main>
 <footer>
-  <button class="primary" id="saveRun" onclick="saveAndRun()">Save & run now</button>
+  <button class="primary" id="saveRun" onclick="saveAndContinue()" disabled>Save & continue to search</button>
   <button onclick="save()">Save only</button>
   <button onclick="load()">Reload</button>
-  <span id="msg"></span>
+  <span id="msg" role="status"></span>
 </footer>
 <script>
 var BASE=null;
+var PUSH_BASELINE=null;
 function el(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function csv(a){return (a||[]).join(', ');}
-function split(s){return (s||'').split(',').map(function(x){return x.trim();}).filter(Boolean);}
+function csv(a){
+  return (a||[]).map(function(x){
+    return /[",]/.test(x) ? '"' + x.replace(/"/g,'""') + '"' : x;
+  }).join(', ');
+}
+function split(s){
+  var values=[], match, fields=/(?:^|,)\s*(?:"((?:[^"]|"")*)"|([^,]*))/g;
+  while((match=fields.exec(s||''))!==null){
+    var value=match[1]===undefined ? match[2].trim() : match[1].replace(/""/g,'"');
+    if(value) values.push(value);
+    if(fields.lastIndex===match.index) fields.lastIndex++;
+  }
+  return values;
+}
 
 function disciplineRow(x){
   x=x||{}; var d=document.createElement('div'); d.className='row grid';
@@ -209,6 +231,7 @@ function addFeed(){el('policy_feeds').appendChild(feedRow(''));}
 
 function journalRow(x){
   x=x||{}; var d=document.createElement('div'); d.className='row j';
+  d.dataset.metricYear=x.metric_year==null?'':x.metric_year;
   d.innerHTML='<input class="j-name" placeholder="Journal name" value="'+esc(x.name)+'">'+
     '<input class="j-url" placeholder="Website URL" value="'+esc(x.url)+'">'+
     '<input class="j-rss" placeholder="RSS (optional)" value="'+esc(x.rss)+'">'+
@@ -247,13 +270,43 @@ function render(){
   (BASE.journals||[]).forEach(function(x){jbox.appendChild(journalRow(x));});
 }
 
-async function load(){
+async function loadPresets(){
+  var box=el('research_presets');
   try{
-    var r=await fetch('/api/config'); BASE=await r.json(); render();
+    var r=await fetch('/api/config/presets');
+    if(!r.ok) throw new Error();
+    var presets=await r.json();
+    box.replaceChildren();
+    presets.forEach(function(preset){
+      var button=document.createElement('button');
+      button.type='button';
+      button.textContent=preset.label;
+      button.setAttribute('aria-pressed',String(BASE.profile===preset.config.profile));
+      button.onclick=function(){
+        BASE=Object.assign(collect(),preset.config);
+        render();
+        box.querySelectorAll('button').forEach(function(option){
+          option.setAttribute('aria-pressed',String(option===button));
+        });
+        el('preset_status').textContent=preset.label+' applied. Review and save to use it.';
+      };
+      box.appendChild(button);
+    });
+  }catch(e){el('preset_status').textContent='Could not load research presets.';}
+}
+
+async function load(){
+  el('saveRun').disabled=true;
+  try{
+    var r=await fetch('/api/config');
+    if(!r.ok) throw new Error('Could not load settings');
+    BASE=await r.json(); render();
     el('cfgpath').textContent='config: ~/neurodaily/config/config.json';
     el('msg').textContent=''; el('msg').className='';
+    loadPresets();
+    await loadPush();
+    el('saveRun').disabled=false;
   }catch(e){el('msg').textContent='Load failed: '+e; el('msg').className='bad';}
-  loadPush();
   loadLaunchdStatus();
   try{
     if(new URLSearchParams(location.search).get('next')==='run'){
@@ -309,7 +362,8 @@ function collect(){
       category:r.querySelector('.j-cat').value.trim(),
       impact_factor: iv?parseFloat(iv):null,
       jcr:r.querySelector('.j-jcr').value.trim(),
-      cas:r.querySelector('.j-cas').value.trim()};
+      cas:r.querySelector('.j-cas').value.trim(),
+      metric_year:r.dataset.metricYear?Number(r.dataset.metricYear):null};
   }).filter(function(x){return x.name;});
   return data;
 }
@@ -320,7 +374,11 @@ async function save(){
   try{
     var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     var out=await r.json();
-    if(out.ok){el('msg').textContent='✅ Saved → '+out.path; el('msg').className='ok'; return true;}
+    if(out.ok){
+      el('msg').textContent='✅ Saved → '+out.path; el('msg').className='ok';
+      loadLaunchdStatus();
+      return true;
+    }
     el('msg').textContent='❌ Save failed: '+(out.error||'unknown'); el('msg').className='bad'; return false;
   }catch(e){el('msg').textContent='❌ '+e; el('msg').className='bad'; return false;}
 }
@@ -336,7 +394,14 @@ async function resetDefaults(){
 async function loadLaunchdStatus(){
   try{
     var r=await fetch('/api/launchd/status'); var s=await r.json();
-    var t='Scheduler: '+(s.loaded?'loaded':'not loaded')+(s.installed?' / installed':' / not installed')+'（'+s.schedule+'）';
+    var desktop=s.backend==='desktop';
+    el('launchd_controls').hidden=desktop;
+    el('schedule_hint').textContent=desktop
+      ? 'Save to apply. Minimize the window to keep scheduled delivery running. Quitting stops delivery.'
+      : 'After changing the time, click Install / update schedule to apply.';
+    var t=desktop
+      ? (s.loaded?'Desktop schedule: daily at '+s.schedule+' (local time)':'Desktop schedule: off')
+      : 'Scheduler: '+(s.loaded?'loaded':'not loaded')+(s.installed?' / installed':' / not installed')+'（'+s.schedule+'）';
     el('ldstat').textContent=t;
     el('ldstat').className='pill'+(s.loaded?' on':'');
   }catch(e){el('ldstat').textContent='Scheduler: read failed';}
@@ -372,8 +437,11 @@ function pushPayload(){
       wecom:el('push_wecom').value.trim()}};
 }
 async function loadPush(){
+  PUSH_BASELINE=null;
   try{
-    var d=await (await fetch('/api/push')).json();
+    var r=await fetch('/api/push');
+    if(!r.ok) return;
+    var d=await r.json();
     var e=d.email||{};
     el('push_email_enabled').checked=e.enabled!==false;
     el('push_to').value=(e.to||[]).join('\n');
@@ -387,12 +455,20 @@ async function loadPush(){
     var w=d.webhooks||{};
     el('push_feishu').value=w.feishu||'';
     el('push_wecom').value=w.wecom||'';
+    PUSH_BASELINE=pushPayload();
   }catch(e){}
 }
 async function savePush(){
-  var r=await fetch('/api/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pushPayload())});
-  var out=await r.json();
-  if(!out.ok) throw new Error(out.error||'Failed to save push settings');
+  var current=pushPayload(), changes={};
+  Object.keys(current).forEach(function(key){
+    if(JSON.stringify(current[key])!==JSON.stringify(PUSH_BASELINE[key])) changes[key]=current[key];
+  });
+  if(Object.keys(changes).length){
+    var r=await fetch('/api/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(changes)});
+    var out=await r.json();
+    if(!out.ok) throw new Error(out.error||'Failed to save push settings');
+    PUSH_BASELINE=current;
+  }
   var pw=el('push_password').value;
   if(pw){
     var r2=await fetch('/api/push/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
@@ -401,25 +477,14 @@ async function savePush(){
     el('push_password').value=''; el('push_pw_state').textContent='(set)';
   }
 }
-async function saveAndRun(){
-  el('msg').textContent='Saving and starting…'; el('msg').className='';
+async function saveAndContinue(){
+  el('saveRun').disabled=true;
   try{
-    var okc=await save(); if(okc===false) throw new Error('Failed to save config');
-    await savePush();
-    var r=await fetch('/api/run?force=1',{method:'POST'});
-    var d=await r.json(); var started=d.started_at;
-    el('msg').textContent='Fetching… (about 2–4 minutes)';
-    var timer=setInterval(async function(){
-      try{
-        var s=await (await fetch('/api/status')).json();
-        if(s.last_run && s.last_run>=started){
-          clearInterval(timer);
-          el('msg').className='ok';
-          el('msg').innerHTML='✅ Done ('+s.item_count+' items) · report opened locally · <a href="/report/latest" target="_blank">Open again</a>';
-        }
-      }catch(e){}
-    },2000);
+    if(!await save()) return;
+    if(PUSH_BASELINE) await savePush();
+    location.href='/run';
   }catch(e){ el('msg').className='bad'; el('msg').textContent='❌ '+e; }
+  finally{el('saveRun').disabled=false;}
 }
 
 load();

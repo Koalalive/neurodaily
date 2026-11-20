@@ -39,6 +39,7 @@ class JournalModel(BaseModel):
     impact_factor: float | None = None
     jcr: str = ""
     cas: str = ""
+    metric_year: int | None = None
     year: int | None = None
 
 

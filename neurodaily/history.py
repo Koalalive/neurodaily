@@ -13,6 +13,7 @@ import sqlite3
 import threading
 import time
 import hashlib
+from contextlib import closing
 from datetime import datetime
 
 from .config import DEFAULT_DIRS
@@ -28,6 +29,15 @@ def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(db_path())
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def claim_desktop_schedule(day: str) -> bool:
+    """Allow at most one desktop scheduled attempt per day for this data directory."""
+    os.makedirs(os.path.dirname(db_path()), exist_ok=True)
+    with _LOCK, closing(_connect()) as conn, conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS desktop_schedule (day TEXT PRIMARY KEY)")
+        cursor = conn.execute("INSERT OR IGNORE INTO desktop_schedule VALUES (?)", (day,))
+        return cursor.rowcount == 1
 
 
 def init_db() -> None:

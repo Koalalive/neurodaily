@@ -19,8 +19,11 @@ NeuroDaily.app / NeuroDaily.exe / NeuroDaily.AppImage
 
 - Sidecar is built with PyInstaller (`desktop/sidecar/neurodaily-server.spec`).
 - Tauri external binary: `desktop/tauri/src-tauri/binaries/neurodaily-server-<target-triple>`.
-- On quit, the shell kills the sidecar.
-- First run goes to `/settings`; later launches go to `/`.
+- Minimizing the window keeps the sidecar and its daily schedule running.
+- Closing the window or quitting requests confirmation. The shell closes the
+  sidecar's parent pipe on confirmed exit to stop scheduled and in-progress delivery.
+- Every desktop launch opens `/settings`. Choose the neuroscience or oncology preset,
+  or keep the saved settings. Save to continue to `/run`, then start a search to open its report.
 
 ## 2. User data locations
 
@@ -56,7 +59,7 @@ npx tauri build
 Artifacts:
 
 - `desktop/tauri/src-tauri/target/release/bundle/macos/NeuroDaily.app`
-- `desktop/tauri/src-tauri/target/release/bundle/dmg/NeuroDaily_1.0.0_aarch64.dmg`
+- `desktop/tauri/src-tauri/target/release/bundle/dmg/NeuroDaily_1.0.1_aarch64.dmg`
 
 Windows (PowerShell):
 
@@ -84,13 +87,14 @@ npx tauri build --bundles appimage,deb
 
 | Runner | Target | Bundles |
 |---|---|---|
-| macos-14 | aarch64-apple-darwin | app, dmg |
-| macos-13 | x86_64-apple-darwin | app, dmg |
+| macos-15 | aarch64-apple-darwin | app, dmg |
+| macos-15-intel | x86_64-apple-darwin | app, dmg |
 | windows-latest | x86_64-pc-windows-msvc | nsis, msi |
 | ubuntu-24.04 | x86_64-unknown-linux-gnu | appimage, deb |
 
-Each job builds the sidecar first, then Tauri, uploads artifacts, and attaches
-installers to the GitHub Release.
+Each job builds and smoke-tests the sidecar, builds Tauri, and uploads its
+installers. On macOS, the workflow creates and verifies the DMG from the Tauri
+app bundle. The publish job attaches the installers after all builds pass.
 
 ## 5. Signing & notarization
 

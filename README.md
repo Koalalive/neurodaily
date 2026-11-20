@@ -1,4 +1,10 @@
-# NeuroDaily
+<p align="center">
+  <img src="desktop/tauri/src-tauri/icons/128x128@2x.png" width="128" height="128" alt="神通寰宇应用图标">
+</p>
+
+# 神通寰宇 · NeuroDaily
+
+**以一份日报，连接全球研究前沿。**
 
 > **中文** — 神经科学与精神病学方向的**每日情报 + AI 精读**系统。一台笔记本/小主机即可部署：抓取论文、预印本、临床试验、监管与创投动态，生成中文日报，每天早晨自动邮件送达全组。检索不消耗 token，AI 按需生成并缓存。
 >
@@ -8,7 +14,20 @@
 
 [![ci](https://github.com/Koalalive/neurodaily/actions/workflows/ci.yml/badge.svg)](https://github.com/Koalalive/neurodaily/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
-![license](https://img.shields.io/badge/license-MIT-green)
+[![Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+
+## 界面预览 · Screenshots
+
+下图截自本地运行界面，日报使用离线演示数据。
+
+![NeuroDaily 日报页，包含来源分类计数和最新论文列表](docs/assets/digest-demo.png)
+
+<details>
+<summary>查看设置页 · Desktop settings</summary>
+
+![NeuroDaily 设置页，包含神经科学与肿瘤学预设](docs/assets/desktop-settings.png)
+
+</details>
 
 ---
 

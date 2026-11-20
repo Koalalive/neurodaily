@@ -1,6 +1,6 @@
 # 安装要求与发行版
 
-NeuroDaily 1.0.0 提供三种桌面安装包；终端用户**不需要安装 Python、Node 或 Rust**，运行时已随安装包打包。
+NeuroDaily 提供 macOS、Windows 和 Linux 桌面安装包。终端用户**不需要安装 Python、Node 或 Rust**，应用所用的 Python 运行时已随安装包打包。
 
 ## 1. 发行矩阵
 
@@ -59,17 +59,20 @@ NeuroDaily 1.0.0 提供三种桌面安装包；终端用户**不需要安装 Pyt
   ```
 - AppImage：
   ```bash
-  chmod +x NeuroDaily_1.0.0_amd64.AppImage
-  ./NeuroDaily_1.0.0_amd64.AppImage
+  chmod +x NeuroDaily_1.0.1_amd64.AppImage
+  ./NeuroDaily_1.0.1_amd64.AppImage
   ```
 - 数据目录：`~/.local/share/neurodaily/`（或 `$XDG_DATA_HOME/neurodaily`）。
 
 ## 6. 首次启动与数据位置
 
 1. 双击安装后的 NeuroDaily。
-2. 首次启动打开设置页（若配置不存在）。
-3. 选择/确认学科、期刊、RSS、时间窗口；可选填 DeepSeek key、SMTP。
-4. 点 **Save & run now** 或 **Run now** 开始。
+2. 每次启动先打开设置页。可选「神经科学」或「肿瘤学」预设，也可沿用保存的设置。
+3. 确认学科、期刊、RSS 和时间窗口，点击 **Save & continue to search**。
+4. 点击 **开始检索**。报告成功生成后自动打开。
+
+在设置页开启 **Enable schedule** 并保存后，桌面应用按本地时间运行定时推送。最小化窗口会继续运行。关闭窗口或退出应用时会显示确认提示，确认后定时推送停止，正在进行的检索或推送也会中断。
+独立安装的系统定时任务仍由系统调度器管理。
 
 配置与输出都在用户数据目录，卸载应用不会删除；备份该目录即可迁移。
 

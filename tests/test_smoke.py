@@ -111,6 +111,22 @@ class MailTuiTests(unittest.TestCase):
 
 
 class PruneTests(unittest.TestCase):
+    def test_save_report_accepts_filename_in_current_directory(self):
+        from pathlib import Path
+        from neurodaily.digest import save_report
+
+        with tempfile.TemporaryDirectory() as directory:
+            previous = os.getcwd()
+            try:
+                os.chdir(directory)
+                with mock.patch("neurodaily.digest._write_static_history"), \
+                     mock.patch("neurodaily.digest._prune_reports"):
+                    name = save_report(demo.build_result(), "review.html")
+                self.assertEqual(name, "review.html")
+                self.assertIn("NeuroDaily", Path(name).read_text(encoding="utf-8"))
+            finally:
+                os.chdir(previous)
+
     def test_keeps_newest_plus_referenced(self):
         d = tempfile.mkdtemp()
         files = []
@@ -444,6 +460,15 @@ class JournalMetricsTests(unittest.TestCase):
         self.assertEqual(j.cas, "2区")
         self.assertEqual(j.metric_year, 2024)
 
+    def test_journal_metric_year_survives_config_round_trip(self):
+        from neurodaily.config import Config, Journal
+
+        cfg = DEFAULT_CONFIG()
+        cfg.journals = [Journal(name="Neuron", metric_year=2025)]
+        with tempfile.TemporaryDirectory() as directory:
+            path = cfg.save(os.path.join(directory, "config.json"))
+            self.assertEqual(Config.load(path).journals[0].metric_year, 2025)
+
 
 class WindowTests(unittest.TestCase):
     def test_time_window_accepts_utc_offset(self):
@@ -594,7 +619,8 @@ class EmailSafeTests(unittest.TestCase):
 class SettingsEnglishTests(unittest.TestCase):
     def test_settings_page_english(self):
         from neurodaily.settings_page import SETTINGS_HTML
-        self.assertIn("Save & run now", SETTINGS_HTML)
+        self.assertIn("Save & continue to search", SETTINGS_HTML)
+        self.assertIn("Research presets", SETTINGS_HTML)
         self.assertIn("Push settings (email / webhook)", SETTINGS_HTML)
         self.assertNotIn("保存并立即检索推送", SETTINGS_HTML)
 
@@ -751,6 +777,40 @@ class LabelProtectionTests(unittest.TestCase):
 
 
 class RunNowTests(unittest.TestCase):
+    def test_research_presets_are_valid_and_leave_saved_config_untouched(self):
+        from pathlib import Path
+        from fastapi.testclient import TestClient
+        from neurodaily.schema import validate
+        from neurodaily.webapp import create_app
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            cfg = DEFAULT_CONFIG()
+            cfg.output["dir"] = directory
+            cfg.save(str(path))
+            before = path.read_bytes()
+            response = TestClient(create_app(str(path))).get("/api/config/presets")
+            self.assertEqual(response.status_code, 200)
+            presets = {entry["label"]: entry["config"] for entry in response.json()}
+            self.assertEqual({label: value["profile"] for label, value in presets.items()},
+                             {"神经科学": "neuro", "肿瘤学": "oncology"})
+            for value in presets.values():
+                self.assertNotIn("output", value)
+                self.assertNotIn("scheduled", value)
+                self.assertEqual(validate({**cfg.to_dict(), **value}), [])
+            self.assertIn("Surgical Procedures, Operative",
+                          [term for d in presets["肿瘤学"]["disciplines"] for term in d["mesh_terms"]])
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_oncology_report_shows_its_topic_without_neuroscience_history(self):
+        from neurodaily.render import render_html
+
+        cfg = DEFAULT_CONFIG()
+        cfg.profile = "oncology"
+        html = render_html(demo.build_result(cfg))
+        self.assertIn("oncology digest", html)
+        self.assertNotIn('id="on-this-day"', html)
+
     def test_fingerprint_tracks_window_mode_and_feed(self):
         from neurodaily.history import compute_fingerprint
         from neurodaily.webapp import _cfg_with_hours
@@ -787,6 +847,174 @@ class RunNowTests(unittest.TestCase):
     def test_settings_feed_selector(self):
         from neurodaily.settings_page import SETTINGS_HTML
         self.assertIn("querySelectorAll('input.feed')", SETTINGS_HTML)
+
+
+class WebSearchOutcomeTests(unittest.TestCase):
+    def setUp(self):
+        from contextlib import ExitStack
+        from fastapi.testclient import TestClient
+        from neurodaily.webapp import create_app
+
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        directory = self.directory = stack.enter_context(tempfile.TemporaryDirectory())
+        cfg = DEFAULT_CONFIG()
+        cfg.output.update(dir=directory, open_on_finish=False)
+        self.config_path = cfg.save(os.path.join(directory, "config.json"))
+        self.result = demo.build_result(cfg)
+        self.app = create_app(self.config_path)
+        self.client = TestClient(self.app)
+        stack.enter_context(mock.patch("neurodaily.webapp.run_digest", return_value=self.result))
+        stack.enter_context(mock.patch("neurodaily.journal_metrics.ensure_fresh"))
+        self.ai = stack.enter_context(mock.patch("neurodaily.ai_summary.generate", return_value=""))
+        stack.enter_context(mock.patch("neurodaily.mailer.load_cfg", return_value={"enabled": False}))
+        stack.enter_context(mock.patch("neurodaily.mailer.render_email", return_value=("", "", "")))
+        self.mail = stack.enter_context(mock.patch("neurodaily.mailer.save_last"))
+        self.hooks = stack.enter_context(mock.patch("neurodaily.webhooks.send_all"))
+
+    def test_success_is_reported_after_the_report_is_written(self):
+        def save(result, path):
+            self.assertIsNone(self.app.state.last_run)
+            self.assertEqual(self.app.state.search_attempt["status"], "running")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("<html>saved report</html>")
+
+        with mock.patch("neurodaily.digest.save_report", side_effect=save):
+            started = self.client.post("/api/run?force=1").json()
+        status = self.client.get("/api/status").json()
+        self.assertEqual(status["search"]["started_at"], started["started_at"])
+        self.assertEqual(status["search"]["status"], "completed")
+        self.assertEqual(status["search"]["item_count"], len(self.result.items))
+        self.assertIn("saved report", self.client.get("/report/latest").text)
+
+    def test_save_failure_does_not_announce_success_or_deliver(self):
+        with mock.patch("neurodaily.digest.save_report", side_effect=OSError("disk full")):
+            with self.assertLogs("neurodaily.webapp", level="ERROR"):
+                self.client.post("/api/run?force=1")
+        status = self.client.get("/api/status").json()
+        self.assertIsNone(status["last_run"])
+        self.assertEqual(status["search"]["status"], "failed")
+        self.assertEqual(self.client.get("/report/latest").status_code, 404)
+        self.mail.assert_not_called()
+        self.hooks.assert_not_called()
+
+    def test_skipped_search_does_not_replace_or_deliver_a_report(self):
+        self.result.skipped = True
+        self.result.skipped_reason = "already searched"
+        with mock.patch("neurodaily.digest.save_report") as save:
+            self.client.post("/api/run")
+        self.assertEqual(self.client.get("/api/status").json()["search"]["status"], "skipped")
+        save.assert_not_called()
+        self.ai.assert_not_called()
+        self.mail.assert_not_called()
+        self.hooks.assert_not_called()
+
+    def test_active_search_rejects_a_second_request(self):
+        self.app.state.search_attempt = {"status": "running"}
+        self.assertEqual(self.client.post("/api/run?force=1").status_code, 409)
+
+    def test_desktop_schedule_shares_report_and_delivery_pipeline(self):
+        from datetime import date
+        from pathlib import Path
+        from threading import Event
+        from fastapi.testclient import TestClient
+        from neurodaily.webapp import create_app, run_digest
+
+        finished = Event()
+        stops = []
+
+        def schedule(stop, load, start):
+            stops.append(stop)
+            start(load(), date(2026, 11, 20))
+            finished.set()
+
+        def save(_result, path):
+            Path(path).write_text("<html>scheduled report</html>", encoding="utf-8")
+
+        with mock.patch("neurodaily.webapp.run_schedule", side_effect=schedule), \
+             mock.patch("neurodaily.history.claim_desktop_schedule", return_value=True), \
+             mock.patch("neurodaily.digest.save_report", side_effect=save):
+            with TestClient(create_app(self.config_path, desktop=True)) as client:
+                self.assertTrue(finished.wait(2))
+                result = client.get("/api/status").json()
+                self.assertEqual(result["search"]["status"], "completed")
+                self.assertEqual(run_digest.call_args.kwargs["mode"], "daily")
+                self.assertIn("scheduled report", client.get("/report/latest").text)
+                self.assertEqual(client.get("/api/launchd/status").json()["backend"], "desktop")
+                self.assertEqual(client.post("/api/launchd/install").status_code, 400)
+                self.hooks.assert_called_once()
+        self.assertTrue(stops[0].is_set())
+
+    def test_latest_report_after_restart_recognizes_custom_names(self):
+        from pathlib import Path
+
+        folder = Path(self.directory)
+        real = folder / "review_2026-11-20.html"
+        demo_report = folder / "neurodaily_demo.html"
+        real.write_text(render_html(self.result).replace(" (demo)", ""), encoding="utf-8")
+        demo_report.write_text(render_html(self.result), encoding="utf-8")
+        (folder / "history.html").write_text("<html>not a report</html>", encoding="utf-8")
+        os.utime(real, (100, 100))
+        os.utime(demo_report, (200, 200))
+
+        response = self.client.get("/report/latest")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text, real.read_text(encoding="utf-8"))
+
+        real.unlink()
+        self.assertEqual(self.client.get("/report/latest").text,
+                         demo_report.read_text(encoding="utf-8"))
+
+    def test_disabled_email_accepts_no_recipients_without_touching_webhooks(self):
+        from pathlib import Path
+
+        email = Path(self.directory) / "email.json"
+        hooks = Path(self.directory) / "webhooks.json"
+        hooks.write_text('{"keep": true}', encoding="utf-8")
+        with mock.patch("neurodaily.mailer.CFG_PATH", str(email)), \
+             mock.patch("neurodaily.webhooks.CFG_PATH", str(hooks)):
+            response = self.client.post("/api/push", json={"email": {"enabled": False, "to": ""}})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(email.read_text(encoding="utf-8"))["to"], [])
+        self.assertEqual(hooks.read_text(encoding="utf-8"), '{"keep": true}')
+
+
+class DesktopScheduleTests(unittest.TestCase):
+    def test_active_schedule_waits_for_manual_search_then_runs_once(self):
+        from datetime import date, datetime
+        from itertools import count
+        from threading import Event
+        from neurodaily.desktop_schedule import run_schedule
+
+        cfg = DEFAULT_CONFIG()
+        cfg.scheduled = {"enabled": True, "hour": 8, "minute": 0}
+        times = [datetime(2026, 11, 20, 7, 58), datetime(2026, 11, 20, 7, 59),
+                 datetime(2026, 11, 20, 8, 0),
+                 datetime(2026, 11, 20, 8, 3), datetime(2026, 11, 20, 8, 5),
+                 datetime(2026, 11, 21, 8, 0)]
+        stop = Event()
+        start = mock.Mock(side_effect=(False, True, True))
+        checks = iter(times)
+        pauses = count(1)
+
+        def wait(_seconds):
+            if next(pauses) == len(times) - 1:
+                stop.set()
+
+        with mock.patch.object(stop, "wait", side_effect=wait):
+            run_schedule(stop, lambda: cfg, start, now=lambda: next(checks))
+        self.assertEqual([call.args[1] for call in start.call_args_list],
+                         [date(2026, 11, 20), date(2026, 11, 20), date(2026, 11, 21)])
+
+    def test_desktop_schedule_claim_survives_new_connections(self):
+        from neurodaily.history import claim_desktop_schedule
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "history.db")
+            with mock.patch("neurodaily.history.db_path", return_value=path):
+                self.assertTrue(claim_desktop_schedule("2026-11-20"))
+                self.assertFalse(claim_desktop_schedule("2026-11-20"))
+                self.assertTrue(claim_desktop_schedule("2026-11-21"))
 
 
 class SettingsJournalMetricsTests(unittest.TestCase):
