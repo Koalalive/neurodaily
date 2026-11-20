@@ -1,0 +1,82 @@
+name: Release Tauri desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf build-essential curl wget file libssl-dev
+
+      - name: Install Python project
+        run: |
+          python -m venv .venv
+          python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e .
+          .venv/bin/python -m pip install pyinstaller
+
+      - name: Build sidecar (Unix)
+        if: runner.os != 'Windows'
+        run: bash desktop/build_sidecar.sh
+
+      - name: Build sidecar (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./desktop/build_sidecar.ps1
+
+      - name: Install Tauri CLI
+        working-directory: desktop/tauri
+        run: npm install
+
+      - name: Generate icons
+        working-directory: desktop/tauri
+        run: npm run icon
+
+      - name: Build app
+        working-directory: desktop/tauri
+        run: npx tauri build --target ${{ matrix.target }}
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurodaily-${{ matrix.target }}
+          if-no-files-found: warn
+          path: |
+            desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/**
+            desktop/tauri/src-tauri/target/release/bundle/**

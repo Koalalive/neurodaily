@@ -12,7 +12,7 @@ import os
 
 import httpx
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.environ.get("NEURODAILY_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG_PATH = os.path.join(ROOT, "config", "webhooks.json")
 
 DEFAULT_CFG = {"feishu": "", "wecom": "", "max_items": 8}

@@ -27,7 +27,7 @@ from datetime import date, datetime
 
 import httpx
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.environ.get("NEURODAILY_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AUTO_PATH = os.path.join(ROOT, "output", "journal_metrics_auto.json")
 OFFICIAL_PATH = os.path.join(ROOT, "config", "journal_metrics.json")
 

@@ -18,9 +18,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.environ.get("NEURODAILY_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG_PATH = os.path.join(ROOT, "config", "email.json")
-LAST_PATH = os.path.join(os.path.expanduser("~"), "neurodaily", "output", "last_email.json")
+LAST_PATH = os.path.join(ROOT, "output", "last_email.json")
 
 _WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 

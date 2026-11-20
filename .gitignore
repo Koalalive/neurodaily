@@ -26,3 +26,11 @@ config/webhooks.json
 
 # personal AI summary config + key
 config/ai_summary.json
+
+# desktop / Tauri build artifacts
+build/
+dist/
+desktop/tauri/node_modules/
+desktop/tauri/src-tauri/target/
+desktop/tauri/src-tauri/binaries/
+desktop/tauri/src-tauri/gen/

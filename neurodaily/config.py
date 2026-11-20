@@ -14,9 +14,10 @@ import sys
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
+_HOME = os.environ.get("NEURODAILY_HOME")
 DEFAULT_DIRS = {
-    "config": os.path.join(os.path.expanduser("~"), "neurodaily", "config"),
-    "output": os.path.join(os.path.expanduser("~"), "neurodaily", "output"),
+    "config": os.path.join(_HOME, "config") if _HOME else os.path.join(os.path.expanduser("~"), "neurodaily", "config"),
+    "output": os.path.join(_HOME, "output") if _HOME else os.path.join(os.path.expanduser("~"), "neurodaily", "output"),
 }
 
 

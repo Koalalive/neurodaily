@@ -21,7 +21,7 @@ from datetime import datetime
 
 import httpx
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.environ.get("NEURODAILY_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG_PATH = os.path.join(ROOT, "config", "ai_summary.json")
 
 DEFAULT_CFG = {
