@@ -294,7 +294,7 @@ function collect(){
   data.windows.trials_hours=parseInt(el('win_trials').value||'36',10);
   data.windows.funding_hours=parseInt(el('win_funding').value||'36',10);
   data.windows.news_hours=parseInt(el('win_news').value||'36',10);
-  data.policy_feeds=[].slice.call(el('policy_feeds').querySelectorAll('.feed')).map(function(i){return i.value.trim();}).filter(Boolean);
+  data.policy_feeds=[].slice.call(el('policy_feeds').querySelectorAll('input.feed')).map(function(i){return i.value.trim();}).filter(Boolean);
   data.journals=[].slice.call(el('journals').querySelectorAll('.row')).map(function(r){
     return {name:r.querySelector('.j-name').value.trim(),
       url:r.querySelector('.j-url').value.trim(),

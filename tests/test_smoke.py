@@ -674,3 +674,31 @@ class LabelProtectionTests(unittest.TestCase):
         out = _clean_summary(src, refs)
         self.assertIn("[Lecanemab (Leqembi) receives full FDA approval](R5)", out)
         self.assertNotIn("（[Leqembi]", out)
+
+
+class RunNowTests(unittest.TestCase):
+    def test_hours_override_is_copy(self):
+        from neurodaily.webapp import _cfg_with_hours
+        from neurodaily.config import DEFAULT_CONFIG
+        c = DEFAULT_CONFIG()
+        c.windows = {"daily_paper_hours": 36, "manual_paper_hours": 168,
+                     "trials_hours": 36, "funding_hours": 36, "news_hours": 36,
+                     "other_lookback_days": 7}
+        c2 = _cfg_with_hours(c, 12)
+        for k in ("daily_paper_hours", "manual_paper_hours", "trials_hours",
+                  "funding_hours", "news_hours"):
+            self.assertEqual(c2.windows[k], 12)
+        self.assertEqual(c.windows["daily_paper_hours"], 36)
+        self.assertEqual(c2.windows["other_lookback_days"], 1)
+
+    def test_run_page(self):
+        from fastapi.testclient import TestClient
+        from neurodaily.webapp import create_app
+        r = TestClient(create_app()).get("/run")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("本次检索范围", r.text)
+        self.assertIn("hours", r.text)
+
+    def test_settings_feed_selector(self):
+        from neurodaily.settings_page import SETTINGS_HTML
+        self.assertIn("querySelectorAll('input.feed')", SETTINGS_HTML)

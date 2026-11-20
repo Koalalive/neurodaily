@@ -335,8 +335,8 @@ var runBtn = document.getElementById('runNow');
 var runMsg = document.getElementById('runMsg');
 if (runBtn) {
   runBtn.addEventListener('click', function () {
-    if (IS_FILE) { window.gotoServer('/settings?next=run'); return; }
-    location.href = '/settings?next=run';
+    if (IS_FILE) { window.gotoServer('/run'); return; }
+    location.href = '/run';
   });
 }
 

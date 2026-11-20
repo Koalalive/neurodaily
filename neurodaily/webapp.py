@@ -2,7 +2,8 @@
 
 Routes:
     GET  /            -> dashboard: run + view latest report inline
-    POST /api/run     -> run a digest now (background task; dedup-aware, ?force=1 bypasses)
+    GET  /run         -> one-range "run now" page (does not write config)
+    POST /api/run     -> run now (background; ?force=1, ?hours=N overrides this run only)
     GET  /api/status  -> recent runs / health
     GET  /api/prompt  -> structured focus prompt JSON + text
     GET  /reports     -> list generated HTML reports
@@ -24,7 +25,21 @@ from fastapi.staticfiles import StaticFiles
 from .config import Config, DEFAULT_CONFIG
 from .digest import run as run_digest, render_html_for
 from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
+from .run_page import RUN_HTML
 from . import history as hist
+
+
+def _cfg_with_hours(cfg: Config, hours: int) -> Config:
+    import copy
+    import math
+    c = copy.deepcopy(cfg)
+    w = dict(c.windows or {})
+    for key in ("daily_paper_hours", "manual_paper_hours", "trials_hours",
+                "funding_hours", "news_hours"):
+        w[key] = hours
+    w["other_lookback_days"] = max(1, math.ceil(hours / 24))
+    c.windows = w
+    return c
 
 
 def create_app(config_path: str | None = None) -> FastAPI:
@@ -55,9 +70,17 @@ def create_app(config_path: str | None = None) -> FastAPI:
         html = render_html_for(result)
         return html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1)
 
+    @app.get("/run", response_class=HTMLResponse)
+    def run_now_page():
+        return RUN_HTML
+
     @app.post("/api/run")
-    def api_run(background_tasks: BackgroundTasks, force: bool = False):
+    def api_run(background_tasks: BackgroundTasks, force: bool = False,
+                hours: int | None = None):
         cfg = _cfg()
+        if hours is not None and not (1 <= hours <= 8760):
+            return JSONResponse({"error": "hours must be 1..8760"}, status_code=400)
+        cfg = _cfg_with_hours(cfg, hours) if hours else cfg
 
         def _do():
             try:
