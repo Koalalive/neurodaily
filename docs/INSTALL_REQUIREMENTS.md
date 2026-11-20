@@ -8,7 +8,7 @@ NeuroDaily 1.0.0 提供三种桌面安装包；终端用户**不需要安装 Pyt
 |---|---|---|---|
 | macOS | `.dmg`（拖入 Applications） | Apple Silicon（arm64）、Intel（x86_64） | macOS 12 Monterey |
 | Windows | `.msi` / `.exe`（NSIS） | x86_64 | Windows 10 1809+ / Windows 11 |
-| Linux | `.AppImage` / `.deb` | x86_64 | Ubuntu 22.04 / 24.04（glibc 2.35+） |
+| Linux | `.AppImage` / `.deb` | x86_64 | Ubuntu 24.04（构建基线） |
 
 > 所有安装包均附带本地 Web UI + Python sidecar；启动后不依赖外部 Web 服务。
 
@@ -45,14 +45,14 @@ NeuroDaily 1.0.0 提供三种桌面安装包；终端用户**不需要安装 Pyt
 - Windows 10 1809+ 或 Windows 11，x86_64。
 - 需要 **WebView2 Runtime**：
   - Windows 11 通常已内置；
-  - Windows 10 如缺失，安装包会提示，或从 Microsoft 安装 Evergreen Runtime。
+  - 安装包内嵌 WebView2 离线安装程序，缺失时由安装包处理。
 - 数据目录：`%APPDATA%\NeuroDaily\`
 - 未签名安装包会触发 SmartScreen：选择「更多信息 → 仍要运行」。
 - 端口仅绑定 `127.0.0.1`。
 
 ## 5. Linux
 
-- Ubuntu 22.04 / 24.04 x86_64（其他发行版需 glibc 2.35+ 与 WebKitGTK 4.1）。
+- Linux x86_64 安装包在 Ubuntu 24.04 构建，其他发行版需验证系统库兼容性。
 - 运行依赖（`.deb` 会自动安装；AppImage 需系统已有）：
   ```bash
   sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1

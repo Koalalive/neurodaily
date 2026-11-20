@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import socket
 import sys
 from pathlib import Path
 
@@ -67,28 +66,30 @@ def prepare_home(home: Path) -> bool:
     return first_run
 
 
-def free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
-
-
 def main() -> None:
     home = app_home()
     os.environ["NEURODAILY_HOME"] = str(home)
     os.environ["NEURODAILY_NO_OPEN"] = "1"
     first_run = prepare_home(home)
 
-    port = int(os.environ.get("NEURODAILY_PORT") or free_port())
+    port = int(os.environ.get("NEURODAILY_PORT") or 0)
     print(f"NEURODAILY_HOME={home}", flush=True)
     print(f"NEURODAILY_FIRST_RUN={1 if first_run else 0}", flush=True)
-    print(f"NEURODAILY_PORT={port}", flush=True)
 
     from neurodaily.webapp import create_app
     import uvicorn
 
+    class DesktopServer(uvicorn.Server):
+        async def startup(self, sockets=None):
+            await super().startup(sockets=sockets)
+            if self.started:
+                bound_port = self.servers[0].sockets[0].getsockname()[1]
+                self.config.app.state.base_url = f"http://127.0.0.1:{bound_port}"
+                print(f"NEURODAILY_PORT={bound_port}", flush=True)
+
     app = create_app(str(home / "config" / "config.json"))
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    server = DesktopServer(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info"))
+    server.run()
 
 
 if __name__ == "__main__":
