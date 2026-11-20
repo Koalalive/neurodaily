@@ -1,220 +1,312 @@
 # NeuroDaily
 
-A daily **neuroscience & psychiatry** research digest that runs **both as a web app and as a standalone script**. Every morning at 08:00 it aggregates the latest literature, industry/regulatory progress, clinical & conference signals, and policy news — then renders a styled, **interactive HTML report** you can open in your browser.
+> **中文** — 神经科学与精神病学方向的**每日情报 + AI 精读**系统。一台笔记本/小主机即可部署：抓取论文、预印本、临床试验、监管与创投动态，生成中文日报，每天早晨自动邮件送达全组。检索不消耗 token，AI 按需生成并缓存。
+>
+> **English** — A self-hosted daily digest for neuroscience & psychiatry. It aggregates journal RSS, PubMed, arXiv, bioRxiv, ClinicalTrials.gov, openFDA, policy feeds and VC/funding news, renders an interactive HTML report with an AI overview and a long-form "on this day" essay, and emails it to your team every morning. Retrieval is token-free; AI runs on demand and is cached.
+>
+> **Русский** — Автономная система ежедневной научной сводки по нейронаукам и психиатрии. Собирает RSS журналов, PubMed, arXiv, bioRxiv, ClinicalTrials.gov, openFDA, новости политики и венчурного финансирования, формирует интерактивный HTML-отчёт с ИИ-обзором и длинным эссе «в этот день», и каждое утро отправляет его по электронной почте. Поиск не расходует токены; ИИ работает по запросу и кэшируется.
 
-Your **focus areas (disciplines), keywords, and journal watch-list are stored as a structured prompt**, so the whole system queries and labels content against exactly what you care about.
-
----
-
-## 📖 Operations manual & Settings GUI
-
-- **Full start/stop/configure/schedule/troubleshooting guide:** [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
-- **Settings GUI:** start the web app and open <http://127.0.0.1:8031/settings> to edit every setting (disciplines, keywords, sources, output, schedule, policy feeds, journals) in the browser, then **Save** — no JSON hand-editing required.
-
----
-
-## What it aggregates
-
-| Source | Type | Endpoint |
-|---|---|---|
-| **Top journals** | Papers | Journal RSS (Neuron, Nature, Nature Medicine, Mol Psychiatry, Nat Rev Neuro…) filtered by your interests |
-| arXiv | Papers | `q-bio.NC`, `cs.NE` by category + keyword |
-| PubMed | Papers | NCBI E-utilities (MeSH + Title/Abstract) |
-| bioRxiv / medRxiv | Preprints | `api.biorxiv.org` detail API |
-| openFDA | Drugs / Devices | New NDA/BLA approvals + 510(k) clearances |
-| ClinicalTrials.gov | Trials / Conference | v2 API, recently updated studies |
-| Policy & News RSS | Policy / institutional | NIMH, NIDA, NINDS, Nature feeds |
-
-**Default focus areas**: Neuroscience, Psychiatry, Cognitive Neuroscience, Neurosurgery, Traumatic Brain Injury, Addiction, Epilepsy.
-
-**Journal watch-list**: 28 leading journals (Nature, Neuron, Science, Cell, Nature Neuroscience, Molecular Psychiatry, JAMA Psychiatry, Journal of Neurosurgery, Epilepsia, etc.) — see [Top Journals](#top-journals-watch-list).
+[![ci](https://github.com/Koalalive/neurodaily/actions/workflows/ci.yml/badge.svg)](https://github.com/Koalalive/neurodaily/actions/workflows/ci.yml)
+![python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
-## Features
+## 目录
 
-- **Two run modes**: FastAPI web app (dashboard + REST API) *and* a standalone CLI script.
-- **Journal-paper sourcing**: top-journal RSS feeds are filtered by your research interests and surface as ★-badged papers at the *top of Latest Papers* — not just broad keyword hits.
-- **Structured focus prompt**: config is editable (JSON) and serializes into a reusable `to_prompt()` string shown in the report (`config show`).
-- **Collapsible cards**: each item is a click-to-expand card (native `<details>`/`<summary>`) with per-section **Expand / Collapse** toggles — collapsed by default for a scannable digest.
-- **Top Journals section**: the report embeds a clickable grid of your watch-list journals (grouped by field), each linking to its official site.
-- **Automatic tagging & dedupe**: every item is labeled by which discipline/keyword it matches; duplicates removed.
-- **Per-source health panel**: shows whether each API succeeded, item count, and latency.
-- **launchd scheduling**: register a macOS LaunchAgent to run at 08:00 daily.
-- **Graceful degradation**: a failing source never breaks the report.
-
----
-
-## Project layout
-
-```
-neurodaily/
-├── pyproject.toml
-├── config.example.json         # sample config (disciplines + keywords + journals); copy to config/config.json
-├── neurodaily/
-│   ├── config.py               # Config, Discipline, Journal, DEFAULT_CONFIG, JOURNALS(), to_prompt()
-│   ├── models.py               # Item dataclass, tagging
-│   ├── digest.py               # orchestrator: run() + save_report()
-│   ├── render.py               # Jinja2 -> HTML
-│   ├── cli.py                  # standalone script + launchd + config editor
-│   ├── webapp.py               # FastAPI app
-│   └── sources/                # arxiv, pubmed, biorxiv, fda, trials, rss
-│       └── http.py             # shared HTTP helper with retries/timeouts
-├── templates/report.html.j2    # styled HTML template (collapsible cards, journal grid)
-└── output/                     # generated reports
-```
+- [核心特性](#核心特性)
+- [快速开始](#快速开始)
+- [Docker](#docker)
+- [配置](#配置)
+- [AI 每日摘要（可选）](#ai-每日摘要可选)
+- [学科 profile 与 Agent 配置](#学科-profile-与-agent-配置)
+- [邮件与 Webhook](#邮件与-webhook)
+- [数据源](#数据源)
+- [命令行](#命令行)
+- [HTTP API](#http-api)
+- [项目结构](#项目结构)
+- [测试](#测试)
+- [文档](#文档)
+- [免责声明](#免责声明)
 
 ---
 
-## Quick start
+## 核心特性
+
+| 能力 | 说明 |
+|---|---|
+| **七源聚合** | 期刊 RSS · PubMed · arXiv · bioRxiv · ClinicalTrials.gov · openFDA · 政策/新闻 |
+| **创投/产业情报** | BCI 融资、neurotech 融资、MedTech Dive、Crunchbase（`kind=funding`） |
+| **AI 每日摘要** | 800+ 条 → 约 900 字：研究进展 / 临床监管 / 产业创投 / 大事件（可选、带缓存） |
+| **历史上的今天** | 936 篇约千字学科史长文，按日轮换，精确日/近邻/经典标注 |
+| **交互式日报** | 折叠卡片、板块导航、来源健康面板、一键引用图谱 |
+| **邮件日报** | 摘要正文 + 完整 HTML 附件；每天 08:00 自动；单机多收件人 |
+| **桌面通知** | macOS / Linux 原生通知 |
+| **Web 设置页 + TUI** | 收件人、SMTP 凭据、关注点、定时任务；无需手改 JSON |
+| **Agent 可配置** | JSON 补丁 + schema 校验 + dry-run + profile；换学科零代码 |
+| **配置化数据源** | 填一个 RSS/JSON 地址即可新增源，不写 Python |
+| **导出** | JSON / BibTeX |
+| **Webhook** | 飞书 / 企业微信 |
+| **离线演示** | `neurodaily demo`，断网可完整演示 |
+| **稳健性** | 并行抓取、0 条自动回退、单源失败降级、报告保留策略 |
+| **可部署** | `scripts/start.sh` 一键启动；Docker / docker compose（镜像约 199MB） |
+
+---
+
+## 快速开始
+
+### 本地（Python 3.12+）
 
 ```bash
-cd ~/neurodaily
+git clone https://github.com/Koalalive/neurodaily.git
+cd neurodaily
 
-# 1. create venv + install (editable so `neurodaily` command works anywhere)
 python3 -m venv .venv
 .venv/bin/pip install -e .
 
-# 2. write the default config (disciplines, keywords, journals)
-.venv/bin/python -m neurodaily config init
-#    (or copy config.example.json -> config/config.json and edit)
-
-# 3a. generate a report (standalone script mode)
-.venv/bin/python -m neurodaily run
-
-# 3b. OR start the web app
-.venv/bin/python -m neurodaily serve --port 8031
-#    open http://127.0.0.1:8031
+.venv/bin/python -m neurodaily config init     # 写入默认 config/config.json
+.venv/bin/python -m neurodaily run             # 跑一次，生成 output/*.html
 ```
 
-> A `neurodaily` console script is also installed, so `neurodaily run` / `neurodaily serve` work if the venv is on PATH.
+一键启动 Web 应用（含设置页）：
+
+```bash
+scripts/start.sh
+# http://127.0.0.1:8031
+```
+
+离线演示（不联网）：
+
+```bash
+.venv/bin/python -m neurodaily demo --no-open
+```
+
+### Docker
+
+```bash
+docker build -t neurodaily:local .
+docker run -d --name neurodaily -p 8031:8031 neurodaily:local
+# http://127.0.0.1:8031
+```
+
+或：
+
+```bash
+docker compose up --build
+```
+
+详见 [`docs/DOCKER.md`](docs/DOCKER.md)。
 
 ---
 
-## Config & the structured prompt
+## 配置
 
-`config.json` holds your disciplines, keywords, and journal watch-list. Each discipline maps to source-specific query terms:
-
-```json
-{
-  "profile": "neuro",
-  "disciplines": [
-    {
-      "name": "Epilepsy",
-      "arxiv_cats": ["q-bio.NC"],
-      "mesh_terms": ["Epilepsy", "Seizures"],
-      "bio_cats": ["neuroscience"],
-      "keywords": ["epilepsy", "seizure", "antiepileptic"],
-      "enabled": true
-    }
-  ],
-  "global_keywords": ["brain", "neuro", "synapse", "EEG", "fMRI"],
-  "journals": [
-    { "name": "Neuron", "url": "https://www.cell.com/neuron",
-      "rss": "https://www.cell.com/neuron/rss", "category": "neuroscience" }
-  ],
-  "sources": { "...": { "enabled": true, "max_results": 20, "lookback_days": 14 } },
-  "scheduled": { "enabled": true, "hour": 8, "minute": 0 },
-  "policy_feeds": ["https://..."],
-  "output": { "dir": "~/neurodaily/output", "filename_format": "neurodaily_%Y-%m-%d.html" }
-}
-```
-
-View the current focus prompt anytime:
+配置文件：`config/config.json`（gitignored）。查看/校验：
 
 ```bash
 .venv/bin/python -m neurodaily config show
+.venv/bin/python -m neurodaily config validate
+.venv/bin/python -m neurodaily config describe     # Agent 可读的能力清单
+.venv/bin/python -m neurodaily config schema --out schema.json
 ```
 
-It produces a single structured prompt you can paste into an LLM, share, or keep as documentation — it now also includes the **Top Journals** watch-list grouped by field.
+完整字段说明见 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)。
+
+**最常改的三件事**
+
+```jsonc
+{
+  "disciplines": [ { "name": "Epilepsy", "mesh_terms": ["Epilepsy"], "keywords": ["seizure"] } ],
+  "sources": { "pubmed": { "enabled": true, "max_results": 500, "lookback_days": 2 } },
+  "journals": [ { "name": "Neuron", "rss": "https://www.cell.com/...", "category": "neuroscience" } ]
+}
+```
 
 ---
 
-## Top Journals (watch-list)
+## AI 每日摘要（可选）
 
-These are embedded in the report as a clickable grid and appear in the prompt. **Journals marked with an RSS feed are actively pulled** — their newest relevant papers are filtered by your research interests and surface first in **Latest Papers** (with a ★ badge). Edit `journals` in `config.json` to add/remove.
-
-| Category | Journals (★ = active RSS → feeds Latest Papers) |
-|---|---|
-| **general** | Nature ★, Science, Cell, Nature Communications ★, Nature Medicine ★ |
-| **neuroscience** | Neuron ★, Nature Neuroscience, Nature Reviews Neuroscience ★, Trends in Neurosciences, Journal of Neuroscience, eLife |
-| **clinical_neuro** | Brain, Brain Research, Annals of Neurology, Neurology, The Lancet Neurology |
-| **psychiatry** | Biological Psychiatry, Molecular Psychiatry ★, American Journal of Psychiatry, JAMA Psychiatry, World Psychiatry |
-| **neurosurgery** | Journal of Neurosurgery, Neurosurgery |
-| **epilepsy** | Epilepsia, Epilepsy & Behavior |
-| **cognition** | Trends in Cognitive Sciences, NeuroImage |
-| **translational** | Science Translational Medicine |
-
-> Only feeds that return valid RSS are wired in (some publishers route through auth/redirects — those are kept as site links only). To ingest a journal's new articles, set its `rss` field to a working feed URL; the `journal` source will filter by your interests and surface matches as ★ top-journal papers in **Latest Papers**.
-
-### Journal-sourced papers
-
-The `journal` source reads each journal's `rss`, keeps entries matching your disciplines/keywords, and emits them as `paper` items sorted to the **top of Latest Papers** and labeled with a ★ `b-journal` badge plus the journal name. This makes the paper section reflect what's genuinely new in *leading journals for your fields* rather than only broad keyword search results (arXiv/PubMed/bioRxiv still run beneath, for completeness).
-
----
-
-## Interactivity in the report
-
-- **Collapsible cards**: every item is collapsed by default showing the title + metadata badges. Click the card header to expand the abstract, authors, and Read link.
-- **Expand / Collapse all**: each section has two small buttons to open or fold every card in that section at once.
-- **Journal grid**: hover to highlight; click a journal to open its site.
-
----
-
-## Daily 08:00 scheduling (launchd)
+需要用户自己的 OpenAI 兼容 API key（默认 DeepSeek）：
 
 ```bash
-# install the LaunchAgent (runs `python -m neurodaily run` at 08:00)
-.venv/bin/python -m neurodaily launchd install
-
-# preview the plist
-.venv/bin/python -m neurodaily launchd show
-
-# remove it
-.venv/bin/python -m neurodaily launchd uninstall
+printf '%s' 'sk-...' > ~/.neurodaily_llm && chmod 600 ~/.neurodaily_llm
+cp config/ai_summary.example.json config/ai_summary.json
+.venv/bin/python -m neurodaily ai-summary --demo --force --save   # 预览
 ```
 
-The plist writes stdout/stderr to `~/neurodaily/output/launchd_*.log`. Verify with `launchctl list | grep neurodaily`.
-
-> The generated plist uses **the venv python that invoked `install`** (`sys.executable`, e.g. `~/neurodaily/.venv/bin/python`), not a hardcoded `/usr/bin/python3` — this is what makes the scheduled job reliably find the package and its dependencies. Re-run `launchd install` from the venv after moving the project or changing the venv path.
+- 位置：报告**最顶部**（在「历史上的今天」之上），并写入邮件正文
+- 缓存：同日同内容不重复调用（`output/ai_summary/`）
+- 失败只降级，不影响报告生成与投递
+- 提示词强制「不得编造日期/数字/人名/结论」
 
 ---
 
-## Web app API
+## 学科 profile 与 Agent 配置
 
-| Route | Method | Purpose |
+为非默认学科单独建配置，不动主配置：
+
+```bash
+.venv/bin/python -m neurodaily profile new oncology
+.venv/bin/python -m neurodaily config apply config/examples/oncology.patch.json --profile oncology --dry-run
+.venv/bin/python -m neurodaily config apply config/examples/oncology.patch.json --profile oncology
+.venv/bin/python -m neurodaily --profile oncology demo --no-open
+```
+
+补丁语义：**对象递归合并、数组整体替换、`null` 删除**。
+非技术用户可以让 Agent 按 [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) 的协议完成换学科。
+
+---
+
+## 邮件与 Webhook
+
+邮件（`config/email.json`）：
+
+```bash
+cp config/email.example.json config/email.json
+printf '%s' '你的SMTP授权码' > ~/.neurodaily_smtp && chmod 600 ~/.neurodaily_smtp
+.venv/bin/python -m neurodaily mail --test
+.venv/bin/python -m neurodaily mail --send            # 立即跑一次并发送
+.venv/bin/python -m neurodaily mail --send-latest     # 复用上次渲染重发
+.venv/bin/python -m neurodaily mail --tui             # 收件人/凭据 TUI
+```
+
+- 主题模板：`神经病专家的厕所读物-{date} {weekday}`
+- 正文：AI 摘要 + 历史上的今天 + 前 12 篇论文 + 其他板块计数
+- 附件：完整 HTML 报告（`attach_max_mb` 超限自动跳过）
+
+Webhook（`config/webhooks.json`）：
+
+```bash
+cp config/webhooks.example.json config/webhooks.json
+.venv/bin/python -m neurodaily webhook --test
+```
+
+---
+
+## 数据源
+
+内置（`sources/*.py`）：`journal`、`arxiv`、`pubmed`、`biorxiv`、`fda_drugs`、`fda_devices`、`trials`、`policy`。
+
+**配置化数据源**（不写代码）：
+
+```json
+{
+  "sources": {
+    "nci_news": { "type": "rss", "url": "https://...", "kind": "news",
+                  "max_results": 30, "lookback_days": 7, "enabled": true },
+    "my_api":   { "type": "json_api", "url": "https://...", "items_path": "data.items",
+                  "map": { "title": "title", "url": "link", "summary": "abstract", "date": "published" },
+                  "kind": "paper", "enabled": true }
+  }
+}
+```
+
+`kind` 决定归属板块：`paper / drug / device / trial / news / policy / conference / funding`。
+可选 `filter_keywords` 做关键词过滤。
+
+**创投源示例**（已内置在 `config.example.json`）：BCI 融资、neurotech 融资、MedTech Dive、Crunchbase。
+
+---
+
+## 命令行
+
+| 命令 | 用途 |
+|---|---|
+| `neurodaily run [--demo] [--no-open] [--dedupe]` | 生成日报（`--demo` 离线） |
+| `neurodaily demo` | 离线演示报告 |
+| `neurodaily serve [--host] [--port] [--demo]` | Web 应用 / 设置页 |
+| `neurodaily export --format json\|bibtex\|both [--demo]` | 数据导出 |
+| `neurodaily ai-summary [--demo] [--force] [--save]` | 生成 AI 摘要 |
+| `neurodaily mail --test\|--send\|--send-latest\|--tui\|--list\|--add\|--remove` | 邮件 |
+| `neurodaily webhook --test [--demo]` | 飞书/企微 |
+| `neurodaily config show\|init\|validate\|schema\|describe\|apply` | 配置 |
+| `neurodaily profile new\|list\|path\|show` | 学科 profile |
+| `neurodaily deepen --status\|--backend llm\|template` | 长文批量扩写 |
+| `neurodaily launchd install\|uninstall\|show` | 定时任务 |
+| `neurodaily history [--limit N]` | 运行历史 |
+
+---
+
+## HTTP API
+
+| 路由 | 方法 | 用途 |
 |---|---|---|
-| `/` | GET | Dashboard (renders latest report) |
-| `/api/run` | POST | Run a fresh digest (background) |
-| `/api/status` | GET | Last run + per-source health |
-| `/api/prompt` | GET | Structured focus prompt (JSON) |
-| `/reports` | GET | List generated HTML reports |
-| `/reports/{file}` | GET | Serve a saved report |
+| `/` | GET | 仪表盘 |
+| `/settings` | GET | 设置 GUI |
+| `/api/config` | GET/POST | 读取/保存配置（带 schema 校验） |
+| `/api/config/reset` | POST | 重置默认 |
+| `/api/run` | POST | 后台跑一次 |
+| `/api/status` | GET | 状态 + 源健康 |
+| `/api/prompt` | GET | 结构化 Focus Prompt |
+| `/reports` `/reports/{file}` | GET | 报告列表/读取 |
+| `/history` `/history/{id}` `/api/history` | GET/DELETE | 历史 |
+| `/api/launchd/status\|install\|uninstall` | GET/POST | 定时任务 |
 
 ---
 
-## Notes & caveats
+## 项目结构
 
-- **External network**: sources require outbound HTTP. In restricted/proxied environments, a slow source degrades to "failed" — the rest still build.
-- **Recent-item windows**: `lookback_days` per source controls how far back each query goes (defaults: 7–14 days for papers, 60 for FDA/trials).
-- **openFDA search syntax**: date ranges use space-separated `TO` (a literal `+` is rejected by openFDA).
-- **ClinicalTrials.gov**: 403s on custom User-Agents; the source sends `python-httpx` and uses short per-discipline queries to avoid HTTP 400.
-- **RSS timeouts**: feeds are fetched with a timed HTTP client (not `feedparser.parse(url)`), which avoids a slow feed stalling the whole pool.
+```
+neurodaily/
+├── neurodaily/
+│   ├── cli.py            # 命令入口
+│   ├── config.py         # Config dataclass / load / save
+│   ├── config_ops.py     # 补丁、profile、schema（Agent 配置）
+│   ├── schema.py         # pydantic 校验
+│   ├── digest.py         # 编排：抓取→标签→去重→排序→板块
+│   ├── models.py         # Item + 标签
+│   ├── sources/          # 各数据源 + 通用 RSS/JSON
+│   ├── onthisday.py      # 历史上的今天（975 条，936 篇长文）
+│   ├── deepen.py         # 长文批量扩写（LLM/模板 + 缓存）
+│   ├── ai_summary.py     # AI 每日摘要（带缓存）
+│   ├── render.py         # HTML 渲染 + 注入
+│   ├── templates/        # Jinja2 模板
+│   ├── mailer.py         # 邮件渲染/发送
+│   ├── mail_tui.py       # 收件人/凭据 TUI
+│   ├── webhooks.py       # 飞书/企微
+│   ├── exporters.py      # JSON / BibTeX
+│   ├── demo.py           # 离线演示数据
+│   ├── webapp.py         # FastAPI
+│   ├── settings_page.py  # 设置页 HTML
+│   └── history.py        # SQLite 运行历史
+├── config/examples/      # 学科补丁示例（oncology）
+├── docs/                 # 架构 / 配置 / Docker / 测试 / Agent 指南
+├── scripts/              # start.sh / test_all.sh / deepen / hooks
+├── tests/                # 32 项 unittest
+├── Dockerfile
+└── docker-compose.yml
+```
 
 ---
 
-## Customizing
+## 测试
 
-- **Add a discipline/keyword**: edit `config.json` (or `config init` then edit), re-run.
-- **Add/edit journals**: edit the `journals` array in `config.json`.
-- **Change output location/filename**: edit `output` in `config.json`.
-- **Ingest journal RSS**: copy a journal's `rss` URL into `policy_feeds`.
+```bash
+bash scripts/test_all.sh      # 编译 + 32 项单元测试 + 配置 + demo + 导出 + profile
+make test                     # 同上
+```
+
+覆盖：配置校验、补丁语义、profile 隔离、渲染置顶、邮件（空收件人/附件上限）、TUI 增删、报告裁剪、366 天长文覆盖、通用 RSS/JSON 源、AI 摘要缓存、路由与安全边界、Docker 容器。
+
+详见 [`docs/TESTING.md`](docs/TESTING.md)。CI：GitHub Actions（Python 3.12/3.13）。
 
 ---
 
-## Troubleshooting
+## 文档
 
-- **`launchd install` loads but job doesn't fire**: ensure `~/Library/LaunchAgents` exists and the plist `WorkingDirectory` points at this repo; check `output/launchd_stderr.log`.
-- **Source returns 0 items**: raise `max_results` / `lookback_days`, or the focus filter was too narrow — loosen `keywords`/`mesh_terms`.
-- **Journals section missing from report**: re-run `config init` (or `config show` — the loader auto-fills `journals` on load), then regenerate.
-- **Cards not toggling**: the report is a static file — open it in a modern browser; `details`/`summary` are supported everywhere.
+| 文档 | 内容 |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 架构、数据流、模块职责、扩展点 |
+| [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | 全部配置字段与示例 |
+| [`docs/DOCKER.md`](docs/DOCKER.md) | 构建/运行/compose/推送 Docker Hub |
+| [`docs/TESTING.md`](docs/TESTING.md) | 测试矩阵、CI、已知未覆盖项 |
+| [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) | Agent 引导换学科的协议 |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | 运维手册（启停/调度/排障/维护记录） |
+
+---
+
+## 免责声明
+
+- 仅聚合**公开**文献与新闻元数据；不存储全文、不绕过付费墙。
+- AI 摘要与长文可能出错，**仅供科研参考，不构成医疗建议**。
+- 请遵守各数据源的使用条款；邮件/Webhook 凭据仅保存在本机（600 权限）。

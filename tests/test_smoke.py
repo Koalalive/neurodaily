@@ -331,3 +331,14 @@ class AISummaryTests(unittest.TestCase):
         h = render_html(r)
         self.assertIn("今日 AI 摘要", h)
         self.assertLess(h.find("今日 AI 摘要"), h.find("历史上的今天"))
+
+
+class RouteTests(unittest.TestCase):
+    def test_routes_and_guards(self):
+        from fastapi.testclient import TestClient
+        from neurodaily.webapp import create_app
+        c = TestClient(create_app())
+        for p in ("/", "/settings", "/api/config", "/api/status", "/history", "/reports"):
+            self.assertEqual(c.get(p).status_code, 200, p)
+        self.assertEqual(c.post("/api/config", json={"disciplines": []}).status_code, 400)
+        self.assertEqual(c.get("/reports/..%2F..%2Fetc%2Fpasswd").status_code, 404)

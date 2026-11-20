@@ -25,6 +25,9 @@ neurodaily export --format json|bibtex|both     # 数据导出
 neurodaily webhook --test                       # 飞书/企微
 scripts/start.sh                                # 一键启动
 docker compose up --build                       # 容器启动
+bash scripts/docker_deploy.sh up                # 容器：构建+运行+验收
+bash scripts/docker_deploy.sh down              # 停止容器
+# Docker 部署协议见 docs/DOCKER_AGENT.md
 ```
 
 ## 禁止提交
