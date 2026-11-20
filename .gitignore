@@ -17,3 +17,12 @@ config/email.json
 
 # competition submission materials (private, never commit)
 competition/
+
+# user-created config profiles
+config/profiles/
+
+# personal webhook URLs
+config/webhooks.json
+
+# personal AI summary config + key
+config/ai_summary.json

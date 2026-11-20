@@ -12,7 +12,7 @@ from datetime import datetime
 
 from .config import Config, DEFAULT_CONFIG
 from .models import Item, tag_items
-from .sources import REGISTRY, fetch_source
+from .sources import registry_for
 from . import history as hist
 
 
@@ -26,6 +26,8 @@ class DigestResult:
     config: object = None          # the Config used (so renderer can show prompt)
     errors: list[str] = field(default_factory=list)
     on_this_day: list = field(default_factory=list)   # 中文“历史上的今天”条目
+    ai_summary: str = ""                              # AI 每日摘要（可选）
+    ai_summary_meta: dict = field(default_factory=dict)
     history_id: int = 0            # id in search_history (0 = not recorded)
     skipped: bool = False          # True if this run was deduped (not executed)
     skipped_reason: str = ""
@@ -49,6 +51,7 @@ _SECTION_BY_KIND = {
     "news": "policy",
     "policy": "policy",
     "conference": "trials_conferences",
+    "funding": "industry",
 }
 
 
@@ -84,7 +87,8 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     all_items: list[Item] = []
     health: list[dict] = []
 
-    enabled = [(n, f) for n, f in REGISTRY.items()
+    registry = registry_for(config)
+    enabled = [(n, f) for n, f in registry.items()
                if config.source_opts(n).get("enabled", True) is not False]
 
     def _fetch(name: str, fn):
@@ -209,6 +213,21 @@ def save_report(result: DigestResult, output_path: str) -> str:
     if result.history_id:
         rel = os.path.basename(output_path)
         hist.set_report_path(result.history_id, rel)
+    stem, _ = os.path.splitext(output_path)
+    formats = []
+    try:
+        formats = (getattr(result, "config", None).output or {}).get("extra_formats") or []
+    except Exception:
+        formats = []
+    try:
+        if "json" in formats:
+            from .exporters import write_json
+            write_json(result, stem + ".json")
+        if "bibtex" in formats:
+            from .exporters import write_bibtex
+            write_bibtex(result, stem + ".bib")
+    except Exception:
+        pass
     _write_static_history(os.path.dirname(output_path))
     keep = 60
     try:

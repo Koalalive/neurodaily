@@ -416,3 +416,70 @@ flowchart TD
 - 定时任务：`output/launchd_stdout.log`、`output/launchd_stderr.log`
 - 深读扩写：`/tmp/deepen_until_done.log`
 - 完成校验：`/tmp/neurodaily_final_check.txt`（由 watcher 生成）
+
+---
+
+## 10. P0 新能力（2026-11）
+
+### 10.1 配置校验与补丁式修改（Agent 友好）
+```bash
+neurodaily config validate [--profile NAME]
+neurodaily config schema --out config.schema.json
+neurodaily config describe
+neurodaily config apply patch.json --dry-run [--profile NAME]
+neurodaily config apply patch.json [--profile NAME]
+```
+- 补丁语义：对象递归合并、**数组整体替换**、`null` 删除
+- 校验失败会打印字段路径，例如 `sources.x: url is required for type rss/json_api`
+- 详见 [`docs/AGENT_GUIDE.md`](AGENT_GUIDE.md)
+
+### 10.2 独立学科 profile
+```bash
+neurodaily profile new oncology
+neurodaily profile list
+neurodaily --profile oncology run --no-open
+```
+profile 存于 `config/profiles/`（gitignore）。
+
+### 10.3 配置化数据源（不写代码加源）
+`config.json -> sources` 增加：
+```json
+"nci_news": {"type":"rss","url":"...","kind":"news","max_results":30,"lookback_days":7,"enabled":true}
+"my_api":  {"type":"json_api","url":"...","items_path":"data.items",
+            "map":{"title":"title","url":"link","summary":"abstract","date":"published"},
+            "kind":"paper","enabled":true}
+```
+
+### 10.4 离线演示 / 导出 / Webhook
+```bash
+neurodaily demo --no-open                  # 断网也能演示
+neurodaily serve --demo --port 8031        # 仪表盘用演示数据
+neurodaily export --format both            # JSON + BibTeX
+neurodaily webhook --test                  # 飞书/企微连通性
+```
+配置：`config/webhooks.example.json` → `config/webhooks.json`（gitignore）
+
+### 10.5 一键启动 / 容器
+```bash
+scripts/start.sh                # venv + 安装 + 初始化 + localhost:8031
+docker compose up --build       # 容器版（挂载 config/ 与 output/）
+```
+
+### 10.6 AI 每日摘要（可选，需 API key）
+
+```bash
+# 1) 写入 key（600 权限，或设 NEURODAILY_LLM_API_KEY）
+printf '%s' 'sk-...' > ~/.neurodaily_llm && chmod 600 ~/.neurodaily_llm
+# 2) 配置（默认 DeepSeek；可换任意 OpenAI 兼容网关）
+cp config/ai_summary.example.json config/ai_summary.json
+# 3) 生成/预览
+neurodaily ai-summary --demo --force --save
+neurodaily ai-summary --force            # 用当天真实抓取生成
+```
+
+`run` 会自动生成（缓存同日复用）。摘要位于报告**最顶部**，并写入邮件正文。失败只降级，不影响报告。
+
+### 10.7 神经科学创投源
+
+`config.example.json` 已内置 4 个 `kind=funding` 源（BCI 融资、neurotech 融资、MedTech Dive、Crunchbase），
+自动汇入「商业与监管」板块。可用 `config apply` 增删。

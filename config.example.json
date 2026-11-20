@@ -193,6 +193,57 @@
       "enabled": true,
       "max_results": 500,
       "lookback_days": 1
+    },
+    "neuro_vc_bci": {
+      "type": "rss",
+      "url": "https://news.google.com/rss/search?q=%22brain-computer+interface%22+funding+when:7d&hl=en-US&gl=US&ceid=US:en",
+      "kind": "funding",
+      "max_results": 25,
+      "lookback_days": 7,
+      "enabled": true
+    },
+    "neuro_vc_startups": {
+      "type": "rss",
+      "url": "https://news.google.com/rss/search?q=neurotech+OR+neuroscience+startup+raises+when:7d&hl=en-US&gl=US&ceid=US:en",
+      "kind": "funding",
+      "max_results": 25,
+      "lookback_days": 7,
+      "enabled": true
+    },
+    "medtech_dive": {
+      "type": "rss",
+      "url": "https://www.medtechdive.com/feeds/news/",
+      "kind": "funding",
+      "max_results": 15,
+      "lookback_days": 7,
+      "enabled": true,
+      "filter_keywords": [
+        "neuro",
+        "brain",
+        "biotech",
+        "drug",
+        "device",
+        "medtech",
+        "therap"
+      ]
+    },
+    "crunchbase_news": {
+      "type": "rss",
+      "url": "https://news.crunchbase.com/feed/",
+      "kind": "funding",
+      "max_results": 15,
+      "lookback_days": 7,
+      "enabled": true,
+      "filter_keywords": [
+        "neuro",
+        "brain",
+        "biotech",
+        "health",
+        "drug",
+        "device",
+        "medtech",
+        "therap"
+      ]
     }
   },
   "output": {
@@ -404,5 +455,6 @@
       "rss": "https://rss.sciencedirect.com/publication/science/10538119",
       "category": "cognition"
     }
-  ]
+  ],
+  "version": 2
 }

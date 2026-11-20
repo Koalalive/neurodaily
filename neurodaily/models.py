@@ -73,6 +73,7 @@ class Item:
             "news": "News",
             "policy": "Policy",
             "conference": "Conference",
+            "funding": "Funding / VC",
         }.get(self.kind, "Item")
 
 

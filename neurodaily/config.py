@@ -138,6 +138,7 @@ class Config:
 
     def to_dict(self) -> dict:
         return {
+            "version": 2,
             "profile": self.profile,
             "disciplines": [d.to_dict() for d in self.disciplines],
             "global_keywords": self.global_keywords,

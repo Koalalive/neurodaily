@@ -132,6 +132,14 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
         '<div style="padding:18px 20px;border:1px solid #eeeeee;border-top:none;border-radius:0 0 8px 8px">'
     ]
 
+    ai = (getattr(result, "ai_summary", "") or "").strip()
+    if ai:
+        parts.append(f'<h2 style="font-size:16px;color:{accent};margin:6px 0 10px">🧠 今日 AI 摘要</h2>')
+        for p_ in ai.split("\n"):
+            if p_.strip():
+                parts.append(f'<p style="margin:0 0 8px;color:#333;font-size:13px;line-height:1.7">'
+                             f'{_esc(p_.strip())}</p>')
+
     otd = getattr(result, "on_this_day", None) or []
     if otd:
         parts.append(f'<h2 style="font-size:16px;color:{accent};margin:6px 0 10px">📅 历史上的今天</h2>')
@@ -184,6 +192,8 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
     html = "".join(parts)
 
     lines = [f"NeuroDaily {date} {weekday} — {len(result.items)} 条", ""]
+    if ai:
+        lines += ["== 今日 AI 摘要 ==", ai, ""]
     if otd:
         lines.append("== 历史上的今天 ==")
         for e in otd:

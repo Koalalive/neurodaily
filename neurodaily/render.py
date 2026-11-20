@@ -29,9 +29,37 @@ def render_html(result: DigestResult, config: Config | None = None) -> str:
             "today": datetime.now().strftime("%Y-%m-%d %H:%M"),
         }
         html = template.render(**ctx)
-        return _inject_graph_links(_inject_on_this_day(html, result))
+        html = _inject_on_this_day(html, result)
+        html = _inject_ai_summary(html, result)
+        return _inject_graph_links(html)
     except Exception:
         return _fallback_plain(result)
+
+
+def _inject_ai_summary(html: str, result: DigestResult) -> str:
+    text = (getattr(result, "ai_summary", "") or "").strip()
+    if not text:
+        return html
+    import html as _html
+    meta = getattr(result, "ai_summary_meta", {}) or {}
+    model = _html.escape(str(meta.get("model", "AI")))
+    paras = "".join(
+        f'<p class="summary">{_html.escape(p.strip())}</p>'
+        for p in text.split("\n") if p.strip()
+    )
+    section = (
+        '<section><div class="sec-head"><div>'
+        f'<h2 class="sec-title"><span class="dot"></span>🧠 今日 AI 摘要'
+        f'<span class="count">({model})</span></h2>'
+        '<p class="sec-desc">由 AI 依据当日抓取内容生成，仅供参考；请以原文为准。</p>'
+        '</div></div>'
+        f'<div class="card" style="padding:14px 18px"><div class="card-body">{paras}</div></div>'
+        '</section>'
+    )
+    for marker in ('<main class="wrap">', "<main>", "<main "):
+        if marker in html:
+            return html.replace(marker, marker + "\n" + section, 1)
+    return section + html
 
 
 def _inject_on_this_day(html: str, result: DigestResult) -> str:

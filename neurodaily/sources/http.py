@@ -56,6 +56,12 @@ def parse_date_any(value: str | None) -> str:
     v = value.strip()
     if not v:
         return ""
+    # RFC 822 / RFC 2822 (e.g. "Mon, 10 Nov 2026 00:00:00 GMT")
+    try:
+        from email.utils import parsedate_to_datetime
+        return parsedate_to_datetime(v).strftime("%Y-%m-%d")
+    except Exception:
+        pass
     # handle common prefixes
     v = v.split("T")[0].split(" ")[0].replace(".000Z", "").replace("Z", "")
     if len(v) >= 10 and v[4] == "-":

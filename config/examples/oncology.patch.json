@@ -1,0 +1,90 @@
+{
+  "profile": "oncology",
+  "disciplines": [
+    {
+      "name": "Medical Oncology",
+      "mesh_terms": ["Neoplasms", "Antineoplastic Agents"],
+      "arxiv_cats": ["q-bio.QM"],
+      "bio_cats": ["cancer biology"],
+      "keywords": ["oncology", "cancer", "tumor", "chemotherapy", "targeted therapy"],
+      "enabled": true
+    },
+    {
+      "name": "Tumor Immunology",
+      "mesh_terms": ["Tumor Microenvironment", "Immunotherapy"],
+      "arxiv_cats": ["q-bio.QM"],
+      "bio_cats": ["immunology"],
+      "keywords": ["immunotherapy", "CAR-T", "checkpoint", "tumor microenvironment", "T cell"],
+      "enabled": true
+    },
+    {
+      "name": "Precision Oncology",
+      "mesh_terms": ["Genomics", "Biomarkers, Tumor"],
+      "arxiv_cats": ["q-bio.GN"],
+      "bio_cats": ["genomics"],
+      "keywords": ["precision oncology", "genomics", "biomarker", "ctDNA", "mutation"],
+      "enabled": true
+    },
+    {
+      "name": "Radiation Oncology",
+      "mesh_terms": ["Radiotherapy"],
+      "arxiv_cats": ["physics.med-ph"],
+      "bio_cats": ["cancer biology"],
+      "keywords": ["radiotherapy", "radiation", "SBRT", "radiomics"],
+      "enabled": true
+    },
+    {
+      "name": "Surgical Oncology",
+      "mesh_terms": ["Surgical Procedures, Operative"],
+      "arxiv_cats": ["q-bio.QM"],
+      "bio_cats": ["cancer biology"],
+      "keywords": ["surgical oncology", "resection", "neoadjuvant"],
+      "enabled": true
+    },
+    {
+      "name": "Cancer Epidemiology",
+      "mesh_terms": ["Neoplasms", "Epidemiology"],
+      "arxiv_cats": ["q-bio.QM"],
+      "bio_cats": ["epidemiology"],
+      "keywords": ["cancer epidemiology", "screening", "risk factors", "survival"],
+      "enabled": true
+    }
+  ],
+  "global_keywords": [
+    "cancer", "tumor", "oncology", "carcinoma", "metastasis", "chemotherapy",
+    "immunotherapy", "biomarker", "ctDNA", "CAR-T", "checkpoint inhibitor"
+  ],
+  "journals": [
+    {"name": "Nature Cancer", "url": "https://www.nature.com/natcancer", "rss": "https://www.nature.com/natcancer.rss", "category": "general"},
+    {"name": "Cancer Cell", "url": "https://www.cell.com/cancer-cell", "rss": "https://www.cell.com/action/showFeed?type=etoc&feed=rss&jc=can", "category": "general"},
+    {"name": "Nature Reviews Cancer", "url": "https://www.nature.com/nrc", "rss": "https://www.nature.com/nrc.rss", "category": "general"},
+    {"name": "Nature Medicine", "url": "https://www.nature.com/nm", "rss": "https://www.nature.com/nm.rss", "category": "general"},
+    {"name": "Nature", "url": "https://www.nature.com/", "rss": "https://www.nature.com/nature.rss", "category": "general"},
+    {"name": "Cell", "url": "https://www.cell.com/", "rss": "https://www.cell.com/action/showFeed?type=etoc&feed=rss&jc=cell", "category": "general"},
+    {"name": "Journal of Clinical Oncology", "url": "https://ascopubs.org/journal/jco", "rss": "", "category": "clinical"},
+    {"name": "The Lancet Oncology", "url": "https://www.thelancet.com/journals/lanonc", "rss": "", "category": "clinical"},
+    {"name": "JAMA Oncology", "url": "https://jamanetwork.com/journals/jamaoncology", "rss": "", "category": "clinical"},
+    {"name": "Annals of Oncology", "url": "https://www.annalsofoncology.org/", "rss": "", "category": "clinical"},
+    {"name": "Cancer Discovery", "url": "https://aacrjournals.org/cancerdiscovery", "rss": "", "category": "translational"},
+    {"name": "Clinical Cancer Research", "url": "https://aacrjournals.org/clincancerres", "rss": "", "category": "translational"},
+    {"name": "Cancer Research", "url": "https://aacrjournals.org/cancerres", "rss": "", "category": "basic"},
+    {"name": "Science Translational Medicine", "url": "https://www.science.org/journal/stm", "rss": "", "category": "translational"}
+  ],
+  "sources": {
+    "journal": {"enabled": true, "max_results": 500, "lookback_days": 2},
+    "pubmed": {"enabled": true, "max_results": 500, "lookback_days": 2},
+    "arxiv": {"enabled": true, "max_results": 200, "lookback_days": 2},
+    "biorxiv": {"enabled": true, "max_results": 300, "lookback_days": 2},
+    "fda_drugs": {"enabled": true, "max_results": 200, "lookback_days": 7},
+    "fda_devices": {"enabled": true, "max_results": 100, "lookback_days": 7},
+    "trials": {"enabled": true, "max_results": 300, "lookback_days": 7},
+    "policy": {"enabled": true, "max_results": 200, "lookback_days": 2}
+  },
+  "policy_feeds": [
+    "https://www.nature.com/subjects/cancer.rss",
+    "https://www.nature.com/subjects/oncology.rss",
+    "https://www.nature.com/nrc.rss",
+    "https://www.nature.com/natcancer.rss",
+    "https://www.cell.com/action/showFeed?type=etoc&feed=rss&jc=can"
+  ]
+}

@@ -27,13 +27,13 @@ from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
 from . import history as hist
 
 
-def create_app() -> FastAPI:
+def create_app(config_path: str | None = None) -> FastAPI:
     app = FastAPI(title="NeuroDaily", version="0.1.0")
     app.state.last_run = None
 
     def _cfg() -> Config:
         try:
-            return Config.load()
+            return Config.load(config_path)
         except Exception:
             return DEFAULT_CONFIG()
 
@@ -43,11 +43,15 @@ def create_app() -> FastAPI:
         result = app.state.last_run
         # render using last run if available, else show an empty-but-styled page
         if result is None:
-            from .digest import DigestResult
-            result = DigestResult(items=[], sections={"papers": [], "industry": [],
-                                                     "trials_conferences": [], "policy": []},
-                                  health=[], generated_at=datetime.now().isoformat(),
-                                  config_profile=cfg.profile, config=cfg)
+            if os.environ.get("NEURODAILY_DEMO"):
+                from .demo import build_result
+                result = build_result(cfg)
+            else:
+                from .digest import DigestResult
+                result = DigestResult(items=[], sections={"papers": [], "industry": [],
+                                                         "trials_conferences": [], "policy": []},
+                                      health=[], generated_at=datetime.now().isoformat(),
+                                      config_profile=cfg.profile, config=cfg)
         html = render_html_for(result)
         return html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1)
 
@@ -115,7 +119,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/config")
     def api_config_get():
-        return JSONResponse(Config.load().to_dict())
+        return JSONResponse(_cfg().to_dict())
 
     @app.post("/api/config")
     async def api_config_post(request: Request):
@@ -124,10 +128,16 @@ def create_app() -> FastAPI:
         except Exception as e:
             return JSONResponse({"ok": False, "error": f"invalid json: {e}"}, status_code=400)
         if not isinstance(data, dict) or not data.get("disciplines"):
-            return JSONResponse({"ok": False, "error": "disciplines 不能为空"}, status_code=400)
+            return JSONResponse({"ok": False, "error": "disciplines 不能为空",
+                                 "errors": ["disciplines: 至少需要一个学科"]}, status_code=400)
+        from .schema import validate as _validate_cfg
+        errs = _validate_cfg(data)
+        if errs:
+            return JSONResponse({"ok": False, "error": "; ".join(errs[:4]),
+                                 "errors": errs}, status_code=400)
         try:
             cfg = Config.from_dict(data)
-            path = cfg.save()
+            path = cfg.save(config_path) if config_path else cfg.save()
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
         return JSONResponse({"ok": True, "path": path})
@@ -135,19 +145,19 @@ def create_app() -> FastAPI:
     @app.post("/api/config/reset")
     def api_config_reset():
         try:
-            path = DEFAULT_CONFIG().save()
+            path = DEFAULT_CONFIG().save(config_path) if config_path else DEFAULT_CONFIG().save()
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
         return JSONResponse({"ok": True, "path": path})
 
     def _launchd_label() -> str:
-        cfg = Config.load()
+        cfg = _cfg()
         sched = cfg.scheduled or {}
         return ((sched.get("launchd") or {}).get("label")) or "com.neurodaily.daily"
 
     @app.get("/api/launchd/status")
     def api_launchd_status():
-        cfg = Config.load()
+        cfg = _cfg()
         sched = cfg.scheduled or {}
         label = _launchd_label()
         dest = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
@@ -168,7 +178,7 @@ def create_app() -> FastAPI:
     def api_launchd_install():
         try:
             from .cli import _plist_content
-            cfg = Config.load()
+            cfg = _cfg()
             pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             label = _launchd_label()
             content = _plist_content(cfg, pkg_root)

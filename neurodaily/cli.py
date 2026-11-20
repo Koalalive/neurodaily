@@ -32,8 +32,21 @@ def cmd_run(args) -> int:
     from .config import Config as C
     cfg = C.load(args.config)
     print(f"[neurodaily] loading config: profile={cfg.profile}")
-    # Explicit CLI run always executes (records history) unless --dedup is set.
-    result = run(cfg, check_duplicate=True, record=True, force=not args.dedupe)
+    if getattr(args, "demo", False):
+        from .demo import build_result
+        print("[neurodaily] demo mode: offline sample data (no network)")
+        result = build_result(cfg)
+    else:
+        result = run(cfg, check_duplicate=True, record=True, force=not args.dedupe)
+        try:
+            from . import ai_summary as _ai
+            _txt = _ai.generate(result)
+            if _txt:
+                result.ai_summary = _txt
+                result.ai_summary_meta = {"model": _ai.load_cfg().get("model", "")}
+                print("[neurodaily] 🧠 AI summary generated")
+        except Exception as e:
+            print(f"[neurodaily] ⚠ AI summary skipped: {e}")
     # default filename from config
     from datetime import datetime
     fmt = cfg.output.get("filename_format", "neurodaily_%Y-%m-%d.html")
@@ -54,17 +67,25 @@ def cmd_run(args) -> int:
         print("[neurodaily] ⚠ source errors:")
         for e in result.errors:
             print(f"    - {e}")
-    try:
-        from .mailer import _password, load_cfg as _mail_cfg, render_email, save_last, send_with_retry
-        _mc = _mail_cfg()
-        _atts = [path] if _mc.get("attach_report", True) else None
-        _subj, _html, _text = render_email(result, _mc)
-        save_last(_subj, _html, _text, path if _atts else None)
-        if _mc.get("enabled", True) and _password(_mc):
-            send_with_retry(_subj, _html, _text, _mc, _atts)
-            print("[neurodaily] 📧 email sent")
-    except Exception as e:
-        print(f"[neurodaily] ⚠ email not sent: {e}")
+    if not getattr(args, "demo", False):
+        try:
+            from .mailer import _password, load_cfg as _mail_cfg, render_email, save_last, send_with_retry
+            _mc = _mail_cfg()
+            _atts = [path] if _mc.get("attach_report", True) else None
+            _subj, _html, _text = render_email(result, _mc)
+            save_last(_subj, _html, _text, path if _atts else None)
+            if _mc.get("enabled", True) and _password(_mc):
+                send_with_retry(_subj, _html, _text, _mc, _atts)
+                print("[neurodaily] 📧 email sent")
+        except Exception as e:
+            print(f"[neurodaily] ⚠ email not sent: {e}")
+        try:
+            from .webhooks import send_all
+            wr = send_all(result)
+            if wr:
+                print(f"[neurodaily] webhook: {wr}")
+        except Exception as e:
+            print(f"[neurodaily] ⚠ webhook not sent: {e}")
     try:
         from .onthisday import should_notify as _should_notify, is_enabled as _otd_enabled, day_label
         from .notify import notify_on_this_day
@@ -85,11 +106,15 @@ def cmd_run(args) -> int:
 # serve
 # ---------------------------------------------------------------------------
 def cmd_serve(args) -> int:
+    import os
     import uvicorn
     from .webapp import create_app
-    app = create_app()
-    print(f"[neurodaily] web app → http://127.0.0.1:{args.port}")
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="info")
+    if getattr(args, "demo", False):
+        os.environ["NEURODAILY_DEMO"] = "1"
+    app = create_app(args.config)
+    host = getattr(args, "host", "127.0.0.1")
+    print(f"[neurodaily] web app → http://{host}:{args.port}")
+    uvicorn.run(app, host=host, port=args.port, log_level="info")
     return 0
 
 
@@ -100,6 +125,56 @@ def cmd_config(args) -> int:
     cfg = Config.load(args.config)
     if args.config_action == "show":
         print(cfg.to_prompt())
+        return 0
+    if args.config_action == "schema":
+        import json as _json
+        from .config_ops import schema_json
+        js = _json.dumps(schema_json(), ensure_ascii=False, indent=2)
+        if args.out:
+            with open(args.out, "w", encoding="utf-8") as f:
+                f.write(js)
+            print(f"[neurodaily] wrote JSON Schema → {args.out}")
+        else:
+            print(js)
+        return 0
+    if args.config_action == "describe":
+        import json as _json
+        from .config_ops import describe
+        print(_json.dumps(describe(), ensure_ascii=False, indent=2))
+        return 0
+    if args.config_action == "apply":
+        import json as _json
+        from .config_ops import apply_patch
+        path = args.config or Config.default_path()
+        try:
+            with open(args.patch, encoding="utf-8") as f:
+                patch = _json.load(f)
+        except Exception as e:
+            print(f"[neurodaily] ✖ cannot read patch: {e}")
+            return 1
+        ok, errs, diff = apply_patch(path, patch, dry_run=args.dry_run)
+        if diff:
+            print(diff)
+        if not ok:
+            print(f"[neurodaily] ✖ patch rejected ({len(errs)} error(s)):")
+            for e in errs:
+                print("   -", e)
+            return 1
+        if args.dry_run:
+            print("[neurodaily] ✔ dry-run OK (nothing written)")
+        else:
+            print(f"[neurodaily] ✔ applied → {path}")
+        return 0
+    if args.config_action == "validate":
+        from .schema import validate_file
+        target = args.config or Config.default_path()
+        errs = validate_file(target)
+        if errs:
+            print(f"[neurodaily] ✖ config invalid ({len(errs)} error(s)): {target}")
+            for e in errs:
+                print("   -", e)
+            return 1
+        print(f"[neurodaily] ✔ config OK: {target}")
         return 0
     if args.config_action == "init":
         target = args.config or DEFAULT_CONFIG().default_path()
@@ -266,6 +341,104 @@ def cmd_mail(args) -> int:
     return 0
 
 
+def cmd_ai_summary(args) -> int:
+    from datetime import datetime
+    from . import ai_summary
+    from .config import Config as C
+    from .demo import build_result
+    from .digest import run as run_digest, save_report
+    cfg = C.load(args.config)
+    result = build_result(cfg) if getattr(args, "demo", False) else run_digest(
+        cfg, check_duplicate=False, record=False, force=True)
+    txt = ai_summary.generate(result, force=getattr(args, "force", False),
+                              api_key_override=args.api_key,
+                              base_url=args.base_url, model=args.model)
+    if not txt:
+        print("[neurodaily] AI summary disabled or empty")
+        return 1
+    if getattr(args, "save", False):
+        result.ai_summary = txt
+        result.ai_summary_meta = {"model": args.model or ai_summary.load_cfg().get("model", "")}
+        fmt = cfg.output.get("filename_format", "neurodaily_%Y-%m-%d.html")
+        out = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
+        save_report(result, out)
+        print(f"[neurodaily] report with AI summary → {out}")
+    print(txt)
+    return 0
+
+
+def cmd_export(args) -> int:
+    from datetime import datetime
+    from .config import Config as C
+    from .demo import build_result
+    from .digest import run as run_digest
+    from .exporters import write_bibtex, write_json
+    cfg = C.load(args.config)
+    result = build_result(cfg) if getattr(args, "demo", False) else run_digest(
+        cfg, check_duplicate=False, record=False, force=True)
+    outdir = cfg.output_dir()
+    os.makedirs(outdir, exist_ok=True)
+    stem = os.path.join(outdir, "neurodaily_" + datetime.now().strftime("%Y-%m-%d_%H%M%S"))
+    paths = []
+    if args.format in ("json", "both"):
+        paths.append(write_json(result, stem + ".json"))
+    if args.format in ("bibtex", "both"):
+        paths.append(write_bibtex(result, stem + ".bib"))
+    for pth in paths:
+        print(f"[neurodaily] wrote {pth}")
+    return 0
+
+
+def cmd_webhook(args) -> int:
+    from .webhooks import send_all, send_test
+    if args.test:
+        print("[neurodaily] webhook:", send_test())
+        return 0
+    from .config import Config as C
+    from .demo import build_result
+    from .digest import run as run_digest
+    cfg = C.load(args.config)
+    result = build_result(cfg) if getattr(args, "demo", False) else run_digest(
+        cfg, check_duplicate=False, record=False, force=True)
+    print("[neurodaily] webhook:", send_all(result))
+    return 0
+
+
+def cmd_demo(args) -> int:
+    args.demo = True
+    args.dedupe = False
+    args.output = None
+    args.no_open = getattr(args, "no_open", False)
+    return cmd_run(args)
+
+
+def cmd_profile(args) -> int:
+    import json as _json
+    from .config_ops import list_profiles, new_profile, profile_path
+    act = args.profile_action
+    if act == "list":
+        names = list_profiles()
+        print("\n".join(names) if names else "(no profiles yet)")
+        return 0
+    if act == "new":
+        path = new_profile(args.name, args.from_path)
+        print(f"[neurodaily] created profile → {path}")
+        return 0
+    if act == "path":
+        print(profile_path(args.name))
+        return 0
+    if act == "show":
+        path = profile_path(args.name)
+        try:
+            with open(path, encoding="utf-8") as f:
+                print(_json.dumps(_json.load(f), ensure_ascii=False, indent=2))
+        except FileNotFoundError:
+            print(f"[neurodaily] profile not found: {args.name}")
+            return 1
+        return 0
+    return 0
+
+
 def cmd_history(args) -> int:
     from . import history as hist
     runs = hist.list_runs(limit=args.limit)
@@ -293,16 +466,25 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--no-open", action="store_true", help="do not auto-open the report")
     run_p.add_argument("--dedupe", action="store_true",
                        help="skip if an identical query already ran today (dedup)")
+    run_p.add_argument("--demo", action="store_true", help="offline demo data (no network)")
     run_p.set_defaults(func=cmd_run)
 
     serve_p = sub.add_parser("serve", help="start the web app")
     serve_p.add_argument("--port", type=int, default=8031)
+    serve_p.add_argument("--host", default="127.0.0.1")
+    serve_p.add_argument("--demo", action="store_true", help="dashboard uses offline demo data")
     serve_p.set_defaults(func=cmd_serve)
 
     cfg_p = sub.add_parser("config", help="view or init config")
     cfg_sub = cfg_p.add_subparsers(dest="config_action", required=True)
     cfg_sub.add_parser("show", help="print structured prompt")
     cfg_sub.add_parser("init", help="write default config file")
+    cfg_sub.add_parser("validate", help="validate config.json against the schema")
+    cfg_sub.add_parser("schema", help="print the JSON Schema").add_argument("--out")
+    cfg_sub.add_parser("describe", help="print an agent-readable capability map")
+    apply_p = cfg_sub.add_parser("apply", help="merge a JSON patch into the config")
+    apply_p.add_argument("patch")
+    apply_p.add_argument("--dry-run", action="store_true")
     cfg_p.add_argument("--force", action="store_true")
     cfg_p.set_defaults(func=cmd_config)
 
@@ -323,6 +505,40 @@ def build_parser() -> argparse.ArgumentParser:
     deepen_p.add_argument("--api-key", default=None)
     deepen_p.add_argument("--concurrency", type=int, default=4)
     deepen_p.set_defaults(func=cmd_deepen)
+
+    ai_p = sub.add_parser("ai-summary", help="generate the AI daily overview")
+    ai_p.add_argument("--demo", action="store_true")
+    ai_p.add_argument("--force", action="store_true")
+    ai_p.add_argument("--save", action="store_true", help="also write a report embedding it")
+    ai_p.add_argument("--api-key", default=None)
+    ai_p.add_argument("--base-url", default=None)
+    ai_p.add_argument("--model", default=None)
+    ai_p.set_defaults(func=cmd_ai_summary)
+
+    export_p = sub.add_parser("export", help="export the digest as JSON / BibTeX")
+    export_p.add_argument("--format", choices=["json", "bibtex", "both"], default="both")
+    export_p.add_argument("--demo", action="store_true")
+    export_p.set_defaults(func=cmd_export)
+
+    demo_p = sub.add_parser("demo", help="generate an offline demo report")
+    demo_p.add_argument("--no-open", action="store_true")
+    demo_p.set_defaults(func=cmd_demo)
+
+    hook_p = sub.add_parser("webhook", help="push to Feishu / WeCom")
+    hook_p.add_argument("--test", action="store_true")
+    hook_p.add_argument("--demo", action="store_true")
+    hook_p.set_defaults(func=cmd_webhook)
+
+    prof_p = sub.add_parser("profile", help="manage config profiles")
+    prof_sub = prof_p.add_subparsers(dest="profile_action", required=True)
+    prof_sub.add_parser("list")
+    new_p = prof_sub.add_parser("new")
+    new_p.add_argument("name")
+    new_p.add_argument("--from", dest="from_path", default=None)
+    for act in ("path", "show"):
+        sp = prof_sub.add_parser(act)
+        sp.add_argument("name")
+    prof_p.set_defaults(func=cmd_profile)
 
     mail_p = sub.add_parser("mail", help="send / preview today's digest as email")
     mail_p.add_argument("--test", action="store_true", help="send a tiny test email")
@@ -346,8 +562,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     _ensure_imports()
+    argv = list(sys.argv[1:] if argv is None else argv)
+    profile = None
+    if "--profile" in argv:
+        i = argv.index("--profile")
+        if i + 1 < len(argv):
+            profile = argv[i + 1]
+            del argv[i:i + 2]
     parser = build_parser()
     args = parser.parse_args(argv)
+    if profile:
+        from .config_ops import profile_path
+        args.config = profile_path(profile)
     return args.func(args)
 
 
