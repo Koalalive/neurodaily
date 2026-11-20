@@ -134,25 +134,79 @@ def _age_days(fetched_at: str | None) -> float:
         return 1e9
 
 
-def lookup(name: str | None) -> dict | None:
+def _find_key(name: str, mapping: dict) -> str | None:
+    n = _norm(name)
+    for key in mapping:
+        if _norm(key) == n:
+            return key
+    alias = _ALIASES.get(n)
+    if alias and alias in mapping:
+        return alias
+    for key in mapping:
+        kn = _norm(key)
+        if kn and len(kn) >= 5 and (kn in n or n in kn):
+            return key
+    return None
+
+
+def _config_metrics(name: str, config) -> dict | None:
+    """User-hardcoded metrics in config.journals take precedence over everything."""
+    if config is None:
+        return None
+    n = _norm(name)
+    alias = _ALIASES.get(n)
+    for j in getattr(config, "journals", []) or []:
+        jn = _norm(getattr(j, "name", ""))
+        if not jn:
+            continue
+        # Exact / known alias only: "Nature" must not match "Nature Medicine".
+        if not (jn == n
+                or (alias is not None and _norm(alias) == jn)
+                or (_ALIASES.get(jn) is not None and _norm(_ALIASES[jn]) == n)):
+            continue
+        if j.impact_factor or j.jcr or j.cas:
+            return {
+                "name": j.name,
+                "if": j.impact_factor,
+                "jcr": j.jcr or None,
+                "cas": j.cas or None,
+                "year": j.metric_year,
+                "official": True,
+                "source": "config",
+            }
+    return None
+
+
+def lookup(name: str | None, config=None) -> dict | None:
     if not name:
         return None
     official = load_official()
     auto = load_auto()
-    canon = None
-    n = _norm(name)
-    for key in list(official) + list(auto):
-        if _norm(key) == n:
-            canon = key
-            break
-    if canon is None and _ALIASES.get(n) in set(official) | set(auto):
-        canon = _ALIASES[n]
-    if canon is None:
-        for key in list(official) + list(auto):
-            kn = _norm(key)
-            if kn and len(kn) >= 5 and (kn in n or n in kn):
-                canon = key
-                break
+
+    hard = _config_metrics(name, config)
+    if hard:
+        off_key = _find_key(hard["name"], official) or _find_key(name, official)
+        off = official.get(off_key, {}) if off_key else {}
+        auto_key = _find_key(hard["name"], auto) or _find_key(name, auto)
+        aut = auto.get(auto_key, {}) if auto_key else {}
+        out = {
+            "name": hard["name"],
+            # per-field merge: hardcoded wins, official fills missing fields
+            "if": hard.get("if") if hard.get("if") is not None else off.get("if"),
+            "jcr": hard.get("jcr") or off.get("jcr"),
+            "cas": hard.get("cas") or off.get("cas"),
+            "year": hard.get("year") or off.get("year"),
+            "official": True,
+            "source": "config",
+            "oa_2yr": aut.get("oa_2yr"),
+            "h_index": aut.get("h_index"),
+            "works": aut.get("works"),
+            "openalex_id": aut.get("openalex_id"),
+            "fetched_at": aut.get("fetched_at"),
+        }
+        return out
+
+    canon = _find_key(name, {**official, **auto})
     if canon is None:
         return None
 
@@ -174,10 +228,10 @@ def lookup(name: str | None) -> dict | None:
     return out if any(out[k] is not None for k in ("if", "jcr", "cas", "oa_2yr")) else None
 
 
-def for_item(item) -> dict | None:
+def for_item(item, config=None) -> dict | None:
     extra = getattr(item, "extra", None) or {}
     for key in ("journal", "journal_abbrev", "container", "venue"):
-        m = lookup(extra.get(key))
+        m = lookup(extra.get(key), config=config)
         if m:
             return m
     return None

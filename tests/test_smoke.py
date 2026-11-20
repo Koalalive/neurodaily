@@ -380,6 +380,45 @@ class JournalMetricsTests(unittest.TestCase):
         self.assertIn("IF 58.7", h)
         self.assertIn("中科院 1区", h)
 
+    def test_config_hardcoded_overrides_all(self):
+        from neurodaily import journal_metrics as jm
+        from neurodaily.config import DEFAULT_CONFIG, Journal
+        cfg = DEFAULT_CONFIG()
+        cfg.journals = [Journal(name="Nature", impact_factor=99.9, jcr="Q1",
+                                cas="1区", metric_year=2025)]
+        m = jm.lookup("Nature", cfg)
+        self.assertEqual(m["if"], 99.9)
+        self.assertEqual(m["jcr"], "Q1")
+        self.assertEqual(m["cas"], "1区")
+        self.assertEqual(m["source"], "config")
+
+    def test_config_exact_name_not_substring(self):
+        from neurodaily import journal_metrics as jm
+        from neurodaily.config import DEFAULT_CONFIG, Journal
+        cfg = DEFAULT_CONFIG()
+        cfg.journals = [Journal(name="Nature", impact_factor=99.9)]
+        m = jm.lookup("Nature Medicine", cfg)
+        self.assertTrue(m is None or m.get("source") != "config")
+
+    def test_render_config_hardcoded_badge(self):
+        r = demo.build_result()
+        from neurodaily.config import DEFAULT_CONFIG, Journal
+        cfg = DEFAULT_CONFIG()
+        cfg.journals = [Journal(name="Nature", impact_factor=99.9, jcr="Q1", cas="1区")]
+        r.config = cfg
+        h = render_html(r, cfg)
+        self.assertIn("IF 99.9", h)
+        self.assertIn("中科院 1区", h)
+
+    def test_journal_from_dict_accepts_if_alias(self):
+        from neurodaily.config import Journal
+        j = Journal.from_dict({"name": "X", "if": 12.5, "jcr": "Q2",
+                               "cas": "2区", "year": 2024})
+        self.assertEqual(j.impact_factor, 12.5)
+        self.assertEqual(j.jcr, "Q2")
+        self.assertEqual(j.cas, "2区")
+        self.assertEqual(j.metric_year, 2024)
+
 
 class WindowTests(unittest.TestCase):
     def test_paper_window_filters_old_papers(self):
@@ -702,3 +741,10 @@ class RunNowTests(unittest.TestCase):
     def test_settings_feed_selector(self):
         from neurodaily.settings_page import SETTINGS_HTML
         self.assertIn("querySelectorAll('input.feed')", SETTINGS_HTML)
+
+
+class SettingsJournalMetricsTests(unittest.TestCase):
+    def test_settings_has_metric_inputs(self):
+        from neurodaily.settings_page import SETTINGS_HTML
+        for marker in ('class="j-if"', 'class="j-jcr"', 'class="j-cas"'):
+            self.assertIn(marker, SETTINGS_HTML)

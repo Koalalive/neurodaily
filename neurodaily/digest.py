@@ -200,7 +200,7 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     try:
         from .journal_metrics import for_item
         for _it in deduped:
-            _m = for_item(_it)
+            _m = for_item(_it, config)
             if _m:
                 _it.extra["metrics"] = _m
     except Exception:
@@ -347,4 +347,4 @@ def _write_static_history(outdir: str) -> None:
 
 def render_html_for(result: DigestResult) -> str:
     from .render import render_html
-    return render_html(result)
+    return render_html(result, getattr(result, "config", None))

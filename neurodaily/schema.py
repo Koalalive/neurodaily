@@ -36,6 +36,10 @@ class JournalModel(BaseModel):
     url: str = ""
     rss: str = ""
     category: str = "neuroscience"
+    impact_factor: float | None = None
+    jcr: str = ""
+    cas: str = ""
+    year: int | None = None
 
 
 class SourceModel(BaseModel):

@@ -289,6 +289,30 @@ neurodaily run --no-open        # 或网页里点 Run now
 
 **创投源示例**（已内置在 `config.example.json`）：BCI 融资、neurotech 融资、MedTech Dive、Crunchbase。
 
+### 期刊指标硬编码（IF / JCR / 中科院分区）
+
+可以直接在 `config/config.json` 的 `journals` 里写死指标：
+
+```json
+"journals": [
+  {
+    "name": "Nature",
+    "url": "https://www.nature.com/",
+    "category": "general",
+    "impact_factor": 50.5,
+    "jcr": "Q1",
+    "cas": "1区",
+    "year": 2024
+  }
+]
+```
+
+- `impact_factor` 也接受别名 `if`
+- `jcr`：`Q1`/`Q2`…；`cas`：`1区`/`2区`…；`year` 可选
+- 优先级：**用户配置 > `config/journal_metrics.json` 官方导入 > OpenAlex 自动 `OA 2yr`**
+- 设置页的期刊行也有 `IF / JCR / 中科院` 三个输入框，可直接编辑保存
+- IF/JCR/中科院分区是 Clarivate / 中科院文献情报中心的专有数据，硬编码值由用户自行负责
+
 ---
 
 ## 命令行

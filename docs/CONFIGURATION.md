@@ -133,11 +133,15 @@ JSON API 示例：
 ```json
 { "name": "Neuron", "url": "https://www.cell.com/neuron",
   "rss": "https://www.cell.com/action/showFeed?type=etoc&feed=rss&jc=neuron",
-  "category": "neuroscience" }
+  "category": "neuroscience",
+  "impact_factor": 14.7, "jcr": "Q1", "cas": "1区", "year": 2024 }
 ```
 
 - 有 `rss` 的期刊会被抓取并置顶到论文区（★ 标记）
 - 没有可靠 RSS 的期刊保留为站点链接
+- `impact_factor`（别名 `if`）/ `jcr` / `cas` / `year` 可选，用于**硬编码期刊指标**
+- 指标优先级：**用户配置 `journals[]` > `config/journal_metrics.json` 官方导入 > OpenAlex 自动 `OA 2yr`**
+- 设置页的期刊行同样提供 `IF / JCR / 中科院` 输入框
 
 ### 2.4 `output`
 

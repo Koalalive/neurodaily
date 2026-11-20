@@ -29,7 +29,7 @@ input:focus{outline:none;border-color:var(--accent)}
 .row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
 .row.grid{display:grid;grid-template-columns:1.1fr 1fr 1fr 1fr 1.2fr auto auto;gap:6px}
 .row.src{display:grid;grid-template-columns:1.2fr auto 90px 100px;gap:8px}
-.row.j{display:grid;grid-template-columns:1fr 1.4fr 1.4fr .8fr auto;gap:6px}
+.row.j{display:grid;grid-template-columns:1fr 1.4fr 1.4fr .8fr .7fr .6fr .7fr auto;gap:6px}
 .row.feed{display:flex}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inline input[type=number]{width:80px}
@@ -213,6 +213,9 @@ function journalRow(x){
     '<input class="j-url" placeholder="Website URL" value="'+esc(x.url)+'">'+
     '<input class="j-rss" placeholder="RSS (optional)" value="'+esc(x.rss)+'">'+
     '<input class="j-cat" placeholder="Category" value="'+esc(x.category)+'">'+
+    '<input class="j-if" type="number" step="0.01" placeholder="IF" value="'+(x.impact_factor!=null?x.impact_factor:'')+'">'+
+    '<input class="j-jcr" placeholder="JCR" value="'+esc(x.jcr)+'">'+
+    '<input class="j-cas" placeholder="中科院" value="'+esc(x.cas)+'">'+
     '<button class="del" onclick="this.closest(\'.row\').remove()">✕</button>';
   return d;
 }
@@ -296,10 +299,14 @@ function collect(){
   data.windows.news_hours=parseInt(el('win_news').value||'36',10);
   data.policy_feeds=[].slice.call(el('policy_feeds').querySelectorAll('input.feed')).map(function(i){return i.value.trim();}).filter(Boolean);
   data.journals=[].slice.call(el('journals').querySelectorAll('.row')).map(function(r){
+    var iv=r.querySelector('.j-if').value.trim();
     return {name:r.querySelector('.j-name').value.trim(),
       url:r.querySelector('.j-url').value.trim(),
       rss:r.querySelector('.j-rss').value.trim(),
-      category:r.querySelector('.j-cat').value.trim()};
+      category:r.querySelector('.j-cat').value.trim(),
+      impact_factor: iv?parseFloat(iv):null,
+      jcr:r.querySelector('.j-jcr').value.trim(),
+      cas:r.querySelector('.j-cas').value.trim()};
   }).filter(function(x){return x.name;});
   return data;
 }

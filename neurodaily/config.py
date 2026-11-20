@@ -56,17 +56,35 @@ class Journal:
     url: str = ""                   # official site
     rss: str = ""                   # optional RSS feed
     category: str = "neuroscience"  # grouping label in the UI
+    # Optional user-hardcoded metrics (override official import / OpenAlex).
+    impact_factor: float | None = None
+    jcr: str = ""
+    cas: str = ""
+    metric_year: int | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @staticmethod
     def from_dict(d: dict) -> "Journal":
+        raw_if = d.get("impact_factor", d.get("if"))
+        try:
+            impact_factor = float(raw_if) if raw_if not in (None, "") else None
+        except (TypeError, ValueError):
+            impact_factor = None
+        try:
+            year = int(d["year"]) if d.get("year") not in (None, "") else None
+        except (TypeError, ValueError):
+            year = None
         return Journal(
             name=d["name"],
             url=d.get("url", ""),
             rss=d.get("rss", ""),
             category=d.get("category", "neuroscience"),
+            impact_factor=impact_factor,
+            jcr=str(d.get("jcr", "") or "").strip(),
+            cas=str(d.get("cas", "") or "").strip(),
+            metric_year=year,
         )
 
 

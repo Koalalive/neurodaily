@@ -73,7 +73,8 @@ def render_html(result: DigestResult, config: Config | None = None) -> str:
         return _fallback_plain(result)
     try:
         from . import journal_metrics
-        env.globals["jm"] = journal_metrics.lookup
+        _cfg = config or getattr(result, "config", None)
+        env.globals["jm"] = lambda name: journal_metrics.lookup(name, _cfg)
         template = env.get_template("report.html.j2")
         ctx = {
             "result": result,
