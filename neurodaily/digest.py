@@ -91,12 +91,27 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     health: list[dict] = []
 
     win = config.windows or {}
-    try:
-        window_hours = int(win.get("daily_paper_hours", 36) if mode == "daily"
-                           else win.get("manual_paper_hours", 168))
-    except (TypeError, ValueError):
-        window_hours = 36
-    needed_days = max(1, math.ceil(window_hours / 24) + 1)
+
+    def _win(key: str, default: int) -> int:
+        try:
+            return max(1, int(win.get(key, default)))
+        except (TypeError, ValueError):
+            return default
+
+    hours_by_kind = {
+        "paper": _win("daily_paper_hours" if mode == "daily" else "manual_paper_hours",
+                      36 if mode == "daily" else 168),
+        "trial": _win("trials_hours", 36),
+        "conference": _win("trials_hours", 36),
+        "funding": _win("funding_hours", 36),
+        "industry": _win("funding_hours", 36),
+        "drug": _win("news_hours", 36),
+        "device": _win("news_hours", 36),
+        "news": _win("news_hours", 36),
+        "policy": _win("news_hours", 36),
+    }
+    other_hours = _win("other_lookback_days", 7) * 24
+    needed_days = max(1, math.ceil(max(hours_by_kind.values()) / 24) + 1)
     import copy as _copy
     _orig_sources = _copy.deepcopy(config.sources)
     for _n, _o in list(config.sources.items()):
@@ -179,7 +194,7 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
             priority = 0
         return (priority, it.date or "0000-00-00")
 
-    deduped = _filter_papers_by_window(deduped, window_hours)
+    deduped = _filter_by_windows(deduped, hours_by_kind, other_hours)
     deduped.sort(key=_sort_key, reverse=True)
 
     try:
@@ -233,21 +248,30 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     return final
 
 
-def _filter_papers_by_window(items: list[Item], hours: int) -> list[Item]:
-    """Keep papers published within `hours`; undated items are kept."""
+def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int = 7 * 24) -> list[Item]:
+    """Keep each kind within its own window; undated items are kept."""
     from datetime import timedelta
-    cutoff = datetime.now() - timedelta(hours=max(1, int(hours)))
     out = []
     for it in items:
-        if it.kind == "paper" and it.date:
-            try:
-                dtv = datetime.fromisoformat(it.date if len(it.date) > 10 else it.date + "T00:00:00")
-            except Exception:
-                dtv = None
-            if dtv is not None and dtv < cutoff:
-                continue
+        if not it.date:
+            out.append(it)
+            continue
+        hours = max(1, int(hours_by_kind.get(it.kind, other_hours)))
+        cutoff = datetime.now() - timedelta(hours=hours)
+        try:
+            dtv = datetime.fromisoformat(it.date if len(it.date) > 10 else it.date + "T00:00:00")
+        except Exception:
+            out.append(it)
+            continue
+        if dtv < cutoff:
+            continue
         out.append(it)
     return out
+
+
+def _filter_papers_by_window(items: list[Item], hours: int) -> list[Item]:
+    """Backward-compatible helper: filter papers only, keep every other kind."""
+    return _filter_by_windows(items, {"paper": hours}, other_hours=10 ** 6)
 
 
 def save_report(result: DigestResult, output_path: str) -> str:

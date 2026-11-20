@@ -6,5 +6,5 @@
   "api_key_file": "~/.neurodaily_llm",
   "max_papers": 30,
   "max_other": 8,
-  "max_input_chars": 8000
+  "max_input_chars": 16000
 }

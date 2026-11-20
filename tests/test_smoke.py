@@ -330,7 +330,7 @@ class AISummaryTests(unittest.TestCase):
         r.ai_summary_meta = {"model": "test-model"}
         h = render_html(r)
         self.assertIn("今日 AI 摘要", h)
-        self.assertLess(h.find("今日 AI 摘要"), h.find("历史上的今天"))
+        self.assertLess(h.find('id="ai-summary"'), h.find('id="on-this-day"'))
 
 
 class RouteTests(unittest.TestCase):
@@ -402,8 +402,29 @@ class WindowTests(unittest.TestCase):
 
     def test_default_windows(self):
         w = DEFAULT_CONFIG().windows
-        self.assertEqual(w["daily_paper_hours"], 36)
+        for key in ("daily_paper_hours", "trials_hours", "funding_hours", "news_hours"):
+            self.assertEqual(w[key], 36)
         self.assertGreaterEqual(w["manual_paper_hours"], 36)
+
+    def test_kind_windows_filter(self):
+        from neurodaily.digest import _filter_by_windows
+        from neurodaily.models import Item
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        items = [
+            Item(title="old trial", kind="trial", date=(now - timedelta(hours=100)).strftime("%Y-%m-%d")),
+            Item(title="old funding", kind="funding", date=(now - timedelta(hours=100)).strftime("%Y-%m-%d")),
+            Item(title="old news", kind="news", date=(now - timedelta(hours=100)).strftime("%Y-%m-%d")),
+            Item(title="new trial", kind="trial", date=(now - timedelta(hours=10)).strftime("%Y-%m-%d")),
+            Item(title="new news", kind="news", date=(now - timedelta(hours=10)).strftime("%Y-%m-%d")),
+        ]
+        out = _filter_by_windows(items, {"trial": 36, "funding": 36, "news": 36})
+        titles = {i.title for i in out}
+        self.assertNotIn("old trial", titles)
+        self.assertNotIn("old funding", titles)
+        self.assertNotIn("old news", titles)
+        self.assertIn("new trial", titles)
+        self.assertIn("new news", titles)
 
 
 class OnThisDayLangTests(unittest.TestCase):
@@ -422,3 +443,128 @@ class OnThisDayLangTests(unittest.TestCase):
             evs = otd.today_events(lang="en")
         self.assertTrue(evs)
         self.assertFalse(all(e.get("translated", True) for e in evs))
+
+
+class RenderAITests(unittest.TestCase):
+    def test_allowed_link(self):
+        from neurodaily.render import render_ai_text
+        h = render_ai_text("见 [Nature 论文](https://example.com/a)", {"https://example.com/a"})
+        self.assertIn('href="https://example.com/a"', h)
+        self.assertIn("Nature 论文</a>", h)
+
+    def test_rejected_link(self):
+        from neurodaily.render import render_ai_text
+        h = render_ai_text("见 [伪造链接](https://evil.example/x)", {"https://example.com/a"})
+        self.assertNotIn("<a ", h)
+        self.assertIn("伪造链接", h)
+
+    def test_escape_html(self):
+        from neurodaily.render import render_ai_text
+        h = render_ai_text("<script>alert(1)</script>")
+        self.assertNotIn("<script>", h)
+        self.assertIn("&lt;script&gt;", h)
+
+
+class SummaryContextTests(unittest.TestCase):
+    def test_build_text_includes_urls(self):
+        from neurodaily.ai_summary import build_text
+        from neurodaily.demo import build_result
+        text = build_text(build_result())
+        self.assertIn("url: http", text)
+
+
+class ReportTocTests(unittest.TestCase):
+    def test_toc_and_anchors(self):
+        from neurodaily.demo import build_result
+        from neurodaily.render import render_html
+        h = render_html(build_result())
+        self.assertIn('class="toc"', h)
+        self.assertIn('href="#trials_conferences"', h)
+        self.assertIn('href="#policy"', h)
+        self.assertIn('id="papers"', h)
+        self.assertIn('id="industry"', h)
+
+
+class AIRefLinkTests(unittest.TestCase):
+    def test_ref_link_renders(self):
+        from neurodaily.render import render_ai_text
+        refs = {"R1": {"url": "https://example.com/paper"}}
+        h = render_ai_text("见 [记忆改善](R1)", {"https://example.com/paper"}, refs)
+        self.assertIn('href="https://example.com/paper"', h)
+        self.assertIn("记忆改善</a>", h)
+
+    def test_strip_links_dedup(self):
+        from neurodaily.ai_summary import _strip_links
+        s = _strip_links("证据[少突胶质细胞功能障碍](R1)。")
+        self.assertEqual(s.count("少突胶质细胞功能障碍"), 1)
+
+
+class EmailSafeTests(unittest.TestCase):
+    def test_strips_interactive_chrome(self):
+        from neurodaily.mailer import email_safe_html
+        from neurodaily.demo import build_result
+        from neurodaily.render import render_html
+        h = render_html(build_result())
+        e = email_safe_html(h)
+        for marker in ('id="runNow"', 'id="settingsLink"', 'id="histLink"', 'id="promptLink"'):
+            self.assertNotIn(marker, e)
+        self.assertNotIn('class="toc"', e)
+        self.assertNotIn("<script", e)
+        self.assertIn("Latest Papers", e)
+        self.assertIn("目录", e)
+        self.assertIn('href="#trials_conferences"', e)
+
+
+class SettingsEnglishTests(unittest.TestCase):
+    def test_settings_page_english(self):
+        from neurodaily.settings_page import SETTINGS_HTML
+        self.assertIn("Save & run now", SETTINGS_HTML)
+        self.assertIn("Push settings (email / webhook)", SETTINGS_HTML)
+        self.assertNotIn("保存并立即检索推送", SETTINGS_HTML)
+
+
+class SummaryLinkGuaranteeTests(unittest.TestCase):
+    def test_entity_fallback_links_journal(self):
+        from neurodaily.ai_summary import _entity_fallback
+        refs = {"R1": {"url": "https://x/1", "title": "A memory study", "journal": "Nature"}}
+        out = _entity_fallback("《Nature》发表了一项记忆研究。", refs)
+        self.assertIn("[Nature](R1)", out)
+
+    def test_append_sources_guarantees_links(self):
+        from neurodaily.ai_summary import _append_sources
+        refs = {"R1": {"url": "https://x/1", "title": "Paper one"},
+                "R2": {"url": "https://x/2", "title": "Paper two"}}
+        out = _append_sources("正文。", refs, 2)
+        self.assertEqual(out.count("](R"), 2)
+
+    def test_generate_guarantees_links_when_model_returns_plain(self):
+        from unittest import mock
+        from neurodaily import ai_summary
+        from neurodaily.demo import build_result
+        r = build_result()
+        with mock.patch.object(ai_summary, "_call_llm", return_value="今日研究进展。" * 30), \
+             mock.patch.object(ai_summary, "_extract_links", return_value=[]), \
+             mock.patch.object(ai_summary, "_cache_path", return_value="/tmp/nd_ai_test.json"), \
+             mock.patch.object(ai_summary, "_write_cache"):
+            out = ai_summary.generate(r, force=True)
+        self.assertGreaterEqual(ai_summary._count_links(out), ai_summary.MIN_SUMMARY_LINKS)
+
+
+class SummaryCleanupTests(unittest.TestCase):
+    def test_clean_parentheses(self):
+        from neurodaily.ai_summary import _clean_summary
+        cases = {
+            "（[记忆改善](R1)）": "[记忆改善](R1)",
+            "结论（）。": "结论。",
+            "研究（TransA-MERFISH揭示环路）。": "研究TransA-MERFISH揭示环路。",
+            "说明（含逗号，的补充）。": "说明（含逗号，的补充）。",
+            "（R3）": "",
+        }
+        for src, want in cases.items():
+            self.assertEqual(_clean_summary(src), want)
+
+    def test_render_skips_empty_label(self):
+        from neurodaily.render import render_ai_text
+        h = render_ai_text("[ ](R1) 正文", {"https://x"}, {"R1": {"url": "https://x"}})
+        self.assertNotIn("<a ", h)
+        self.assertIn("正文", h)

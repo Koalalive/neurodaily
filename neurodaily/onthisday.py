@@ -2723,7 +2723,7 @@ def render_section_html(events: list[dict], when: _date | None = None, lang: str
     if lang != "zh" and any(not e.get("translated", True) for e in events):
         note = f'<p class="sec-desc">{L["note"]}</p>'
     return (
-        '<section>'
+        '<section id="on-this-day">'
         '<div class="sec-head"><div>'
         f'<h2 class="sec-title"><span class="dot"></span>{L["title"]}'
         f'<span class="count">({label} · {len(events)})</span></h2>'

@@ -97,6 +97,19 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 _hooks(result)
             except Exception:
                 pass
+            try:
+                if cfg.output.get("open_on_finish", True) and os.environ.get("NEURODAILY_NO_OPEN") != "1":
+                    import subprocess
+                    import sys
+                    print("[neurodaily] opening report:", path, flush=True)
+                    if sys.platform == "darwin":
+                        subprocess.run(["open", path], check=False)
+                    else:
+                        import webbrowser
+                        webbrowser.open("file://" + os.path.abspath(path))
+                    print("[neurodaily] opened report:", path, flush=True)
+            except Exception:
+                pass
             return result
 
         background_tasks.add_task(_do)
@@ -248,6 +261,19 @@ def create_app(config_path: str | None = None) -> FastAPI:
         except Exception as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
         return JSONResponse({"ok": True, "path": path})
+
+    @app.get("/report/latest")
+    def report_latest():
+        from fastapi.responses import FileResponse
+        p = getattr(app.state, "last_report_path", None)
+        if not p or not os.path.exists(p):
+            import glob
+            files = sorted(glob.glob(os.path.join(_cfg().output_dir(), "neurodaily_*.html")),
+                           key=os.path.getmtime)
+            p = files[-1] if files else None
+        if not p:
+            return JSONResponse({"error": "no report yet"}, status_code=404)
+        return FileResponse(p, media_type="text/html")
 
     @app.get("/api/launchd/status")
     def api_launchd_status():

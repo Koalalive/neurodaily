@@ -430,6 +430,9 @@ def DEFAULT_CONFIG() -> Config:
     windows = {
         "daily_paper_hours": 36,
         "manual_paper_hours": 168,
+        "trials_hours": 36,
+        "funding_hours": 36,
+        "news_hours": 36,
         "other_lookback_days": 7,
     }
     journals = JOURNALS()

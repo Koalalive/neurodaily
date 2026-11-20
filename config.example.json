@@ -461,6 +461,9 @@
   "windows": {
     "daily_paper_hours": 36,
     "manual_paper_hours": 168,
-    "other_lookback_days": 7
+    "other_lookback_days": 7,
+    "trials_hours": 36,
+    "funding_hours": 36,
+    "news_hours": 36
   }
 }

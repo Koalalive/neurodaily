@@ -18,6 +18,55 @@ def _stdlib_loader():
         return None
 
 
+_LINK_RE = r"\[([^\]]+)\]\(([^)\s]+)\)"
+
+
+def render_ai_inline(text: str, allowed_urls=None, refs=None) -> str:
+    """Escape text but turn Markdown links into anchors (validated against allowed URLs)."""
+    import html as _html
+    import re
+    allowed = None if allowed_urls is None else {u.rstrip("/") for u in allowed_urls if u}
+    refs = refs or {}
+    parts, pos = [], 0
+    for m in re.finditer(_LINK_RE, text or ""):
+        parts.append(_html.escape(text[pos:m.start()]))
+        label, target = m.group(1), m.group(2)
+        if not label.strip():
+            pos = m.end()
+            continue
+        url = (refs.get(target) or {}).get("url") if target in refs else target
+        ok = bool(url) and (url.startswith(("http://", "https://"))
+              and (allowed is None or url.rstrip("/") in allowed))
+        if ok:
+            parts.append(
+                f'<a href="{_html.escape(url, quote=True)}" target="_blank" '
+                f'rel="noopener noreferrer">{_html.escape(label)}</a>'
+            )
+        else:
+            parts.append(_html.escape(label))
+        pos = m.end()
+    parts.append(_html.escape(text[pos:]))
+    return "".join(parts)
+
+
+def render_ai_text(text: str, allowed_urls=None, refs=None) -> str:
+    out = []
+    for line in (text or "").splitlines():
+        s = line.strip().replace("**", "")
+        if not s:
+            continue
+        bullet = s.startswith(("- ", "• ", "* "))
+        if bullet:
+            s = s[2:].strip()
+        out.append(f'<p class="summary">{"• " if bullet else ""}{render_ai_inline(s, allowed_urls, refs)}</p>')
+    return "".join(out)
+
+
+def ai_links_to_text(text: str) -> str:
+    import re
+    return re.sub(_LINK_RE, r"\1 (\2)", text or "")
+
+
 def render_html(result: DigestResult, config: Config | None = None) -> str:
     env = _stdlib_loader()
     if env is None:
@@ -45,12 +94,12 @@ def _inject_ai_summary(html: str, result: DigestResult) -> str:
     import html as _html
     meta = getattr(result, "ai_summary_meta", {}) or {}
     model = _html.escape(str(meta.get("model", "AI")))
-    paras = "".join(
-        f'<p class="summary">{_html.escape(p.strip())}</p>'
-        for p in text.split("\n") if p.strip()
-    )
+    allowed = {it.url for it in (getattr(result, "items", None) or []) if getattr(it, "url", None)}
+    refs = getattr(result, "ai_summary_refs", {}) or {}
+    allowed |= {(v or {}).get("url") for v in refs.values() if (v or {}).get("url")}
+    paras = render_ai_text(text, allowed, refs)
     section = (
-        '<section><div class="sec-head"><div>'
+        '<section id="ai-summary"><div class="sec-head"><div>'
         f'<h2 class="sec-title"><span class="dot"></span>🧠 今日 AI 摘要'
         f'<span class="count">({model})</span></h2>'
         '<p class="sec-desc">由 AI 依据当日抓取内容生成，仅供参考；请以原文为准。</p>'

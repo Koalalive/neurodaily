@@ -150,11 +150,15 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
                   "ru": "📅 В этот день"}.get(_lang, "📅 历史上的今天")
     ai = (getattr(result, "ai_summary", "") or "").strip()
     if ai:
+        from .render import render_ai_inline
+        _allowed = {it.url for it in (getattr(result, "items", None) or []) if getattr(it, "url", None)}
+        _refs = getattr(result, "ai_summary_refs", {}) or {}
+        _allowed |= {(v or {}).get("url") for v in _refs.values() if (v or {}).get("url")}
         parts.append(f'<h2 style="font-size:16px;color:{accent};margin:6px 0 10px">{_ai_title}</h2>')
         for p_ in ai.split("\n"):
             if p_.strip():
                 parts.append(f'<p style="margin:0 0 8px;color:#333;font-size:13px;line-height:1.7">'
-                             f'{_esc(p_.strip())}</p>')
+                             f'{render_ai_inline(p_.strip(), _allowed, _refs)}</p>')
 
     otd = getattr(result, "on_this_day", None) or []
     if otd:
@@ -229,6 +233,38 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
     return subject_for(result, cfg), html, text
 
 
+
+
+def email_safe_html(html: str) -> str:
+    """Strip interactive-only chrome (toolbar buttons, TOC, scripts) for email."""
+    import re
+    html = re.sub(r"<script\b[\s\S]*?</script>", "", html, flags=re.I)
+    html = re.sub(r'<nav class="toc"[\s\S]*?</nav>', "", html, flags=re.I)
+    for _id in ("runNow", "settingsLink", "histLink", "promptLink", "runMsg"):
+        html = re.sub(
+            rf'<(?P<tag>button|a|span)[^>]*\bid="{_id}"[^>]*>[\s\S]*?</(?P=tag)>',
+            "", html, flags=re.I,
+        )
+    html = re.sub(r'<div class="toolbar">\s*</div>', "", html, flags=re.I)
+    toc = (
+        '<div style="margin:14px 0;padding:10px 14px;background:#f6f8fa;'
+        'border:1px solid #e5e7eb;border-radius:8px;'
+        'font:13px/1.7 -apple-system,Segoe UI,Roboto,sans-serif;color:#333">'
+        '<b>目录</b>：'
+        '<a href="#ai-summary" style="color:#0366d6;text-decoration:none">AI 摘要</a> · '
+        '<a href="#on-this-day" style="color:#0366d6;text-decoration:none">历史上的今天</a> · '
+        '<a href="#papers" style="color:#0366d6;text-decoration:none">最新论文</a> · '
+        '<a href="#industry" style="color:#0366d6;text-decoration:none">产业 / Funding</a> · '
+        '<a href="#trials_conferences" style="color:#0366d6;text-decoration:none">临床试验</a> · '
+        '<a href="#policy" style="color:#0366d6;text-decoration:none">政策 / 新闻</a> · '
+        '<a href="#journals" style="color:#0366d6;text-decoration:none">期刊</a>'
+        '</div>'
+    )
+    if '<main class="wrap">' in html:
+        html = html.replace('<main class="wrap">', toc + '\n<main class="wrap">', 1)
+    return html
+
+
 def _build_message(cfg: dict, subject: str, html: str, text: str,
                    attachments: list[str] | None = None) -> MIMEMultipart:
     msg = MIMEMultipart("mixed")
@@ -248,8 +284,18 @@ def _build_message(cfg: dict, subject: str, html: str, text: str,
             if os.path.getsize(path) > max_mb * 1024 * 1024:
                 continue
             with open(path, "rb") as f:
-                part = MIMEBase("text", "html")
-                part.set_payload(f.read())
+                raw = f.read()
+            if path.lower().endswith((".html", ".htm")):
+                try:
+                    safe = email_safe_html(raw.decode("utf-8", "ignore"))
+                    raw = safe.encode("utf-8")
+                    with open(os.path.join(os.path.dirname(path), "last_email_attachment.html"),
+                              "w", encoding="utf-8") as _f:
+                        _f.write(safe)
+                except Exception:
+                    pass
+            part = MIMEBase("text", "html")
+            part.set_payload(raw)
             encoders.encode_base64(part)
             part.add_header("Content-Disposition", "attachment",
                             filename=os.path.basename(path))

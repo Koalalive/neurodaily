@@ -8,7 +8,7 @@ DASHBOARD_SETTINGS_LINK = (
 )
 
 SETTINGS_HTML = r"""<!DOCTYPE html>
-<html lang="zh"><head><meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeuroDaily — Settings</title>
 <style>
@@ -49,123 +49,126 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
 .pill.on{color:#34d399;border-color:#164e3a}
 </style></head>
 <body>
-<header><h1>⚙ NeuroDaily 设置</h1><a href="/">← 返回仪表盘</a><span class="mini" id="cfgpath"></span></header>
+<header><h1>⚙ NeuroDaily Settings</h1><a href="/">← Back to dashboard</a><span class="mini" id="cfgpath"></span></header>
 <main>
   <section>
-    <h2>基本</h2>
-    <div class="row"><input id="profile" placeholder="profile (如 neuro)"></div>
+    <h2>General</h2>
+    <div class="row"><input id="profile" placeholder="profile (e.g. neuro)"></div>
   </section>
 
   <section>
-    <h2>学科（关注方向）</h2>
-    <p class="desc">每行一个学科；分类/关键词用英文逗号分隔。</p>
+    <h2>Disciplines (focus areas)</h2>
+    <p class="desc">One discipline per row; separate categories and keywords with commas.</p>
     <div id="disciplines"></div>
-    <button onclick="addDiscipline()">+ 添加学科</button>
+    <button onclick="addDiscipline()">+ Add discipline</button>
   </section>
 
   <section>
-    <h2>全局关键词</h2>
+    <h2>Global keywords</h2>
     <input id="global_keywords" placeholder="brain, neuro, EEG, fMRI ...">
   </section>
 
   <section>
-    <h2>数据源</h2>
-    <p class="desc">启用开关、每次抓取上限、回看天数。</p>
+    <h2>Sources</h2>
+    <p class="desc">Enable, max results per fetch, lookback days.</p>
     <div id="sources"></div>
   </section>
 
   <section>
-    <h2>输出</h2>
+    <h2>Output</h2>
     <div class="grid2">
-      <div><label>报告目录</label><input id="out_dir"></div>
-      <div><label>文件名格式</label><input id="out_fmt"></div>
+      <div><label>Report directory</label><input id="out_dir"></div>
+      <div><label>Filename format</label><input id="out_fmt"></div>
     </div>
-    <div class="inline" style="margin-top:10px"><label><input type="checkbox" id="out_open"> 跑完自动打开报告</label></div>
+    <div class="inline" style="margin-top:10px"><label><input type="checkbox" id="out_open"> Open report when finished</label></div>
   </section>
 
   <section>
-    <h2>检索时间窗口</h2>
-    <p class="desc">论文只显示窗口内的条目；每日运行与手动运行可分别设置（小时）。</p>
+    <h2>Retrieval windows</h2>
+    <p class="desc">Only items inside each window are shown; daily and manual runs can differ (hours).</p>
     <div class="grid2">
-      <div><label>每日运行：论文小时数</label><input type="number" id="win_daily" min="1" max="720"></div>
-      <div><label>手动运行：论文小时数</label><input type="number" id="win_manual" min="1" max="8760"></div>
+      <div><label>Daily: paper hours</label><input type="number" id="win_daily" min="1" max="720"></div>
+      <div><label>Manual: paper hours</label><input type="number" id="win_manual" min="1" max="8760"></div>
+      <div><label>Trials: hours</label><input type="number" id="win_trials" min="1" max="8760"></div>
+      <div><label>Funding: hours</label><input type="number" id="win_funding" min="1" max="8760"></div>
+      <div><label>News / policy: hours</label><input type="number" id="win_news" min="1" max="8760"></div>
     </div>
   </section>
 
   <section>
-    <h2>每日定时任务</h2>
+    <h2>Schedule</h2>
     <div class="inline">
-      <label><input type="checkbox" id="sch_enabled"> 启用定时</label>
-      <span class="mini">时间</span>
+      <label><input type="checkbox" id="sch_enabled"> Enable schedule</label>
+      <span class="mini">Time</span>
       <input type="number" id="sch_hour" min="0" max="23"> :
       <input type="number" id="sch_minute" min="0" max="59">
     </div>
     <div class="inline" style="margin-top:10px">
-      <label><input type="checkbox" id="otd_enabled"> 报告含「历史上的今天」</label>
-      <label><input type="checkbox" id="otd_notify"> 每天弹桌面通知</label>
+      <label><input type="checkbox" id="otd_enabled"> Include "On This Day"</label>
+      <label><input type="checkbox" id="otd_notify"> Desktop notification daily</label>
     </div>
     <div class="inline" style="margin-top:10px">
-      <label>「历史上的今天」语言</label>
+      <label>"On This Day" language</label>
       <select id="otd_lang" style="width:160px">
-        <option value="zh">中文</option>
+        <option value="zh">Chinese</option>
         <option value="en">English</option>
         <option value="ru">Русский</option>
       </select>
     </div>
     <div class="inline" style="margin-top:12px">
-      <span class="pill" id="ldstat">定时状态：…</span>
-      <button onclick="launchd('install')">安装/更新定时任务</button>
-      <button class="warn" onclick="launchd('uninstall')">卸载定时任务</button>
+      <span class="pill" id="ldstat">Scheduler: …</span>
+      <button onclick="launchd('install')">Install / update schedule</button>
+      <button class="warn" onclick="launchd('uninstall')">Uninstall schedule</button>
     </div>
-    <p class="hint">改动时间后需点「安装/更新定时任务」才生效。</p>
+    <p class="hint">After changing the time, click Install / update schedule to apply.</p>
   </section>
 
   <section>
-    <h2>政策 / 新闻 RSS</h2>
+    <h2>Policy / news RSS</h2>
     <div id="policy_feeds"></div>
-    <button onclick="addFeed()">+ 添加 RSS</button>
+    <button onclick="addFeed()">+ Add RSS</button>
   </section>
 
   <section>
-    <h2>顶级期刊观察列表</h2>
-    <p class="desc">有 RSS 的期刊会被抓取并置顶到论文区。</p>
+    <h2>Top journals watch-list</h2>
+    <p class="desc">Journals with RSS are fetched and pinned to the papers section.</p>
     <div id="journals"></div>
-    <button onclick="addJournal()">+ 添加期刊</button>
+    <button onclick="addJournal()">+ Add journal</button>
   </section>
 
   <section>
-    <h2>推送设置（邮件 / Webhook）</h2>
-    <p class="desc">保存后可直接点底部「保存并立即检索推送」。</p>
-    <div class="inline"><label><input type="checkbox" id="push_email_enabled"> 启用邮件</label>
-      <label><input type="checkbox" id="push_attach" checked> 附带完整 HTML</label></div>
-    <div style="margin-top:8px"><label>收件人（逗号或换行分隔）</label>
+    <h2>Push settings (email / webhook)</h2>
+    <p class="desc">After saving, click "Save & run now" at the bottom to fetch and push.</p>
+    <div class="inline"><label><input type="checkbox" id="push_email_enabled"> Enable email</label>
+      <label><input type="checkbox" id="push_attach" checked> Attach full HTML</label></div>
+    <div style="margin-top:8px"><label>Recipients (comma or newline separated)</label>
       <textarea id="push_to" rows="3" style="width:100%;background:#161616;border:1px solid #262626;color:#e8e8e8;border-radius:8px;padding:8px"></textarea></div>
     <div class="grid2" style="margin-top:8px">
-      <div><label>SMTP 主机</label><input id="push_host"></div>
-      <div><label>端口</label><input type="number" id="push_port"></div>
-      <div><label>账号 username</label><input id="push_user"></div>
-      <div><label>发件人 from</label><input id="push_from"></div>
+      <div><label>SMTP host</label><input id="push_host"></div>
+      <div><label>Port</label><input type="number" id="push_port"></div>
+      <div><label>Username</label><input id="push_user"></div>
+      <div><label>From</label><input id="push_from"></div>
     </div>
-    <div class="inline" style="margin-top:8px"><label>主题模板</label><input id="push_subject" style="flex:1"></div>
-    <div class="inline" style="margin-top:8px"><label>SMTP 授权码</label>
-      <input type="password" id="push_password" placeholder="不修改则留空" style="flex:1">
+    <div class="inline" style="margin-top:8px"><label>Subject template</label><input id="push_subject" style="flex:1"></div>
+    <div class="inline" style="margin-top:8px"><label>SMTP app password</label>
+      <input type="password" id="push_password" placeholder="Leave blank to keep" style="flex:1">
       <span class="mini" id="push_pw_state"></span></div>
     <div class="grid2" style="margin-top:8px">
-      <div><label>飞书 Webhook</label><input id="push_feishu"></div>
-      <div><label>企业微信 Webhook</label><input id="push_wecom"></div>
+      <div><label>Feishu webhook</label><input id="push_feishu"></div>
+      <div><label>WeCom webhook</label><input id="push_wecom"></div>
     </div>
   </section>
 
   <section>
-    <h2>恢复默认</h2>
-    <p class="desc">把配置重置为内置默认值（会覆盖当前设置）。</p>
-    <button class="warn" onclick="resetDefaults()">重置为默认配置</button>
+    <h2>Reset</h2>
+    <p class="desc">Reset config to built-in defaults (overwrites current settings).</p>
+    <button class="warn" onclick="resetDefaults()">Reset to defaults</button>
   </section>
 </main>
 <footer>
-  <button class="primary" id="saveRun" onclick="saveAndRun()">保存并立即检索推送</button>
-  <button onclick="save()">仅保存设置</button>
-  <button onclick="load()">重新载入</button>
+  <button class="primary" id="saveRun" onclick="saveAndRun()">Save & run now</button>
+  <button onclick="save()">Save only</button>
+  <button onclick="load()">Reload</button>
   <span id="msg"></span>
 </footer>
 <script>
@@ -177,12 +180,12 @@ function split(s){return (s||'').split(',').map(function(x){return x.trim();}).f
 
 function disciplineRow(x){
   x=x||{}; var d=document.createElement('div'); d.className='row grid';
-  d.innerHTML='<input class="d-name" placeholder="学科名" value="'+esc(x.name)+'">'+
-    '<input class="d-arxiv" placeholder="arXiv 分类" value="'+esc(csv(x.arxiv_cats))+'">'+
+  d.innerHTML='<input class="d-name" placeholder="Discipline name" value="'+esc(x.name)+'">'+
+    '<input class="d-arxiv" placeholder="arXiv categories" value="'+esc(csv(x.arxiv_cats))+'">'+
     '<input class="d-mesh" placeholder="PubMed MeSH" value="'+esc(csv(x.mesh_terms))+'">'+
-    '<input class="d-bio" placeholder="bioRxiv 分类" value="'+esc(csv(x.bio_cats))+'">'+
-    '<input class="d-kw" placeholder="关键词" value="'+esc(csv(x.keywords))+'">'+
-    '<label><input type="checkbox" class="d-en" '+(x.enabled!==false?'checked':'')+'> 启用</label>'+
+    '<input class="d-bio" placeholder="bioRxiv categories" value="'+esc(csv(x.bio_cats))+'">'+
+    '<input class="d-kw" placeholder="Keywords" value="'+esc(csv(x.keywords))+'">'+
+    '<label><input type="checkbox" class="d-en" '+(x.enabled!==false?'checked':'')+'> On</label>'+
     '<button class="del" onclick="this.closest(\'.row\').remove()">✕</button>';
   return d;
 }
@@ -191,7 +194,7 @@ function addDiscipline(){el('disciplines').appendChild(disciplineRow({}));}
 function sourceRow(k,o){
   o=o||{}; var d=document.createElement('div'); d.className='row src'; d.dataset.key=k;
   d.innerHTML='<b>'+esc(k)+'</b>'+
-    '<label><input type="checkbox" class="s-en" '+(o.enabled!==false?'checked':'')+'> 启用</label>'+
+    '<label><input type="checkbox" class="s-en" '+(o.enabled!==false?'checked':'')+'> On</label>'+
     '<input type="number" class="s-max" title="max_results" value="'+(o.max_results!=null?o.max_results:20)+'">'+
     '<input type="number" class="s-look" title="lookback_days" value="'+(o.lookback_days!=null?o.lookback_days:1)+'">';
   return d;
@@ -206,10 +209,10 @@ function addFeed(){el('policy_feeds').appendChild(feedRow(''));}
 
 function journalRow(x){
   x=x||{}; var d=document.createElement('div'); d.className='row j';
-  d.innerHTML='<input class="j-name" placeholder="期刊名" value="'+esc(x.name)+'">'+
-    '<input class="j-url" placeholder="官网 URL" value="'+esc(x.url)+'">'+
-    '<input class="j-rss" placeholder="RSS (可空)" value="'+esc(x.rss)+'">'+
-    '<input class="j-cat" placeholder="分类" value="'+esc(x.category)+'">'+
+  d.innerHTML='<input class="j-name" placeholder="Journal name" value="'+esc(x.name)+'">'+
+    '<input class="j-url" placeholder="Website URL" value="'+esc(x.url)+'">'+
+    '<input class="j-rss" placeholder="RSS (optional)" value="'+esc(x.rss)+'">'+
+    '<input class="j-cat" placeholder="Category" value="'+esc(x.category)+'">'+
     '<button class="del" onclick="this.closest(\'.row\').remove()">✕</button>';
   return d;
 }
@@ -232,6 +235,9 @@ function render(){
   var w = BASE.windows || {};
   el('win_daily').value = (w.daily_paper_hours != null ? w.daily_paper_hours : 36);
   el('win_manual').value = (w.manual_paper_hours != null ? w.manual_paper_hours : 168);
+  el('win_trials').value = (w.trials_hours != null ? w.trials_hours : 36);
+  el('win_funding').value = (w.funding_hours != null ? w.funding_hours : 36);
+  el('win_news').value = (w.news_hours != null ? w.news_hours : 36);
   var pbox=el('policy_feeds'); pbox.innerHTML='';
   (BASE.policy_feeds||[]).forEach(function(u){pbox.appendChild(feedRow(u));});
   var jbox=el('journals'); jbox.innerHTML='';
@@ -243,7 +249,7 @@ async function load(){
     var r=await fetch('/api/config'); BASE=await r.json(); render();
     el('cfgpath').textContent='config: ~/neurodaily/config/config.json';
     el('msg').textContent=''; el('msg').className='';
-  }catch(e){el('msg').textContent='加载失败: '+e; el('msg').className='bad';}
+  }catch(e){el('msg').textContent='Load failed: '+e; el('msg').className='bad';}
   loadPush();
   loadLaunchdStatus();
   try{
@@ -285,6 +291,9 @@ function collect(){
   data.windows=Object.assign({},data.windows||{});
   data.windows.daily_paper_hours=parseInt(el('win_daily').value||'36',10);
   data.windows.manual_paper_hours=parseInt(el('win_manual').value||'168',10);
+  data.windows.trials_hours=parseInt(el('win_trials').value||'36',10);
+  data.windows.funding_hours=parseInt(el('win_funding').value||'36',10);
+  data.windows.news_hours=parseInt(el('win_news').value||'36',10);
   data.policy_feeds=[].slice.call(el('policy_feeds').querySelectorAll('.feed')).map(function(i){return i.value.trim();}).filter(Boolean);
   data.journals=[].slice.call(el('journals').querySelectorAll('.row')).map(function(r){
     return {name:r.querySelector('.j-name').value.trim(),
@@ -297,38 +306,38 @@ function collect(){
 
 async function save(){
   var data=collect();
-  el('msg').textContent='保存中…'; el('msg').className='';
+  el('msg').textContent='Saving…'; el('msg').className='';
   try{
     var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     var out=await r.json();
-    if(out.ok){el('msg').textContent='✅ 已保存 → '+out.path; el('msg').className='ok'; return true;}
-    el('msg').textContent='❌ 保存失败: '+(out.error||'unknown'); el('msg').className='bad'; return false;
+    if(out.ok){el('msg').textContent='✅ Saved → '+out.path; el('msg').className='ok'; return true;}
+    el('msg').textContent='❌ Save failed: '+(out.error||'unknown'); el('msg').className='bad'; return false;
   }catch(e){el('msg').textContent='❌ '+e; el('msg').className='bad'; return false;}
 }
 
 async function resetDefaults(){
-  if(!confirm('确定重置为默认配置？（会覆盖当前设置）')) return;
+  if(!confirm('Reset to defaults? This overwrites current settings.')) return;
   var r=await fetch('/api/config/reset',{method:'POST'});
   var out=await r.json();
-  if(out.ok){await load(); el('msg').textContent='✅ 已重置为默认'; el('msg').className='ok';}
-  else{el('msg').textContent='❌ 重置失败'; el('msg').className='bad';}
+  if(out.ok){await load(); el('msg').textContent='✅ Reset to defaults'; el('msg').className='ok';}
+  else{el('msg').textContent='❌ Reset failed'; el('msg').className='bad';}
 }
 
 async function loadLaunchdStatus(){
   try{
     var r=await fetch('/api/launchd/status'); var s=await r.json();
-    var t='定时状态：'+(s.loaded?'已装载':'未装载')+(s.installed?' / 已安装':' / 未安装')+'（'+s.schedule+'）';
+    var t='Scheduler: '+(s.loaded?'loaded':'not loaded')+(s.installed?' / installed':' / not installed')+'（'+s.schedule+'）';
     el('ldstat').textContent=t;
     el('ldstat').className='pill'+(s.loaded?' on':'');
-  }catch(e){el('ldstat').textContent='定时状态：读取失败';}
+  }catch(e){el('ldstat').textContent='Scheduler: read failed';}
 }
 
 async function launchd(action){
-  if(action==='uninstall' && !confirm('卸载定时任务？')) return;
-  el('msg').textContent='处理中…'; el('msg').className='';
+  if(action==='uninstall' && !confirm('Uninstall schedule？')) return;
+  el('msg').textContent='Working…'; el('msg').className='';
   var r=await fetch('/api/launchd/'+action,{method:'POST'});
   var out=await r.json();
-  el('msg').textContent = out.ok ? ('✅ '+(action==='install'?'已安装/更新':'已卸载')) : '❌ 操作失败';
+  el('msg').textContent = out.ok ? ('✅ '+(action==='install'?'installed/updated':'Uninstalled')) : '❌ Action failed';
   el('msg').className = out.ok?'ok':'bad';
   loadPush();
   loadLaunchdStatus();
@@ -364,7 +373,7 @@ async function loadPush(){
     el('push_from').value=e.from||'';
     el('push_subject').value=e.subject_template||'';
     el('push_attach').checked=e.attach_report!==false;
-    el('push_pw_state').textContent=d.password_set?'（已设置）':'（未设置）';
+    el('push_pw_state').textContent=d.password_set?'(set)':'(not set)';
     var w=d.webhooks||{};
     el('push_feishu').value=w.feishu||'';
     el('push_wecom').value=w.wecom||'';
@@ -373,30 +382,30 @@ async function loadPush(){
 async function savePush(){
   var r=await fetch('/api/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pushPayload())});
   var out=await r.json();
-  if(!out.ok) throw new Error(out.error||'推送设置保存失败');
+  if(!out.ok) throw new Error(out.error||'Failed to save push settings');
   var pw=el('push_password').value;
   if(pw){
     var r2=await fetch('/api/push/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
     var o2=await r2.json();
-    if(!o2.ok) throw new Error(o2.error||'密码保存失败');
-    el('push_password').value=''; el('push_pw_state').textContent='（已设置）';
+    if(!o2.ok) throw new Error(o2.error||'Failed to save password');
+    el('push_password').value=''; el('push_pw_state').textContent='(set)';
   }
 }
 async function saveAndRun(){
-  el('msg').textContent='保存并启动检索…'; el('msg').className='';
+  el('msg').textContent='Saving and starting…'; el('msg').className='';
   try{
-    var okc=await save(); if(okc===false) throw new Error('配置保存失败');
+    var okc=await save(); if(okc===false) throw new Error('Failed to save config');
     await savePush();
     var r=await fetch('/api/run?force=1',{method:'POST'});
     var d=await r.json(); var started=d.started_at;
-    el('msg').textContent='检索中…（约 2–4 分钟）';
+    el('msg').textContent='Fetching… (about 2–4 minutes)';
     var timer=setInterval(async function(){
       try{
         var s=await (await fetch('/api/status')).json();
         if(s.last_run && s.last_run>=started){
           clearInterval(timer);
           el('msg').className='ok';
-          el('msg').innerHTML='✅ 完成（'+s.item_count+' 条）· <a href="/">查看报告</a>';
+          el('msg').innerHTML='✅ Done ('+s.item_count+' items) · report opened locally · <a href="/report/latest" target="_blank">Open again</a>';
         }
       }catch(e){}
     },2000);

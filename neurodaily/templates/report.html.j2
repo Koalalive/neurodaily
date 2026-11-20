@@ -12,7 +12,7 @@
 {%- endmacro %}
 
 {% macro block_section(key, title, desc, badge_class) -%}
-<section>
+<section id="{{ key }}">
   <div class="sec-head">
     <div>
       <h2 class="sec-title"><span class="dot"></span>{{ title }}
@@ -165,9 +165,36 @@
   .runmsg { font-size:.8rem; color:var(--muted); }
   .runmsg.ok { color:var(--ok); }
   @media (max-width: 640px) { .sec-head { flex-direction: column; } }
+  html{scroll-behavior:smooth}
+  section[id]{scroll-margin-top:84px}
+  .toc{position:fixed;right:16px;top:96px;width:172px;padding:10px 10px 12px;
+       background:rgba(20,20,22,.94);border:1px solid #262626;border-radius:12px;
+       z-index:60;backdrop-filter:blur(10px);font-size:12.5px;line-height:1.2}
+  .toc .toc-title{font-weight:700;color:#e8e8e8;margin:2px 6px 8px;font-size:11px;
+       letter-spacing:.10em;text-transform:uppercase}
+  .toc a{display:block;color:#9a9a9a;text-decoration:none;padding:6px 8px;border-radius:7px}
+  .toc a:hover{color:#fff;background:#1e1e20}
+  @media (max-width:1280px){
+    .toc{left:12px;right:12px;bottom:12px;top:auto;width:auto;display:flex;gap:2px;
+         overflow-x:auto;padding:8px;border-radius:12px}
+    .toc .toc-title{display:none}
+    .toc a{white-space:nowrap;padding:6px 10px}
+  }
 </style>
 </head>
 <body>
+<div id="top"></div>
+<nav class="toc" aria-label="目录">
+  <div class="toc-title">目录</div>
+  <a href="#top">↑ 顶部</a>
+  {% if result.ai_summary %}<a href="#ai-summary">🧠 AI 摘要</a>{% endif %}
+  {% if result.on_this_day %}<a href="#on-this-day">📅 历史上的今天</a>{% endif %}
+  <a href="#papers">📄 最新论文</a>
+  <a href="#industry">💊 产业 / Funding</a>
+  <a href="#trials_conferences">🧪 临床试验</a>
+  <a href="#policy">🏛️ 政策 / 新闻</a>
+  {% if result.config and result.config.journals %}<a href="#journals">📚 期刊</a>{% endif %}
+</nav>
 <header>
   <div class="wrap">
     <h1><span class="logo">NeuroDaily</span> — neuroscience &amp; psychiatry digest</h1>
@@ -186,7 +213,7 @@
     </div>
     <div class="toolbar">
       <button class="btn" id="runNow" type="button">▶ Run now</button>
-      <a class="btn ghost" id="settingsLink" href="/settings">⚙ 设置 / Settings</a>
+      <a class="btn ghost" id="settingsLink" href="/settings">⚙ Settings</a>
       <a class="btn ghost" id="histLink" href="/history">History</a>
       <a class="btn ghost" id="promptLink" href="/api/prompt" target="_blank" rel="noopener">Focus prompt</a>
       <span class="runmsg" id="runMsg"></span>
@@ -201,7 +228,7 @@
   {{ block_section('policy', '🏛️ Policy, Funding & News', 'Institutional press, agency announcements, and news.', 'b-policy') }}
 
   {% if result.config and result.config.journals %}
-  <section>
+  <section id="journals">
     <h2 class="sec-title"><span class="dot"></span>Top Journals
       <span class="count">({{ result.config.journals|length }})</span></h2>
     <p class="sec-desc">Curated watch-list of leading journals — click to browse each site.
