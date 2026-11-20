@@ -232,7 +232,7 @@ class Config:
             "",
             "## Mission",
             "Aggregate the latest scientific literature, commercial/regulatory progress, "
-            "conference signals, and policy/news for a neuroscience-adjacent daily digest.",
+            "conference signals, and policy/news for the configured research focus.",
             "",
             "## Disciplines (focus areas)",
         ]

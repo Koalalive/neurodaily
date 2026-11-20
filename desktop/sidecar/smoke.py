@@ -1,5 +1,6 @@
 """Check that a frozen sidecar starts with an empty user data directory."""
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -30,6 +31,9 @@ def smoke(executable: Path) -> None:
                     for route in ("/settings", "/api/status", "/run"):
                         with opener.open(f"http://127.0.0.1:{port}{route}", timeout=5) as response:
                             assert response.status == 200, route
+                    with opener.open(f"http://127.0.0.1:{port}/api/config/presets", timeout=5) as response:
+                        profiles = {preset["config"]["profile"] for preset in json.load(response)}
+                        assert {"neuro", "oncology"} <= profiles, profiles
                     print("Frozen sidecar first-launch smoke test passed")
                     return
                 time.sleep(0.25)

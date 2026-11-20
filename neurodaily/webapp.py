@@ -14,9 +14,11 @@ Routes:
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 from datetime import datetime
+from threading import Lock
 
 from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
@@ -24,9 +26,10 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Config, DEFAULT_CONFIG
 from .digest import run as run_digest, render_html_for
+from .presets import research_presets
 from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
 from .run_page import RUN_HTML
-from . import history as hist
+from . import __version__, history as hist
 
 
 def _cfg_with_hours(cfg: Config, hours: int) -> Config:
@@ -43,8 +46,10 @@ def _cfg_with_hours(cfg: Config, hours: int) -> Config:
 
 
 def create_app(config_path: str | None = None) -> FastAPI:
-    app = FastAPI(title="NeuroDaily", version="0.1.0")
+    app = FastAPI(title="NeuroDaily", version=__version__)
     app.state.last_run = None
+    app.state.search_attempt = None
+    search_lock = Lock()
 
     def _cfg() -> Config:
         try:
@@ -82,7 +87,15 @@ def create_app(config_path: str | None = None) -> FastAPI:
             return JSONResponse({"error": "hours must be 1..8760"}, status_code=400)
         cfg = _cfg_with_hours(cfg, hours) if hours else cfg
 
-        def _do():
+        started_at = datetime.now().isoformat()
+        attempt = {"started_at": started_at, "status": "running"}
+        with search_lock:
+            current = app.state.search_attempt
+            if current and current["status"] == "running":
+                return JSONResponse({"error": "A search is already running"}, status_code=409)
+            app.state.search_attempt = attempt
+
+        def _search_and_deliver():
             try:
                 from .journal_metrics import ensure_fresh
                 ensure_fresh([j.name for j in cfg.journals])
@@ -90,6 +103,9 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 pass
             result = run_digest(cfg, check_duplicate=True, record=True, force=force,
                                 mode="manual")
+            if result.skipped:
+                attempt.update(status="skipped", error=result.skipped_reason)
+                return
             try:
                 from .ai_summary import generate as _ai_gen, load_cfg as _ai_cfg
                 _txt = _ai_gen(result)
@@ -98,12 +114,10 @@ def create_app(config_path: str | None = None) -> FastAPI:
                     result.ai_summary_meta = {"model": _ai_cfg().get("model", "")}
             except Exception:
                 pass
-            app.state.last_run = result
             from .digest import save_report
-            fmt = cfg.output.get("filename_format", "neurodaily_%Y-%m-%d.html")
+            fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d_%H%M%S.html"
             path = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
             save_report(result, path)
-            app.state.last_report_path = path
             base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
             try:
                 with open(path, encoding="utf-8") as _f:
@@ -114,6 +128,8 @@ def create_app(config_path: str | None = None) -> FastAPI:
                     _f.write(_html)
             except Exception:
                 pass
+            app.state.last_report_path = path
+            app.state.last_run = result
             try:
                 from .mailer import (_password, load_cfg as _mail_cfg,
                                      render_email, save_last, send_with_retry)
@@ -144,12 +160,19 @@ def create_app(config_path: str | None = None) -> FastAPI:
                     print("[neurodaily] opened report:", url, flush=True)
             except Exception:
                 pass
-            return result
+            attempt.update(status="completed", item_count=len(result.items))
+
+        def _do():
+            try:
+                _search_and_deliver()
+            except Exception:
+                logging.getLogger(__name__).exception("Search or report generation failed")
+                attempt.update(status="failed", error="Report generation failed. See the server log.")
 
         background_tasks.add_task(_do)
         return JSONResponse({"status": "started", "profile": cfg.profile,
                              "force": force,
-                             "started_at": datetime.now().isoformat()})
+                             "started_at": started_at})
 
     @app.get("/api/status")
     def api_status():
@@ -162,6 +185,7 @@ def create_app(config_path: str | None = None) -> FastAPI:
             "sections": (lr.section_counts() if lr else {}),
             "health": (lr.health if lr else ["not run yet"]),
             "prompt": cfg.to_prompt(),
+            "search": app.state.search_attempt,
         }
 
     @app.get("/api/prompt")
@@ -197,6 +221,10 @@ def create_app(config_path: str | None = None) -> FastAPI:
     @app.get("/api/config")
     def api_config_get():
         return JSONResponse(_cfg().to_dict())
+
+    @app.get("/api/config/presets")
+    def api_config_presets():
+        return research_presets()
 
     @app.post("/api/config")
     async def api_config_post(request: Request):
@@ -261,10 +289,8 @@ def create_app(config_path: str | None = None) -> FastAPI:
         if email.get("to") is not None:
             if isinstance(email["to"], str):
                 email["to"] = [x.strip() for x in email["to"].replace("\n", ",").split(",") if x.strip()]
-            if not email["to"]:
+            if not email["to"] and email.get("enabled", True):
                 return JSONResponse({"ok": False, "error": "收件人不能为空"}, status_code=400)
-        cfg_e = _mail_cfg(); cfg_e.update({k: v for k, v in email.items() if v is not None})
-        cfg_w = _hook_cfg(); cfg_w.update({k: v for k, v in hooks.items() if v is not None})
 
         def _write(path, obj):
             os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -273,8 +299,14 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 _json.dump(obj, f, ensure_ascii=False, indent=2)
             os.replace(tmp, path)
 
-        _write(EMAIL_PATH, cfg_e)
-        _write(HOOK_PATH, cfg_w)
+        if email:
+            cfg_e = _mail_cfg()
+            cfg_e.update({k: v for k, v in email.items() if v is not None})
+            _write(EMAIL_PATH, cfg_e)
+        if hooks:
+            cfg_w = _hook_cfg()
+            cfg_w.update({k: v for k, v in hooks.items() if v is not None})
+            _write(HOOK_PATH, cfg_w)
         return JSONResponse({"ok": True})
 
     @app.post("/api/push/password")

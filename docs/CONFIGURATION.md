@@ -323,8 +323,7 @@ neurodaily config describe
 - 凭据：SMTP 授权码输入框 → `POST /api/push/password` 写入 `~/.neurodaily_smtp`（600）
 - Webhook：飞书、企业微信
 
-底部按钮 **保存并立即检索推送** 的流程：保存配置 → 保存推送设置 → `POST /api/run?force=1`
-→ 后台检索 → 写报告 → AI 摘要 → 邮件/Webhook → 页面提示「完成（N 条）· 查看报告」。
+选择「神经科学」或「肿瘤学」预设会填入检索配置。检查后点击 **Save & continue to search** 保存并进入 `/run`。临时时间范围留空时使用保存的配置。点击 **开始检索** 后，系统在报告生成成功时打开结果页，并按配置投递。
 
-报告页入口：右上角 **⚙ 设置 / Settings**；**▶ Run now** 会跳到 `/settings?next=run`。
+报告页的 **Settings** 打开 `/settings`，**Run now** 打开 `/run`。
 macOS 可双击 `scripts/启动 NeuroDaily.command` 启动服务并直接打开设置页，无需命令行。

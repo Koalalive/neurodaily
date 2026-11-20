@@ -6,7 +6,7 @@ from datetime import datetime
 from .config import DEFAULT_CONFIG
 from .digest import DigestResult, _SECTION_BY_KIND
 from .models import Item, tag_items
-from .onthisday import today_events
+from .onthisday import is_enabled, today_events
 
 
 def _items() -> list[Item]:
@@ -90,5 +90,5 @@ def build_result(config=None) -> DigestResult:
         generated_at=datetime.now().isoformat(),
         config_profile=f"{cfg.profile} (demo)",
         config=cfg,
-        on_this_day=today_events(),
+        on_this_day=today_events() if is_enabled(cfg) else [],
     )

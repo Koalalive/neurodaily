@@ -594,7 +594,8 @@ class EmailSafeTests(unittest.TestCase):
 class SettingsEnglishTests(unittest.TestCase):
     def test_settings_page_english(self):
         from neurodaily.settings_page import SETTINGS_HTML
-        self.assertIn("Save & run now", SETTINGS_HTML)
+        self.assertIn("Save & continue to search", SETTINGS_HTML)
+        self.assertIn("Research presets", SETTINGS_HTML)
         self.assertIn("Push settings (email / webhook)", SETTINGS_HTML)
         self.assertNotIn("保存并立即检索推送", SETTINGS_HTML)
 
@@ -751,6 +752,40 @@ class LabelProtectionTests(unittest.TestCase):
 
 
 class RunNowTests(unittest.TestCase):
+    def test_research_presets_are_valid_and_leave_saved_config_untouched(self):
+        from pathlib import Path
+        from fastapi.testclient import TestClient
+        from neurodaily.schema import validate
+        from neurodaily.webapp import create_app
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            cfg = DEFAULT_CONFIG()
+            cfg.output["dir"] = directory
+            cfg.save(str(path))
+            before = path.read_bytes()
+            response = TestClient(create_app(str(path))).get("/api/config/presets")
+            self.assertEqual(response.status_code, 200)
+            presets = {entry["label"]: entry["config"] for entry in response.json()}
+            self.assertEqual({label: value["profile"] for label, value in presets.items()},
+                             {"神经科学": "neuro", "肿瘤学": "oncology"})
+            for value in presets.values():
+                self.assertNotIn("output", value)
+                self.assertNotIn("scheduled", value)
+                self.assertEqual(validate({**cfg.to_dict(), **value}), [])
+            self.assertIn("Surgical Procedures, Operative",
+                          [term for d in presets["肿瘤学"]["disciplines"] for term in d["mesh_terms"]])
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_oncology_report_shows_its_topic_without_neuroscience_history(self):
+        from neurodaily.render import render_html
+
+        cfg = DEFAULT_CONFIG()
+        cfg.profile = "oncology"
+        html = render_html(demo.build_result(cfg))
+        self.assertIn("oncology digest", html)
+        self.assertNotIn('id="on-this-day"', html)
+
     def test_fingerprint_tracks_window_mode_and_feed(self):
         from neurodaily.history import compute_fingerprint
         from neurodaily.webapp import _cfg_with_hours
@@ -787,6 +822,84 @@ class RunNowTests(unittest.TestCase):
     def test_settings_feed_selector(self):
         from neurodaily.settings_page import SETTINGS_HTML
         self.assertIn("querySelectorAll('input.feed')", SETTINGS_HTML)
+
+
+class WebSearchOutcomeTests(unittest.TestCase):
+    def setUp(self):
+        from contextlib import ExitStack
+        from fastapi.testclient import TestClient
+        from neurodaily.webapp import create_app
+
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        directory = self.directory = stack.enter_context(tempfile.TemporaryDirectory())
+        cfg = DEFAULT_CONFIG()
+        cfg.output.update(dir=directory, open_on_finish=False)
+        path = cfg.save(os.path.join(directory, "config.json"))
+        self.result = demo.build_result(cfg)
+        self.app = create_app(path)
+        self.client = TestClient(self.app)
+        stack.enter_context(mock.patch("neurodaily.webapp.run_digest", return_value=self.result))
+        stack.enter_context(mock.patch("neurodaily.journal_metrics.ensure_fresh"))
+        self.ai = stack.enter_context(mock.patch("neurodaily.ai_summary.generate", return_value=""))
+        stack.enter_context(mock.patch("neurodaily.mailer.load_cfg", return_value={"enabled": False}))
+        stack.enter_context(mock.patch("neurodaily.mailer.render_email", return_value=("", "", "")))
+        self.mail = stack.enter_context(mock.patch("neurodaily.mailer.save_last"))
+        self.hooks = stack.enter_context(mock.patch("neurodaily.webhooks.send_all"))
+
+    def test_success_is_reported_after_the_report_is_written(self):
+        def save(result, path):
+            self.assertIsNone(self.app.state.last_run)
+            self.assertEqual(self.app.state.search_attempt["status"], "running")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("<html>saved report</html>")
+
+        with mock.patch("neurodaily.digest.save_report", side_effect=save):
+            started = self.client.post("/api/run?force=1").json()
+        status = self.client.get("/api/status").json()
+        self.assertEqual(status["search"]["started_at"], started["started_at"])
+        self.assertEqual(status["search"]["status"], "completed")
+        self.assertEqual(status["search"]["item_count"], len(self.result.items))
+        self.assertIn("saved report", self.client.get("/report/latest").text)
+
+    def test_save_failure_does_not_announce_success_or_deliver(self):
+        with mock.patch("neurodaily.digest.save_report", side_effect=OSError("disk full")):
+            with self.assertLogs("neurodaily.webapp", level="ERROR"):
+                self.client.post("/api/run?force=1")
+        status = self.client.get("/api/status").json()
+        self.assertIsNone(status["last_run"])
+        self.assertEqual(status["search"]["status"], "failed")
+        self.assertEqual(self.client.get("/report/latest").status_code, 404)
+        self.mail.assert_not_called()
+        self.hooks.assert_not_called()
+
+    def test_skipped_search_does_not_replace_or_deliver_a_report(self):
+        self.result.skipped = True
+        self.result.skipped_reason = "already searched"
+        with mock.patch("neurodaily.digest.save_report") as save:
+            self.client.post("/api/run")
+        self.assertEqual(self.client.get("/api/status").json()["search"]["status"], "skipped")
+        save.assert_not_called()
+        self.ai.assert_not_called()
+        self.mail.assert_not_called()
+        self.hooks.assert_not_called()
+
+    def test_active_search_rejects_a_second_request(self):
+        self.app.state.search_attempt = {"status": "running"}
+        self.assertEqual(self.client.post("/api/run?force=1").status_code, 409)
+
+    def test_disabled_email_accepts_no_recipients_without_touching_webhooks(self):
+        from pathlib import Path
+
+        email = Path(self.directory) / "email.json"
+        hooks = Path(self.directory) / "webhooks.json"
+        hooks.write_text('{"keep": true}', encoding="utf-8")
+        with mock.patch("neurodaily.mailer.CFG_PATH", str(email)), \
+             mock.patch("neurodaily.webhooks.CFG_PATH", str(hooks)):
+            response = self.client.post("/api/push", json={"email": {"enabled": False, "to": ""}})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(email.read_text(encoding="utf-8"))["to"], [])
+        self.assertEqual(hooks.read_text(encoding="utf-8"), '{"keep": true}')
 
 
 class SettingsJournalMetricsTests(unittest.TestCase):

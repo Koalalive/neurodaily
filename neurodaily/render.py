@@ -74,10 +74,13 @@ def render_html(result: DigestResult, config: Config | None = None) -> str:
     try:
         from . import journal_metrics
         _cfg = config or getattr(result, "config", None)
+        profile = getattr(_cfg, "profile", result.config_profile)
         env.globals["jm"] = lambda name: journal_metrics.lookup(name, _cfg)
         template = env.get_template("report.html.j2")
         ctx = {
             "result": result,
+            "digest_title": {"neuro": "neuroscience & psychiatry digest",
+                             "oncology": "oncology digest"}.get(profile, "research digest"),
             "today": datetime.now().strftime("%Y-%m-%d %H:%M"),
         }
         html = template.render(**ctx)

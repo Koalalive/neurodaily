@@ -41,15 +41,10 @@ fn main() {
 
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let mut first_run = false;
                 if let Some(stdout) = stdout {
                     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                        if let Some(v) = line.strip_prefix("NEURODAILY_FIRST_RUN=") {
-                            first_run = v.trim() == "1";
-                        }
                         if let Some(port) = line.strip_prefix("NEURODAILY_PORT=") {
-                            let path = if first_run { "/settings" } else { "/" };
-                            let url = format!("http://127.0.0.1:{}{}", port.trim(), path);
+                            let url = format!("http://127.0.0.1:{}/settings", port.trim());
                             let h = handle.clone();
                             let _ = handle.run_on_main_thread(move || {
                                 if let Some(w) = h.get_webview_window("main") {
