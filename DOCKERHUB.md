@@ -1,7 +1,7 @@
 # NeuroDaily
 
 > **Short description（≤100 字符）**
-> `NeuroDaily：神经科学每日情报+AI精读｜Self-hosted neuroscience digest｜Нейродайджест`
+> `NeuroDaily｜神经科学每日情报+AI精读｜Нейродайджест`
 
 ---
 
