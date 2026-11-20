@@ -26,6 +26,7 @@
 - [学科 profile 与 Agent 配置](#学科-profile-与-agent-配置)
 - [邮件与 Webhook](#邮件与-webhook)
 - [数据源](#数据源)
+- [自定义 RSS 订阅源](#自定义-rss-订阅源)
 - [命令行](#命令行)
 - [HTTP API](#http-api)
 - [项目结构](#项目结构)
@@ -217,6 +218,75 @@ cp config/webhooks.example.json config/webhooks.json
 `kind` 决定归属板块：`paper / drug / device / trial / news / policy / conference / funding`。
 可选 `filter_keywords` 做关键词过滤。
 
+### 自定义 RSS 订阅源
+
+支持 RSS 2.0 / Atom。两种添加方式：
+
+#### 方式 A：设置页（最简单，进「政策/新闻」）
+
+1. 打开 `http://127.0.0.1:8031/settings`
+2. 找到 **Policy / news RSS**
+3. 点 **+ Add RSS**，粘贴 feed URL（例如 `https://www.nature.com/subjects/neuroscience.rss`）
+4. 点 **Save**
+5. 下一次 **Run now** 或定时任务生效
+
+> 这里添加的源统一以 `kind=news` 进入「政策/新闻」板块；抓取上限与回看天数由 `sources.policy` 控制。
+> 如需放进「最新论文 / 临床试验 / Funding」板块，用方式 B。
+
+#### 方式 B：配置文件（可指定板块）
+
+编辑 `config/config.json`（或 `config/profiles/<name>.json`）：
+
+```json
+{
+  "sources": {
+    "my_lab_news": {
+      "type": "rss",
+      "url": "https://example.org/feed.xml",
+      "kind": "news",
+      "enabled": true,
+      "max_results": 20,
+      "lookback_days": 7,
+      "filter_keywords": ["neuro", "brain", "EEG"]
+    },
+    "my_funding_feed": {
+      "type": "rss",
+      "url": "https://example.org/neuro-funding.xml",
+      "kind": "funding",
+      "max_results": 15,
+      "lookback_days": 14
+    }
+  }
+}
+```
+
+字段说明：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `type` | 是 | 固定 `rss` |
+| `url` | 是 | RSS/Atom 地址 |
+| `kind` | 否 | `paper`→最新论文；`trial`/`conference`→临床试验；`funding`/`drug`/`device`/`industry`→产业/Funding；`news`/`policy`→政策/新闻；默认 `news` |
+| `enabled` | 否 | `false` 可临时关闭 |
+| `max_results` | 否 | 每次最多抓多少条，默认 20 |
+| `lookback_days` | 否 | 抓取回看天数，默认 7 |
+| `filter_keywords` | 否 | 标题+摘要任一命中才保留 |
+
+注意：
+
+- 源名称不要和内置源重名：`journal`、`arxiv`、`pubmed`、`biorxiv`、`fda_drugs`、`fda_devices`、`trials`、`policy`。
+- 条目至少要有一个标题和一个链接；没有日期的条目不会被时间窗丢弃。
+- 去重按链接；建议 feed 提供 `pubDate` / `updated`。
+- 配置在每次运行时重新读取，**不需要重启服务**；设置页保存后下一次运行生效。
+- `config/` 已在 gitignore 中，可以放心填自己的私有源。
+
+验证：
+
+```bash
+neurodaily config validate
+neurodaily run --no-open        # 或网页里点 Run now
+```
+
 **创投源示例**（已内置在 `config.example.json`）：BCI 融资、neurotech 融资、MedTech Dive、Crunchbase。
 
 ---
@@ -382,6 +452,23 @@ No-CLI flow: open the report → **⚙ Настройки** → изменить
 - Patch: `neurodaily config apply patch.json --dry-run` (objects merge, lists replace, null deletes)
 - Disciplines: `neurodaily profile new oncology` → `--profile oncology`
 
+### Custom RSS feeds
+
+- Easiest: **Settings → Policy / news RSS → + Add RSS** (these enter the news/policy section).
+- For other sections, add to `config/config.json`:
+
+```json
+"sources": {
+  "my_feed": {"type": "rss", "url": "https://example.org/feed.xml",
+              "kind": "funding", "max_results": 20, "lookback_days": 7,
+              "filter_keywords": ["neuro", "brain"]}
+}
+```
+
+`kind`: `paper` / `trial` / `conference` / `funding` / `drug` / `device` / `news` / `policy`.
+Do not reuse built-in names (`journal`, `arxiv`, `pubmed`, `biorxiv`, `fda_drugs`, `fda_devices`, `trials`, `policy`).
+Config is re-read on every run; no restart needed.
+
 ### AI overview (optional)
 
 ```bash
@@ -460,6 +547,21 @@ docker run -d --name neurodaily -p 8031:8031 \
 - Проверка: `neurodaily config validate`
 - Патч: `neurodaily config apply patch.json --dry-run` (объекты сливаются, массивы заменяются, null удаляет)
 - Дисциплины: `neurodaily profile new oncology` → `--profile oncology`
+
+### Свои RSS-ленты
+
+- Проще всего: **Settings → Policy / news RSS → + Add RSS** (попадут в раздел «Политика/новости»).
+- Для других разделов добавьте в `config/config.json`:
+
+```json
+"sources": {
+  "my_feed": {"type": "rss", "url": "https://example.org/feed.xml",
+              "kind": "funding", "max_results": 20, "lookback_days": 7}
+}
+```
+
+`kind`: `paper` / `trial` / `conference` / `funding` / `drug` / `device` / `news` / `policy`.
+Не используйте имена встроенных источников. Конфиг читается при каждом запуске, перезапуск не нужен.
 
 ### ИИ-обзор (опционально)
 

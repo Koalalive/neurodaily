@@ -166,9 +166,33 @@ JSON API 示例：
 }
 ```
 
-### 2.6 `policy_feeds`
+### 2.6 `policy_feeds` 与自定义 RSS
 
-RSS 列表，全部以 `kind=news` 进入「政策/新闻」板块。
+`policy_feeds` 是 URL 列表，全部以 `kind=news` 进入「政策/新闻」板块：
+
+```json
+"policy_feeds": ["https://www.nature.com/subjects/neuroscience.rss"]
+```
+
+如需指定板块（论文/试验/Funding），在 `sources` 里加一个自定义 RSS：
+
+```json
+"sources": {
+  "my_rss": {
+    "type": "rss",
+    "url": "https://example.org/feed.xml",
+    "kind": "funding",
+    "max_results": 20,
+    "lookback_days": 7,
+    "filter_keywords": ["neuro", "brain"]
+  }
+}
+```
+
+- `kind` 映射：`paper`→最新论文；`trial`/`conference`→临床试验；`funding`/`drug`/`device`/`industry`→产业/Funding；`news`/`policy`→政策/新闻。
+- 不能与内置源重名（`journal`/`arxiv`/`pubmed`/`biorxiv`/`fda_drugs`/`fda_devices`/`trials`/`policy`）。
+- 设置页 **Policy / news RSS → + Add RSS** 等价于往 `policy_feeds` 追加。
+- 配置每次运行重新读取，保存后下一次运行生效，无需重启。
 
 ---
 
