@@ -111,6 +111,28 @@ docker compose up --build
 
 详见 [`docs/DOCKER.md`](docs/DOCKER.md)。
 
+### 桌面安装包（Tauri 2 + Python sidecar）
+
+Release 1.0.0 提供三平台安装包，终端用户不需要 Python/Node/Rust：
+
+| 平台 | 安装包 | 架构 |
+|---|---|---|
+| macOS | `.dmg` | Apple Silicon / Intel |
+| Windows | `.msi` / `.exe` | x86_64 |
+| Linux | `.AppImage` / `.deb` | x86_64 |
+
+安装包从 GitHub Releases 下载；具体系统要求见
+[`docs/INSTALL_REQUIREMENTS.md`](docs/INSTALL_REQUIREMENTS.md)。
+
+源码构建：
+
+```bash
+bash desktop/build_sidecar.sh
+cd desktop/tauri && npm install && npm run icon && npx tauri build
+```
+
+架构、签名、CI 矩阵与排障见 [`docs/DESKTOP_TAURI.md`](docs/DESKTOP_TAURI.md)。
+
 ---
 
 ## 配置
@@ -409,6 +431,8 @@ make test                     # 同上
 | [`docs/TESTING.md`](docs/TESTING.md) | 测试矩阵、CI、已知未覆盖项 |
 | [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) | Agent 引导换学科的协议 |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | 运维手册（启停/调度/排障/维护记录） |
+| [`docs/INSTALL_REQUIREMENTS.md`](docs/INSTALL_REQUIREMENTS.md) | 三平台安装包、软硬件要求 |
+| [`docs/DESKTOP_TAURI.md`](docs/DESKTOP_TAURI.md) | Tauri 2 + Python sidecar 构建与发布 |
 
 ---
 

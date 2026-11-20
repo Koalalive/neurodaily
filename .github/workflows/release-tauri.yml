@@ -6,6 +6,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -14,12 +17,16 @@ jobs:
         include:
           - os: macos-14
             target: aarch64-apple-darwin
+            bundles: app,dmg
           - os: macos-13
             target: x86_64-apple-darwin
+            bundles: app,dmg
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: ubuntu-22.04
+            bundles: nsis,msi
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            bundles: appimage,deb
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -44,12 +51,20 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
             librsvg2-dev patchelf build-essential curl wget file libssl-dev
 
-      - name: Install Python project
+      - name: Python venv (Unix)
+        if: runner.os != 'Windows'
         run: |
           python -m venv .venv
-          python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -e .
-          .venv/bin/python -m pip install pyinstaller
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e . pyinstaller
+
+      - name: Python venv (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python -m pip install --upgrade pip
+          .\.venv\Scripts\python -m pip install -e . pyinstaller
 
       - name: Build sidecar (Unix)
         if: runner.os != 'Windows'
@@ -70,9 +85,9 @@ jobs:
 
       - name: Build app
         working-directory: desktop/tauri
-        run: npx tauri build --target ${{ matrix.target }}
+        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
-      - name: Upload installers
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: neurodaily-${{ matrix.target }}
@@ -80,3 +95,16 @@ jobs:
           path: |
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/**
             desktop/tauri/src-tauri/target/release/bundle/**
+
+      - name: Publish GitHub Release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            desktop/tauri/src-tauri/target/**/release/bundle/dmg/*.dmg
+            desktop/tauri/src-tauri/target/**/release/bundle/msi/*.msi
+            desktop/tauri/src-tauri/target/**/release/bundle/nsis/*.exe
+            desktop/tauri/src-tauri/target/**/release/bundle/appimage/*.AppImage
+            desktop/tauri/src-tauri/target/**/release/bundle/deb/*.deb
