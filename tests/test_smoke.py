@@ -748,3 +748,13 @@ class SettingsJournalMetricsTests(unittest.TestCase):
         from neurodaily.settings_page import SETTINGS_HTML
         for marker in ('class="j-if"', 'class="j-jcr"', 'class="j-cas"'):
             self.assertIn(marker, SETTINGS_HTML)
+
+
+class SectionButtonTests(unittest.TestCase):
+    def test_no_legacy_expand_collapse_pairs(self):
+        from neurodaily.demo import build_result
+        from neurodaily.render import render_html
+        h = render_html(build_result())
+        self.assertNotIn('class="sec-actions"', h)
+        self.assertNotIn("toggleAll(", h)
+        self.assertIn("initCollapsibleSections", h)

@@ -19,10 +19,6 @@
         <span class="count">({{ result.sections.get(key, [])|length }})</span></h2>
       <p class="sec-desc">{{ desc }}</p>
     </div>
-    <div class="sec-actions">
-      <button class="minibtn" onclick="toggleAll(this, true)" type="button">Expand</button>
-      <button class="minibtn" onclick="toggleAll(this, false)" type="button">Collapse</button>
-    </div>
   </div>
   {% set entries = result.sections.get(key, []) %}
   {% if entries %}
@@ -325,11 +321,7 @@ if (IS_FILE) {
   }
 }
 
-function toggleAll(btn, open) {
-  var section = btn.closest('section');
-  var cards = section.querySelectorAll('details.card');
-  cards.forEach(function (d) { d.open = open; });
-}
+
 
 var runBtn = document.getElementById('runNow');
 var runMsg = document.getElementById('runMsg');
