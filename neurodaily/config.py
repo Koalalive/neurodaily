@@ -73,8 +73,9 @@ class Journal:
             impact_factor = float(raw_if) if raw_if not in (None, "") else None
         except (TypeError, ValueError):
             impact_factor = None
+        raw_year = d.get("metric_year", d.get("year"))
         try:
-            year = int(d["year"]) if d.get("year") not in (None, "") else None
+            year = int(raw_year) if raw_year not in (None, "") else None
         except (TypeError, ValueError):
             year = None
         return Journal(
@@ -173,7 +174,7 @@ class Config:
         }
 
     def output_dir(self) -> str:
-        return self.output.get("dir", DEFAULT_DIRS["output"])
+        return self.output.get("dir") or DEFAULT_DIRS["output"]
 
     # ----------------------------------------------------- derived queries
     def active_disciplines(self) -> list[Discipline]:

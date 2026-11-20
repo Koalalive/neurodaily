@@ -124,10 +124,12 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
     </div>
     <div class="inline" style="margin-top:12px">
       <span class="pill" id="ldstat">Scheduler: …</span>
-      <button onclick="launchd('install')">Install / update schedule</button>
-      <button class="warn" onclick="launchd('uninstall')">Uninstall schedule</button>
+      <span id="launchd_controls" hidden>
+        <button onclick="launchd('install')">Install / update schedule</button>
+        <button class="warn" onclick="launchd('uninstall')">Uninstall schedule</button>
+      </span>
     </div>
-    <p class="hint">After changing the time, click Install / update schedule to apply.</p>
+    <p class="hint" id="schedule_hint"></p>
   </section>
 
   <section>
@@ -229,6 +231,7 @@ function addFeed(){el('policy_feeds').appendChild(feedRow(''));}
 
 function journalRow(x){
   x=x||{}; var d=document.createElement('div'); d.className='row j';
+  d.dataset.metricYear=x.metric_year==null?'':x.metric_year;
   d.innerHTML='<input class="j-name" placeholder="Journal name" value="'+esc(x.name)+'">'+
     '<input class="j-url" placeholder="Website URL" value="'+esc(x.url)+'">'+
     '<input class="j-rss" placeholder="RSS (optional)" value="'+esc(x.rss)+'">'+
@@ -359,7 +362,8 @@ function collect(){
       category:r.querySelector('.j-cat').value.trim(),
       impact_factor: iv?parseFloat(iv):null,
       jcr:r.querySelector('.j-jcr').value.trim(),
-      cas:r.querySelector('.j-cas').value.trim()};
+      cas:r.querySelector('.j-cas').value.trim(),
+      metric_year:r.dataset.metricYear?Number(r.dataset.metricYear):null};
   }).filter(function(x){return x.name;});
   return data;
 }
@@ -370,7 +374,11 @@ async function save(){
   try{
     var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     var out=await r.json();
-    if(out.ok){el('msg').textContent='✅ Saved → '+out.path; el('msg').className='ok'; return true;}
+    if(out.ok){
+      el('msg').textContent='✅ Saved → '+out.path; el('msg').className='ok';
+      loadLaunchdStatus();
+      return true;
+    }
     el('msg').textContent='❌ Save failed: '+(out.error||'unknown'); el('msg').className='bad'; return false;
   }catch(e){el('msg').textContent='❌ '+e; el('msg').className='bad'; return false;}
 }
@@ -386,7 +394,14 @@ async function resetDefaults(){
 async function loadLaunchdStatus(){
   try{
     var r=await fetch('/api/launchd/status'); var s=await r.json();
-    var t='Scheduler: '+(s.loaded?'loaded':'not loaded')+(s.installed?' / installed':' / not installed')+'（'+s.schedule+'）';
+    var desktop=s.backend==='desktop';
+    el('launchd_controls').hidden=desktop;
+    el('schedule_hint').textContent=desktop
+      ? 'Save to apply. Minimize the window to keep scheduled delivery running. Quitting stops delivery.'
+      : 'After changing the time, click Install / update schedule to apply.';
+    var t=desktop
+      ? (s.loaded?'Desktop schedule: daily at '+s.schedule+' (local time)':'Desktop schedule: off')
+      : 'Scheduler: '+(s.loaded?'loaded':'not loaded')+(s.installed?' / installed':' / not installed')+'（'+s.schedule+'）';
     el('ldstat').textContent=t;
     el('ldstat').className='pill'+(s.loaded?' on':'');
   }catch(e){el('ldstat').textContent='Scheduler: read failed';}

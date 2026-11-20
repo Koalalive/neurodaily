@@ -17,14 +17,17 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-from datetime import datetime
-from threading import Lock
+from contextlib import asynccontextmanager
+from datetime import date, datetime
+from pathlib import Path
+from threading import Event, Lock, Thread
 
 from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Config, DEFAULT_CONFIG
+from .desktop_schedule import run_schedule, scheduled_time
 from .digest import run as run_digest, render_html_for
 from .presets import research_presets
 from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
@@ -45,8 +48,20 @@ def _cfg_with_hours(cfg: Config, hours: int) -> Config:
     return c
 
 
-def create_app(config_path: str | None = None) -> FastAPI:
-    app = FastAPI(title="NeuroDaily", version=__version__)
+def create_app(config_path: str | None = None, *, desktop: bool = False) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        stop = Event()
+        if desktop:
+            Thread(target=run_schedule, args=(stop, lambda: Config.load(config_path),
+                                                _start_scheduled_search),
+                   name="neurodaily-schedule", daemon=True).start()
+        try:
+            yield
+        finally:
+            stop.set()
+
+    app = FastAPI(title="NeuroDaily", version=__version__, lifespan=lifespan)
     app.state.last_run = None
     app.state.search_attempt = None
     search_lock = Lock()
@@ -79,6 +94,101 @@ def create_app(config_path: str | None = None) -> FastAPI:
     def run_now_page():
         return RUN_HTML
 
+    def _begin_search():
+        started_at = datetime.now().isoformat()
+        attempt = {"started_at": started_at, "status": "running"}
+        with search_lock:
+            current = app.state.search_attempt
+            if current and current["status"] == "running":
+                return None
+            app.state.search_attempt = attempt
+        return attempt
+
+    def _search_and_deliver(cfg: Config, attempt: dict, force: bool, mode: str):
+        try:
+            from .journal_metrics import ensure_fresh
+            ensure_fresh([j.name for j in cfg.journals])
+        except Exception:
+            pass
+        result = run_digest(cfg, check_duplicate=True, record=True, force=force,
+                            mode=mode)
+        if result.skipped:
+            attempt.update(status="skipped", error=result.skipped_reason)
+            return
+        try:
+            from .ai_summary import generate as _ai_gen, load_cfg as _ai_cfg
+            _txt = _ai_gen(result)
+            if _txt:
+                result.ai_summary = _txt
+                result.ai_summary_meta = {"model": _ai_cfg().get("model", "")}
+        except Exception:
+            pass
+        from .digest import save_report
+        fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d_%H%M%S.html"
+        path = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
+        save_report(result, path)
+        base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
+        try:
+            with open(path, encoding="utf-8") as _f:
+                _html = _f.read()
+            _html = _html.replace('<meta name="nd-base" content="">',
+                                  f'<meta name="nd-base" content="{base}">')
+            with open(path, "w", encoding="utf-8") as _f:
+                _f.write(_html)
+        except Exception:
+            pass
+        app.state.last_report_path = path
+        app.state.last_run = result
+        try:
+            from .mailer import (_password, load_cfg as _mail_cfg,
+                                 render_email, save_last, send_with_retry)
+            _mc = _mail_cfg()
+            _atts = [path] if _mc.get("attach_report", True) else None
+            _subj, _html, _text = render_email(result, _mc)
+            save_last(_subj, _html, _text, path if _atts else None)
+            if _mc.get("enabled", True) and _password(_mc):
+                send_with_retry(_subj, _html, _text, _mc, _atts)
+        except Exception:
+            pass
+        try:
+            from .webhooks import send_all as _hooks
+            _hooks(result)
+        except Exception:
+            pass
+        try:
+            if cfg.output.get("open_on_finish", True) and os.environ.get("NEURODAILY_NO_OPEN") != "1":
+                import subprocess
+                import sys
+                url = base.rstrip("/") + "/report/latest"
+                print("[neurodaily] opening report:", url, flush=True)
+                if sys.platform == "darwin":
+                    subprocess.run(["open", url], check=False)
+                else:
+                    import webbrowser
+                    webbrowser.open(url)
+                print("[neurodaily] opened report:", url, flush=True)
+        except Exception:
+            pass
+        attempt.update(status="completed", item_count=len(result.items))
+
+    def _execute_search(cfg: Config, attempt: dict, force: bool = False,
+                        mode: str = "manual", scheduled_day: str | None = None):
+        try:
+            if scheduled_day is not None and not hist.claim_desktop_schedule(scheduled_day):
+                attempt.update(status="skipped", error="Today's desktop schedule already ran.")
+                return
+            _search_and_deliver(cfg, attempt, force, mode)
+        except Exception:
+            logging.getLogger(__name__).exception("Search or report generation failed")
+            attempt.update(status="failed", error="Report generation failed. See the server log.")
+
+    def _start_scheduled_search(cfg: Config, day: date) -> bool:
+        attempt = _begin_search()
+        if attempt is None:
+            return False
+        _execute_search(cfg, attempt, mode="daily", scheduled_day=day.isoformat())
+        return True
+
     @app.post("/api/run")
     def api_run(background_tasks: BackgroundTasks, force: bool = False,
                 hours: int | None = None):
@@ -86,93 +196,13 @@ def create_app(config_path: str | None = None) -> FastAPI:
         if hours is not None and not (1 <= hours <= 8760):
             return JSONResponse({"error": "hours must be 1..8760"}, status_code=400)
         cfg = _cfg_with_hours(cfg, hours) if hours else cfg
+        attempt = _begin_search()
+        if attempt is None:
+            return JSONResponse({"error": "A search is already running"}, status_code=409)
 
-        started_at = datetime.now().isoformat()
-        attempt = {"started_at": started_at, "status": "running"}
-        with search_lock:
-            current = app.state.search_attempt
-            if current and current["status"] == "running":
-                return JSONResponse({"error": "A search is already running"}, status_code=409)
-            app.state.search_attempt = attempt
-
-        def _search_and_deliver():
-            try:
-                from .journal_metrics import ensure_fresh
-                ensure_fresh([j.name for j in cfg.journals])
-            except Exception:
-                pass
-            result = run_digest(cfg, check_duplicate=True, record=True, force=force,
-                                mode="manual")
-            if result.skipped:
-                attempt.update(status="skipped", error=result.skipped_reason)
-                return
-            try:
-                from .ai_summary import generate as _ai_gen, load_cfg as _ai_cfg
-                _txt = _ai_gen(result)
-                if _txt:
-                    result.ai_summary = _txt
-                    result.ai_summary_meta = {"model": _ai_cfg().get("model", "")}
-            except Exception:
-                pass
-            from .digest import save_report
-            fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d_%H%M%S.html"
-            path = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
-            save_report(result, path)
-            base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
-            try:
-                with open(path, encoding="utf-8") as _f:
-                    _html = _f.read()
-                _html = _html.replace('<meta name="nd-base" content="">',
-                                      f'<meta name="nd-base" content="{base}">')
-                with open(path, "w", encoding="utf-8") as _f:
-                    _f.write(_html)
-            except Exception:
-                pass
-            app.state.last_report_path = path
-            app.state.last_run = result
-            try:
-                from .mailer import (_password, load_cfg as _mail_cfg,
-                                     render_email, save_last, send_with_retry)
-                _mc = _mail_cfg()
-                _atts = [path] if _mc.get("attach_report", True) else None
-                _subj, _html, _text = render_email(result, _mc)
-                save_last(_subj, _html, _text, path if _atts else None)
-                if _mc.get("enabled", True) and _password(_mc):
-                    send_with_retry(_subj, _html, _text, _mc, _atts)
-            except Exception:
-                pass
-            try:
-                from .webhooks import send_all as _hooks
-                _hooks(result)
-            except Exception:
-                pass
-            try:
-                if cfg.output.get("open_on_finish", True) and os.environ.get("NEURODAILY_NO_OPEN") != "1":
-                    import subprocess
-                    import sys
-                    url = base.rstrip("/") + "/report/latest"
-                    print("[neurodaily] opening report:", url, flush=True)
-                    if sys.platform == "darwin":
-                        subprocess.run(["open", url], check=False)
-                    else:
-                        import webbrowser
-                        webbrowser.open(url)
-                    print("[neurodaily] opened report:", url, flush=True)
-            except Exception:
-                pass
-            attempt.update(status="completed", item_count=len(result.items))
-
-        def _do():
-            try:
-                _search_and_deliver()
-            except Exception:
-                logging.getLogger(__name__).exception("Search or report generation failed")
-                attempt.update(status="failed", error="Report generation failed. See the server log.")
-
-        background_tasks.add_task(_do)
+        background_tasks.add_task(_execute_search, cfg, attempt, force)
         return JSONResponse({"status": "started", "profile": cfg.profile,
-                             "force": force,
-                             "started_at": started_at})
+                             "force": force, "started_at": attempt["started_at"]})
 
     @app.get("/api/status")
     def api_status():
@@ -330,29 +360,41 @@ def create_app(config_path: str | None = None) -> FastAPI:
 
     @app.get("/report/latest")
     def report_latest():
-        from fastapi.responses import FileResponse
-        import glob
-
-        def _is_demo(path: str) -> bool:
+        def _header(path) -> str:
             try:
-                with open(path, encoding="utf-8") as f:
-                    return "(demo)" in f.read(4000)
-            except Exception:
-                return False
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    return f.read(4096)
+            except OSError:
+                return ""
 
         p = getattr(app.state, "last_report_path", None)
-        if not p or not os.path.exists(p) or _is_demo(p):
-            files = sorted(glob.glob(os.path.join(_cfg().output_dir(), "neurodaily_*.html")),
-                           key=os.path.getmtime, reverse=True)
-            p = next((f for f in files if not _is_demo(f)), files[0] if files else None)
-        if not p:
-            return JSONResponse({"error": "no report yet"}, status_code=404)
-        return FileResponse(p, media_type="text/html")
+        if p and os.path.isfile(p) and "(demo)" not in _header(p):
+            return FileResponse(p, media_type="text/html")
+
+        files = sorted((f for f in Path(_cfg().output_dir()).glob("*.html") if f.is_file()),
+                       key=os.path.getmtime, reverse=True)
+        demo = None
+        for file in files:
+            header = _header(file)
+            # Custom filenames can still be identified by either report renderer.
+            if not (file.name.startswith("neurodaily_") or 'name="nd-base"' in header
+                    or "<title>NeuroDaily</title>" in header):
+                continue
+            if "(demo)" not in header:
+                return FileResponse(file, media_type="text/html")
+            demo = demo or file
+        if demo is not None:
+            return FileResponse(demo, media_type="text/html")
+        return JSONResponse({"error": "no report yet"}, status_code=404)
 
     @app.get("/api/launchd/status")
     def api_launchd_status():
         cfg = _cfg()
         sched = cfg.scheduled or {}
+        if desktop:
+            due = scheduled_time(sched)
+            return JSONResponse({"backend": "desktop", "loaded": due is not None,
+                                 "schedule": due.strftime("%H:%M") if due else ""})
         label = _launchd_label()
         dest = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
         loaded = False
@@ -370,6 +412,9 @@ def create_app(config_path: str | None = None) -> FastAPI:
 
     @app.post("/api/launchd/install")
     def api_launchd_install():
+        if desktop:
+            return JSONResponse({"ok": False, "error": "Save desktop schedule settings instead."},
+                                status_code=400)
         try:
             from .cli import _plist_content
             cfg = _cfg()
@@ -390,6 +435,9 @@ def create_app(config_path: str | None = None) -> FastAPI:
 
     @app.post("/api/launchd/uninstall")
     def api_launchd_uninstall():
+        if desktop:
+            return JSONResponse({"ok": False, "error": "Disable the schedule in desktop settings."},
+                                status_code=400)
         try:
             label = _launchd_label()
             dest = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")

@@ -14,10 +14,12 @@ def smoke(executable: Path) -> None:
     with tempfile.TemporaryDirectory() as workdir:
         home = Path(workdir) / "home"
         log = Path(workdir) / "sidecar.log"
-        env = {**os.environ, "NEURODAILY_HOME": str(home), "NEURODAILY_PORT": "0"}
+        env = {**os.environ, "NEURODAILY_HOME": str(home), "NEURODAILY_PORT": "0",
+               "NEURODAILY_MANAGED": "1"}
         with log.open("wb") as output:
             process = subprocess.Popen([str(executable.resolve())], cwd=workdir,
-                                       env=env, stdout=output, stderr=subprocess.STDOUT)
+                                       env=env, stdin=subprocess.PIPE, stdout=output,
+                                       stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 90
             while process.poll() is None and time.monotonic() < deadline:
@@ -34,17 +36,26 @@ def smoke(executable: Path) -> None:
                     with opener.open(f"http://127.0.0.1:{port}/api/config/presets", timeout=5) as response:
                         profiles = {preset["config"]["profile"] for preset in json.load(response)}
                         assert {"neuro", "oncology"} <= profiles, profiles
-                    print("Frozen sidecar first-launch smoke test passed")
-                    return
+                    with opener.open(f"http://127.0.0.1:{port}/api/launchd/status", timeout=5) as response:
+                        assert json.load(response)["backend"] == "desktop"
+                    break
                 time.sleep(0.25)
-            raise RuntimeError(log.read_text(encoding="utf-8", errors="replace"))
+            else:
+                raise RuntimeError(log.read_text(encoding="utf-8", errors="replace"))
         finally:
-            if process.poll() is None and os.name == "nt":
-                subprocess.run(["taskkill", "/pid", str(process.pid), "/t", "/f"],
-                               stdout=subprocess.DEVNULL, check=False)
-            elif process.poll() is None:
-                process.terminate()
-            process.wait(timeout=15)
+            process.stdin.close()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/pid", str(process.pid), "/t", "/f"],
+                                   stdout=subprocess.DEVNULL, check=False)
+                else:
+                    process.kill()
+                process.wait(timeout=5)
+                raise
+            assert process.returncode == 0, log.read_text(encoding="utf-8", errors="replace")
+        print("Frozen sidecar started with the desktop scheduler and stopped when its parent pipe closed")
 
 
 if __name__ == "__main__":

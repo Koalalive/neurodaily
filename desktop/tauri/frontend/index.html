@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NeuroDaily</title>
+  <title>神通寰宇 · NeuroDaily</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -15,25 +15,23 @@
     .card { width: 420px; max-width: calc(100vw - 48px); text-align: center; padding: 34px 30px;
       background: rgba(18, 19, 23, .88); border: 1px solid #263041; border-radius: 20px;
       box-shadow: 0 24px 80px rgba(0,0,0,.45); }
-    .logo { width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 18px;
-      background: linear-gradient(135deg, #38bdf8, #818cf8); display: grid; place-items: center;
-      font-size: 30px; font-weight: 800; color: #04121c; }
+    .logo { display: block; width: 88px; height: 88px; margin: 0 auto 16px; }
     h1 { margin: 0 0 6px; font-size: 1.35rem; letter-spacing: .01em; }
     p { margin: 0; color: #96a0b5; font-size: .9rem; }
     .bar { margin-top: 22px; height: 4px; background: #1b2330; border-radius: 999px; overflow: hidden; }
     .bar i { display: block; width: 40%; height: 100%; border-radius: 999px;
       background: linear-gradient(90deg, #38bdf8, #818cf8); animation: move 1.2s ease-in-out infinite; }
     @keyframes move { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
-    #status { margin-top: 12px; font-size: .78rem; color: #6f7a90; min-height: 1.2em; }
+    #status { margin-top: 12px; font-size: .78rem; color: #96a0b5; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">N</div>
-    <h1>NeuroDaily</h1>
-    <p>正在启动本地服务…</p>
-    <div class="bar"><i></i></div>
-    <div id="status">首次启动需要几秒钟</div>
+    <img class="logo" src="icon.png" alt="">
+    <h1>神通寰宇 · NeuroDaily</h1>
+    <p>以一份日报，连接全球研究前沿。</p>
+    <div class="bar" aria-hidden="true"><i></i></div>
+    <div id="status" role="status">正在启动本地服务…</div>
   </div>
 </body>
 </html>

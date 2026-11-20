@@ -10,6 +10,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from threading import Thread
 
 
 def app_home() -> Path:
@@ -87,7 +88,16 @@ def main() -> None:
                 self.config.app.state.base_url = f"http://127.0.0.1:{bound_port}"
                 print(f"NEURODAILY_PORT={bound_port}", flush=True)
 
-    app = create_app(str(home / "config" / "config.json"))
+    if os.environ.get("NEURODAILY_MANAGED") == "1":
+        # The desktop shell owns the write end of this pipe for its entire life.
+        # Closing it stops delivery even if the PyInstaller bootloader has a child.
+        def stop_on_eof():
+            sys.stdin.buffer.read()
+            os._exit(0)
+
+        Thread(target=stop_on_eof, name="neurodaily-parent", daemon=True).start()
+
+    app = create_app(str(home / "config" / "config.json"), desktop=True)
     server = DesktopServer(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info"))
     server.run()
 

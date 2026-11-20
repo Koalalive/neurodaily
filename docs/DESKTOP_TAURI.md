@@ -19,7 +19,9 @@ NeuroDaily.app / NeuroDaily.exe / NeuroDaily.AppImage
 
 - Sidecar is built with PyInstaller (`desktop/sidecar/neurodaily-server.spec`).
 - Tauri external binary: `desktop/tauri/src-tauri/binaries/neurodaily-server-<target-triple>`.
-- On quit, the shell kills the sidecar.
+- Minimizing the window keeps the sidecar and its daily schedule running.
+- Closing the window or quitting requests confirmation. The shell closes the
+  sidecar's parent pipe on confirmed exit to stop scheduled and in-progress delivery.
 - Every desktop launch opens `/settings`. Choose the neuroscience or oncology preset,
   or keep the saved settings. Save to continue to `/run`, then start a search to open its report.
 

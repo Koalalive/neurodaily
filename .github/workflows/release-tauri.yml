@@ -102,13 +102,8 @@ jobs:
           DMG_ARCH: ${{ matrix.dmg_arch }}
         run: |
           version=$(node -p "require('./desktop/tauri/src-tauri/tauri.conf.json').version")
-          staging=$(mktemp -d "$RUNNER_TEMP/neurodaily-dmg.XXXXXX")
-          ditto "$BUNDLE_DIR/macos/NeuroDaily.app" "$staging/NeuroDaily.app"
-          ln -s /Applications "$staging/Applications"
-          mkdir -p "$BUNDLE_DIR/dmg"
           image="$BUNDLE_DIR/dmg/NeuroDaily_${version}_${DMG_ARCH}.dmg"
-          hdiutil create -srcfolder "$staging" -fs HFS+ -volname NeuroDaily -format UDZO "$image"
-          hdiutil verify "$image"
+          bash desktop/build_dmg.sh "$BUNDLE_DIR/macos/NeuroDaily.app" "$image"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

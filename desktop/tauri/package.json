@@ -2,11 +2,12 @@
   "name": "neurodaily-desktop",
   "private": true,
   "version": "1.0.1",
+  "license": "Apache-2.0",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "icon": "tauri icon src-tauri/icons/icon.svg -o src-tauri/icons"
+    "icon": "tauri icon frontend/icon.png -o src-tauri/icons"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

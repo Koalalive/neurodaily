@@ -10,12 +10,14 @@
     "windows": [
       {
         "label": "main",
-        "title": "NeuroDaily",
+        "title": "神通寰宇 · NeuroDaily",
+        "create": false,
         "width": 1280,
         "height": 860,
         "minWidth": 960,
         "minHeight": 640,
         "resizable": true,
+        "minimizable": true,
         "fullscreen": false
       }
     ],
@@ -27,8 +29,14 @@
     "active": true,
     "targets": "all",
     "category": "Productivity",
+    "license": "Apache-2.0",
+    "licenseFile": "../../../LICENSE",
     "shortDescription": "Neuroscience daily digest",
     "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      },
       "webviewInstallMode": {
         "type": "offlineInstaller"
       }

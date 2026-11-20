@@ -286,7 +286,8 @@ def save_report(result: DigestResult, output_path: str) -> str:
     if result.skipped:
         return output_path
     html = render_html(result)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    outdir = os.path.dirname(output_path) or "."
+    os.makedirs(outdir, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
     # attach the (relative) report path to the history record for re-opening
@@ -308,13 +309,13 @@ def save_report(result: DigestResult, output_path: str) -> str:
             write_bibtex(result, stem + ".bib")
     except Exception:
         pass
-    _write_static_history(os.path.dirname(output_path))
+    _write_static_history(outdir)
     keep = 60
     try:
         keep = int((getattr(result, "config", None).output or {}).get("keep_reports", 60))
     except Exception:
         pass
-    _prune_reports(os.path.dirname(output_path), keep)
+    _prune_reports(outdir, keep)
     return output_path
 
 
