@@ -1,5 +1,9 @@
 # Docker 部署（Agent 协议）
 
+> **中文** — Agent 的 Docker 部署协议（检查→构建→运行→验收→清理）。
+> **English** — Agent protocol for Docker deployment (check → build → run → verify → clean).
+> **Русский** — Протокол агента для развёртывания в Docker (проверка → сборка → запуск → приёмка → очистка).
+
 > 给 Agent 的非交互部署流程：**检查 → 构建 → 运行 → 健康检查 → 验收 → 清理**。
 > 所有命令返回明文 + 退出码；任何一步失败立即停止并打印日志。
 

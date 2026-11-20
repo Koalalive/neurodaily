@@ -1,5 +1,9 @@
 # Docker 部署
 
+> **中文** — 镜像构建、运行、compose 与 Docker Hub 推送。
+> **English** — Image build, run, compose and Docker Hub push.
+> **Русский** — Сборка образа, запуск, compose и публикация в Docker Hub.
+
 > 已实测：镜像构建成功（**约 199 MB**），容器启动后 `/`、`/api/status`、`/api/config`、`/settings` 均返回 200，`docker compose config` 校验通过。
 
 ## 1. 前置

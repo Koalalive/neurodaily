@@ -32,12 +32,26 @@ def cmd_run(args) -> int:
     from .config import Config as C
     cfg = C.load(args.config)
     print(f"[neurodaily] loading config: profile={cfg.profile}")
+    if getattr(args, "lang", None):
+        cfg.scheduled.setdefault("on_this_day", {})["lang"] = args.lang
+    if not getattr(args, "demo", False) and os.environ.get("NEURODAILY_NO_METRICS") != "1":
+        try:
+            from .journal_metrics import ensure_fresh
+            _mr = ensure_fresh([j.name for j in cfg.journals])
+            if _mr:
+                print(f"[neurodaily] journal metrics refreshed: {_mr}")
+        except Exception as e:
+            print(f"[neurodaily] ⚠ metrics skipped: {e}")
     if getattr(args, "demo", False):
         from .demo import build_result
         print("[neurodaily] demo mode: offline sample data (no network)")
         result = build_result(cfg)
     else:
-        result = run(cfg, check_duplicate=True, record=True, force=not args.dedupe)
+        _mode = getattr(args, "mode", "auto")
+        if _mode == "auto":
+            _mode = os.environ.get("NEURODAILY_MODE", "manual")
+        result = run(cfg, check_duplicate=True, record=True, force=not args.dedupe,
+                     mode=_mode)
         try:
             from . import ai_summary as _ai
             _txt = _ai.generate(result)
@@ -114,6 +128,9 @@ def cmd_serve(args) -> int:
     app = create_app(args.config)
     host = getattr(args, "host", "127.0.0.1")
     print(f"[neurodaily] web app → http://{host}:{args.port}")
+    if getattr(args, "open", False):
+        import threading, webbrowser
+        threading.Timer(2.0, lambda: webbrowser.open(f"http://{host}:{args.port}/settings")).start()
     uvicorn.run(app, host=host, port=args.port, log_level="info")
     return 0
 
@@ -204,7 +221,7 @@ def _plist_content(cfg: Config, script_path: str) -> str:
     # Use the CURRENT interpreter (the venv python that invoked this command),
     # not a hardcoded /usr/bin/python3 which won't have neurodaily + deps.
     python = sys.executable
-    cmd = [python, "-m", "neurodaily", "run"]
+    cmd = [python, "-m", "neurodaily", "run", "--mode", "daily"]
     args_xml = "".join(f"<string>{_esc(a)}</string>" for a in cmd)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -367,6 +384,29 @@ def cmd_ai_summary(args) -> int:
     return 0
 
 
+def cmd_metrics(args) -> int:
+    import json as _json
+    from . import journal_metrics as jm
+    act = args.action
+    if act == "refresh":
+        print(_json.dumps(jm.refresh(args.journal or None, force=args.force),
+                          ensure_ascii=False))
+        return 0
+    if act == "import":
+        print(_json.dumps(jm.import_csv(args.path), ensure_ascii=False))
+        return 0
+    if act == "status":
+        print(_json.dumps(jm.status(), ensure_ascii=False, indent=2))
+        return 0
+    if act == "show":
+        from .config import Config as C
+        cfg = C.load(args.config)
+        for j in cfg.journals:
+            print(f"{j.name}: {jm.lookup(j.name)}")
+        return 0
+    return 0
+
+
 def cmd_export(args) -> int:
     from datetime import datetime
     from .config import Config as C
@@ -467,12 +507,17 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--dedupe", action="store_true",
                        help="skip if an identical query already ran today (dedup)")
     run_p.add_argument("--demo", action="store_true", help="offline demo data (no network)")
+    run_p.add_argument("--mode", choices=["auto", "daily", "manual"], default="auto",
+                       help="time window: daily / manual (default: auto)")
+    run_p.add_argument("--lang", choices=["zh", "en", "ru"], default=None,
+                       help="on-this-day language (default: from config)")
     run_p.set_defaults(func=cmd_run)
 
     serve_p = sub.add_parser("serve", help="start the web app")
     serve_p.add_argument("--port", type=int, default=8031)
     serve_p.add_argument("--host", default="127.0.0.1")
     serve_p.add_argument("--demo", action="store_true", help="dashboard uses offline demo data")
+    serve_p.add_argument("--open", action="store_true", help="open the settings page in a browser")
     serve_p.set_defaults(func=cmd_serve)
 
     cfg_p = sub.add_parser("config", help="view or init config")
@@ -505,6 +550,17 @@ def build_parser() -> argparse.ArgumentParser:
     deepen_p.add_argument("--api-key", default=None)
     deepen_p.add_argument("--concurrency", type=int, default=4)
     deepen_p.set_defaults(func=cmd_deepen)
+
+    met_p = sub.add_parser("metrics", help="journal metrics (OpenAlex auto + official import)")
+    met_sub = met_p.add_subparsers(dest="action", required=True)
+    met_r = met_sub.add_parser("refresh")
+    met_r.add_argument("--force", action="store_true")
+    met_r.add_argument("--journal", action="append")
+    met_i = met_sub.add_parser("import")
+    met_i.add_argument("path")
+    met_sub.add_parser("status")
+    met_sub.add_parser("show")
+    met_p.set_defaults(func=cmd_metrics)
 
     ai_p = sub.add_parser("ai-summary", help="generate the AI daily overview")
     ai_p.add_argument("--demo", action="store_true")

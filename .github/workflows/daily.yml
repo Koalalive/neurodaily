@@ -1,0 +1,57 @@
+name: daily-digest
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # 08:00 Asia/Shanghai (UTC+8)
+  workflow_dispatch:
+    inputs:
+      demo:
+        description: "Run with offline demo data"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -e .
+      - name: Materialize config from secrets
+        env:
+          CONFIG_JSON: ${{ secrets.NEURODAILY_CONFIG_JSON }}
+          EMAIL_JSON: ${{ secrets.NEURODAILY_EMAIL_JSON }}
+          AI_JSON: ${{ secrets.NEURODAILY_AI_JSON }}
+        run: |
+          mkdir -p config
+          if [ -n "$CONFIG_JSON" ]; then
+            printf '%s' "$CONFIG_JSON" > config/config.json
+          else
+            .venv/bin/python -m neurodaily config init
+          fi
+          [ -n "$EMAIL_JSON" ] && printf '%s' "$EMAIL_JSON" > config/email.json || true
+          [ -n "$AI_JSON" ] && printf '%s' "$AI_JSON" > config/ai_summary.json || true
+      - name: Run digest
+        env:
+          NEURODAILY_SMTP_PASSWORD: ${{ secrets.NEURODAILY_SMTP_PASSWORD }}
+          NEURODAILY_LLM_API_KEY: ${{ secrets.NEURODAILY_LLM_API_KEY }}
+        run: |
+          if [ "${{ inputs.demo }}" = "true" ]; then
+            .venv/bin/python -m neurodaily demo --no-open
+          else
+            .venv/bin/python -m neurodaily run --no-open
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neurodaily-report
+          path: output/*.html
+          retention-days: 14

@@ -12,6 +12,10 @@
 
 ---
 
+## 中文
+
+**Languages:** [中文](#中文) · [English](#english) · [Русский](#русский)
+
 ## 目录
 
 - [核心特性](#核心特性)
@@ -74,6 +78,15 @@ python3 -m venv .venv
 scripts/start.sh
 # http://127.0.0.1:8031
 ```
+
+### 一键（macOS，无需命令行）
+
+双击 `scripts/启动 NeuroDaily.command` → 自动启动服务并打开设置页。
+
+日报页右上角：
+
+- **⚙ 设置 / Settings** — 改推送（收件人、SMTP 授权码、飞书/企微）、检索时间窗口、史论语言
+- **▶ Run now** — 跳到设置页；改完点 **保存并立即检索推送**，直接完成「检索 + 邮件/Webhook 推送」
 
 离线演示（不联网）：
 
@@ -310,3 +323,169 @@ make test                     # 同上
 - 仅聚合**公开**文献与新闻元数据；不存储全文、不绕过付费墙。
 - AI 摘要与长文可能出错，**仅供科研参考，不构成医疗建议**。
 - 请遵守各数据源的使用条款；邮件/Webhook 凭据仅保存在本机（600 权限）。
+
+
+---
+
+## English
+
+### What it is
+
+NeuroDaily is a **self-hosted daily digest for neuroscience and psychiatry**. It aggregates journal RSS, PubMed, arXiv, bioRxiv, ClinicalTrials.gov, openFDA, policy feeds and VC/funding news, filters by your focus, renders an interactive HTML report with an **AI overview** and a long-form **"on this day"** essay, and emails it to your team every morning.
+
+- **Retrieval is token-free**; AI runs on demand and is cached.
+- **Journal metrics**: OpenAlex auto-fetch (2yr mean citedness, h-index); official JCR IF / quartile and CAS partition can be imported.
+- **Local-first**: one laptop/mini-PC, data never leaves the machine.
+- **Agent-configurable**: switch disciplines with JSON patches (`profile` + `config apply`).
+
+### Quick start
+
+```bash
+git clone https://github.com/Koalalive/neurodaily.git
+cd neurodaily
+python3 -m venv .venv && .venv/bin/pip install -e .
+.venv/bin/python -m neurodaily config init
+.venv/bin/python -m neurodaily run --no-open
+# web UI + settings:
+scripts/start.sh          # http://127.0.0.1:8031
+```
+
+No-CLI flow: double-click `scripts/启动 NeuroDaily.command` (macOS), or open the report →
+**⚙ Settings** → edit push/windows/language → **Save & run now** (fetch + email/webhook).
+
+Offline demo:
+
+```bash
+.venv/bin/python -m neurodaily demo --no-open
+```
+
+### Docker
+
+```bash
+docker build -t neurodaily:local .
+docker run -d --name neurodaily -p 8031:8031 \
+  -v "$PWD/config:/app/neurodaily/config" \
+  -v "$PWD/output:/app/neurodaily/output" \
+  neurodaily:local
+```
+
+Prebuilt image: `docker pull koalalive/neurodaily:latest`.
+
+No-CLI flow: open the report → **⚙ Настройки** → изменить получателей/окна/язык →
+**Сохранить и запустить** (сбор + почта/webhook).
+
+### Configuration
+
+- Main: `config/config.json` (gitignored)
+- Email: `config/email.json`; AI: `config/ai_summary.json`; webhooks: `config/webhooks.json`
+- Validate: `neurodaily config validate`
+- Patch: `neurodaily config apply patch.json --dry-run` (objects merge, lists replace, null deletes)
+- Disciplines: `neurodaily profile new oncology` → `--profile oncology`
+
+### AI overview (optional)
+
+```bash
+printf '%s' 'sk-...' > ~/.neurodaily_llm && chmod 600 ~/.neurodaily_llm
+cp config/ai_summary.example.json config/ai_summary.json
+.venv/bin/python -m neurodaily ai-summary --force --save
+```
+
+Top of the report + email body; cached; failures never break the report.
+
+### Email
+
+```bash
+printf '%s' 'SMTP-CODE' > ~/.neurodaily_smtp && chmod 600 ~/.neurodaily_smtp
+.venv/bin/python -m neurodaily mail --test
+.venv/bin/python -m neurodaily mail --send
+.venv/bin/python -m neurodaily mail --tui     # manage recipients/credentials
+```
+
+### Docs
+
+ARCHITECTURE · CONFIGURATION · DOCKER · DOCKER_AGENT · TESTING · AGENT_GUIDE · GITHUB_ACTIONS_AGENT — see [`docs/`](docs/).
+
+### Tests
+
+```bash
+bash scripts/test_all.sh      # 35 unit tests + compile + config + demo + export + profile
+```
+
+---
+
+## Русский
+
+### Что это
+
+NeuroDaily — это **автономная система ежедневной научной сводки по нейронаукам и психиатрии**. Она собирает RSS журналов, PubMed, arXiv, bioRxiv, ClinicalTrials.gov, openFDA, новости политики и венчурного финансирования, фильтрует по вашим интересам, формирует интерактивный HTML-отчёт с **ИИ-обзором** и длинным эссе **«в этот день»**, и каждое утро отправляет его по электронной почте.
+
+- **Поиск не расходует токены**; ИИ работает по запросу и кэшируется.
+- **Метрики журналов**: автоматически из OpenAlex (2yr mean citedness, h-index); официальные JCR IF / квартиль и раздел CAS можно импортировать.
+- **Локальный запуск**: один ноутбук/мини-ПК, данные не покидают машину.
+- **Настраивается агентом**: смена дисциплины через JSON-патчи (`profile` + `config apply`).
+
+### Быстрый старт
+
+```bash
+git clone https://github.com/Koalalive/neurodaily.git
+cd neurodaily
+python3 -m venv .venv && .venv/bin/pip install -e .
+.venv/bin/python -m neurodaily config init
+.venv/bin/python -m neurodaily run --no-open
+scripts/start.sh          # http://127.0.0.1:8031
+```
+
+Демо без сети:
+
+```bash
+.venv/bin/python -m neurodaily demo --no-open
+```
+
+### Docker
+
+```bash
+docker build -t neurodaily:local .
+docker run -d --name neurodaily -p 8031:8031 \
+  -v "$PWD/config:/app/neurodaily/config" \
+  -v "$PWD/output:/app/neurodaily/output" \
+  neurodaily:local
+```
+
+Готовый образ: `docker pull koalalive/neurodaily:latest`.
+
+### Конфигурация
+
+- Основная: `config/config.json` (gitignored)
+- Почта: `config/email.json`; ИИ: `config/ai_summary.json`; webhooks: `config/webhooks.json`
+- Проверка: `neurodaily config validate`
+- Патч: `neurodaily config apply patch.json --dry-run` (объекты сливаются, массивы заменяются, null удаляет)
+- Дисциплины: `neurodaily profile new oncology` → `--profile oncology`
+
+### ИИ-обзор (опционально)
+
+```bash
+printf '%s' 'sk-...' > ~/.neurodaily_llm && chmod 600 ~/.neurodaily_llm
+cp config/ai_summary.example.json config/ai_summary.json
+.venv/bin/python -m neurodaily ai-summary --force --save
+```
+
+Вверху отчёта и в письме; кэшируется; ошибки не ломают отчёт.
+
+### Почта
+
+```bash
+printf '%s' 'SMTP-CODE' > ~/.neurodaily_smtp && chmod 600 ~/.neurodaily_smtp
+.venv/bin/python -m neurodaily mail --test
+.venv/bin/python -m neurodaily mail --send
+.venv/bin/python -m neurodaily mail --tui
+```
+
+### Документация
+
+ARCHITECTURE · CONFIGURATION · DOCKER · DOCKER_AGENT · TESTING · AGENT_GUIDE · GITHUB_ACTIONS_AGENT — см. [`docs/`](docs/).
+
+### Тесты
+
+```bash
+bash scripts/test_all.sh      # 35 модульных тестов + компиляция + конфиг + демо + экспорт
+```

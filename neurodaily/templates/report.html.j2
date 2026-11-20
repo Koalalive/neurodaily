@@ -3,6 +3,7 @@
   <span class="badge {{ badge_class }}">{{ it.kind_label }}</span>
   {% if "top-journal" in it.tags and it.source != "pubmed" and it.source != "arxiv" %}<span class="badge b-journal">★ {{ it.source }}</span>{% endif %}
   {% if it.extra.get('journal') and it.extra.get('journal') != it.source %}<span class="tag tj">{{ it.extra.get('journal') }}</span>{% endif %}
+  {% if it.extra.get('metrics') %}{% set m = it.extra.get('metrics') %}{% if m.get('if') %}<span class="tag tj" title="官方 JCR 影响因子">IF {{ m['if'] }}</span>{% endif %}{% if m.get('jcr') %}<span class="tag t">JCR {{ m['jcr'] }}</span>{% endif %}{% if m.get('cas') %}<span class="tag t">中科院 {{ m['cas'] }}</span>{% endif %}{% if not m.get('if') and m.get('oa_2yr') %}<span class="tag t" title="OpenAlex 2yr mean citedness（非 JCR IF）">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}{% endif %}
   <span class="tag t">{{ it.source }}</span>
   {% if it.date_display %}<span class="tag t">{{ it.date_display }}</span>{% endif %}
   {% if it.doi %}<span class="tag t">doi:{{ it.doi }}</span>{% endif %}
@@ -185,6 +186,7 @@
     </div>
     <div class="toolbar">
       <button class="btn" id="runNow" type="button">▶ Run now</button>
+      <a class="btn ghost" id="settingsLink" href="/settings">⚙ 设置 / Settings</a>
       <a class="btn ghost" id="histLink" href="/history">History</a>
       <a class="btn ghost" id="promptLink" href="/api/prompt" target="_blank" rel="noopener">Focus prompt</a>
       <span class="runmsg" id="runMsg"></span>
@@ -202,12 +204,21 @@
   <section>
     <h2 class="sec-title"><span class="dot"></span>Top Journals
       <span class="count">({{ result.config.journals|length }})</span></h2>
-    <p class="sec-desc">Curated watch-list of leading journals — click to browse each site.</p>
+    <p class="sec-desc">Curated watch-list of leading journals — click to browse each site.
+      IF / JCR / 中科院分区来自导入的官方表（<code>config/journal_metrics.json</code>）；
+      <code>OA 2yr</code> 为 <strong>OpenAlex</b> 自动拉取的 2 年平均被引（非 JCR IF）。</p>
     <div class="journals">
       {% for j in result.config.journals %}
       <div class="journal">
         <div class="cat">{{ j.category }}</div>
         <h4>{% if j.url %}<a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.name }}</a>{% else %}{{ j.name }}{% endif %}</h4>
+        {% set m = jm(j.name) %}
+        {% if m %}<div class="meta" style="margin-top:6px">
+          {% if m.get('if') %}<span class="tag tj">IF {{ m['if'] }}</span>{% endif %}
+          {% if m.get('jcr') %}<span class="tag t">JCR {{ m['jcr'] }}</span>{% endif %}
+          {% if m.get('cas') %}<span class="tag t">中科院 {{ m['cas'] }}</span>{% endif %}
+          {% if not m.get('if') and m.get('oa_2yr') %}<span class="tag t" title="OpenAlex，非 JCR IF">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}
+        </div>{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -258,6 +269,8 @@ var IS_FILE = (location.protocol === 'file:');
 if (IS_FILE) {
   var histLink = document.getElementById('histLink');
   if (histLink) histLink.href = 'history.html';
+  var settingsLink = document.getElementById('settingsLink');
+  if (settingsLink) settingsLink.href = 'http://127.0.0.1:8031/settings';
   var promptLink = document.getElementById('promptLink');
   if (promptLink) {
     promptLink.removeAttribute('target');
@@ -275,27 +288,8 @@ var runBtn = document.getElementById('runNow');
 var runMsg = document.getElementById('runMsg');
 if (runBtn) {
   runBtn.addEventListener('click', function () {
-    if (IS_FILE) {
-      runMsg.textContent = 'Run now needs the web app. Start it with: ' +
-        'python -m neurodaily serve --port 8031  (then open http://127.0.0.1:8031)';
-      runMsg.className = 'runmsg bad';
-      return;
-    }
-    runBtn.disabled = true;
-    runMsg.textContent = 'Searching (dedup-aware: skips if same query already ran today)…';
-    runMsg.className = 'runmsg';
-    fetch('/api/run', { method: 'POST' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        runMsg.textContent = 'Search started at ' + d.started_at.slice(0, 19).replace('T', ' ') +
-          '. Refreshing when done…';
-        pollUntilDone(d.started_at);
-      })
-      .catch(function (e) {
-        runBtn.disabled = false;
-        runMsg.textContent = 'Error: ' + e;
-        runMsg.className = 'runmsg bad';
-      });
+    var base = IS_FILE ? 'http://127.0.0.1:8031' : '';
+    location.href = base + '/settings?next=run';
   });
 }
 

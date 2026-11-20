@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import json
 import os
+import httpx
+import re
 from datetime import date as _date
 
 
@@ -51,6 +53,121 @@ def _refresh_deep_cache() -> None:
 
 
 _refresh_deep_cache()
+
+
+OTD_LABELS = {
+    "zh": {"title": "📅 历史上的今天", "desc": "神经科学 / 神经病学 / 精神病学 / 神经外科史上的今天。",
+           "badge_exact": "历史上的今天", "badge_near": "本月近邻", "badge_classic": "经典里程碑",
+           "note": "AI 翻译可能不精确，请以原文为准。"},
+    "en": {"title": "📅 On This Day", "desc": "Milestones in neuroscience, neurology, psychiatry and neurosurgery.",
+           "badge_exact": "On this day", "badge_near": "Nearby", "badge_classic": "Classic milestone",
+           "note": "Machine-translated; refer to the Chinese original for precision."},
+    "ru": {"title": "📅 В этот день", "desc": "Важные события в нейронауках, неврологии, психиатрии и нейрохирургии.",
+           "badge_exact": "В этот день", "badge_near": "Рядом", "badge_classic": "Классический рубеж",
+           "note": "Машинный перевод; точность — по китайскому оригиналу."},
+}
+
+KIND_I18N = {
+    "drug": {"en": "Drug approval", "ru": "Одобрение препарата"},
+    "surgery": {"en": "Key surgery", "ru": "Ключевая операция"},
+    "discovery": {"en": "Discovery", "ru": "Открытие"},
+    "device": {"en": "Device / technique", "ru": "Устройство / технология"},
+}
+
+CATEGORY_I18N = {
+    "neurosurgery": {"en": "Neurosurgery", "ru": "Нейрохирургия"},
+    "neurology": {"en": "Neurology", "ru": "Неврология"},
+    "psychiatry": {"en": "Psychiatry", "ru": "Психиатрия"},
+    "neuroscience": {"en": "Neuroscience", "ru": "Нейронауки"},
+}
+
+_TRANSLATE_CACHE = None
+
+
+def _translation_cache_path() -> str:
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "output", "on_this_day_i18n.json")
+
+
+def _load_translations() -> dict:
+    global _TRANSLATE_CACHE
+    if _TRANSLATE_CACHE is None:
+        try:
+            with open(_translation_cache_path(), encoding="utf-8") as f:
+                _TRANSLATE_CACHE = json.load(f)
+        except Exception:
+            _TRANSLATE_CACHE = {}
+    return _TRANSLATE_CACHE
+
+
+def _save_translations(data: dict) -> None:
+    global _TRANSLATE_CACHE
+    _TRANSLATE_CACHE = data
+    try:
+        os.makedirs(os.path.dirname(_translation_cache_path()), exist_ok=True)
+        with open(_translation_cache_path(), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+
+
+def translate_events(events: list[dict], lang: str, d=None) -> list[dict]:
+    """Translate title/text/body via the configured LLM; cache per day+lang."""
+    if lang not in ("en", "ru"):
+        return events
+    d = d or _date.today()
+    key = f"{d.isoformat()}|{lang}|v1"
+    cache = _load_translations()
+    if key in cache:
+        return cache[key]
+    try:
+        from . import ai_summary
+        cfg = ai_summary.load_cfg()
+        secret = ai_summary.api_key(cfg)
+        if not secret:
+            raise RuntimeError("no api key")
+        payload = [{"title": e["title"], "text": e.get("text", ""), "body": e.get("body", "")}
+                   for e in events]
+        name = "English" if lang == "en" else "Russian"
+        prompt = ("Translate each JSON object's title/text/body into " + name +
+                  ". Keep all facts, numbers, names and dates unchanged. "
+                  "Return ONLY a JSON array with the same keys, no markdown.")
+        r = httpx.post(cfg.get("base_url", ai_summary.DEFAULT_CFG["base_url"]).rstrip("/") + "/chat/completions",
+                       headers={"Authorization": f"Bearer {secret}"},
+                       json={"model": cfg.get("model", "deepseek-chat"), "temperature": 0.2,
+                             "max_tokens": 3000,
+                             "messages": [{"role": "system", "content": prompt},
+                                          {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]},
+                       timeout=120)
+        r.raise_for_status()
+        txt = (r.json()["choices"][0]["message"]["content"] or "").strip()
+        txt = re.sub(r"^```(?:json)?\s*", "", txt)
+        txt = re.sub(r"\s*```$", "", txt).strip()
+        m = re.search(r"\[[\s\S]*\]", txt)
+        if m:
+            txt = m.group(0)
+        rows = json.loads(txt)
+        if isinstance(rows, dict):
+            rows = rows.get("events") or rows.get("items") or []
+        out = []
+        for e, t in zip(events, rows):
+            item = dict(e)
+            item["title"] = t.get("title") or e["title"]
+            item["text"] = t.get("text") or e.get("text", "")
+            if t.get("body"):
+                item["body"] = t["body"]
+            item["translated"] = True
+            out.append(item)
+        if len(out) != len(events):
+            raise ValueError("length mismatch")
+        cache[key] = out
+        _save_translations(cache)
+        return out
+    except Exception as exc:
+        if os.environ.get("NEURODAILY_DEBUG"):
+            import traceback
+            traceback.print_exc()
+        return [{**e, "translated": False} for e in events]
 
 
 CATEGORY_LABELS = {
@@ -2524,32 +2641,34 @@ def _evergreen_for(d: _date) -> list[dict]:
     return [_decorate(item, "evergreen")]
 
 
-def today_events(d: _date | None = None) -> list[dict]:
-    """Exact events if today has any; otherwise a long-form classic milestone.
-
-    If the exact-day events lack a long body, append one rotating deep-dive so
-    the daily section always contains a full-length read.
-    """
+def today_events(d: _date | None = None, lang: str = "zh") -> list[dict]:
+    """Exact events if today has any; otherwise a long-form classic milestone."""
     d = d or _date.today()
     exact = events_for(d.month, d.day)
     if exact:
-        if any(e.get("body") for e in exact):
-            return exact
-        return exact + _evergreen_for(d)
-    return _evergreen_for(d)
+        events = exact if any(e.get("body") for e in exact) else exact + _evergreen_for(d)
+    else:
+        events = _evergreen_for(d)
+    return translate_events(events, lang, d)
 
 
-def day_label(events: list[dict], d: _date | None = None) -> str:
+def day_label(events: list[dict], d: _date | None = None, lang: str = "zh") -> str:
     d = d or _date.today()
     if not events:
-        return f"{d.month} 月 {d.day} 日"
+        return f"{d.month}/{d.day}"
     match = events[0].get("match", "exact")
-    if match == "exact":
-        return f"{d.month} 月 {d.day} 日"
+    if lang == "zh":
+        if match == "exact":
+            return f"{d.month} 月 {d.day} 日"
+        if match == "near":
+            return f"{d.month} 月 {d.day} 日 · 近邻事件（本月 {events[0].get('near_day', d.day)} 日）"
+        return f"{d.month} 月 {d.day} 日 · 经典里程碑（非特定日期）"
+    base = f"{d.month}/{d.day}"
     if match == "near":
-        nd = events[0].get("near_day", d.day)
-        return f"{d.month} 月 {d.day} 日 · 近邻事件（本月 {nd} 日）"
-    return f"{d.month} 月 {d.day} 日 · 经典里程碑（非特定日期）"
+        return base + (" · nearby" if lang == "en" else " · рядом")
+    if match == "evergreen":
+        return base + (" · classic milestone" if lang == "en" else " · классический рубеж")
+    return base
 
 
 def summary_text(events: list[dict], max_items: int = 2) -> str:
@@ -2563,11 +2682,12 @@ def _paragraphs(text: str) -> str:
     return "".join(f'<p class="summary">{p.strip()}</p>' for p in parts if p.strip())
 
 
-def render_section_html(events: list[dict], when: _date | None = None) -> str:
+def render_section_html(events: list[dict], when: _date | None = None, lang: str = "zh") -> str:
     if not events:
         return ""
     when = when or _date.today()
-    label = day_label(events, when)
+    L = OTD_LABELS.get(lang, OTD_LABELS["zh"])
+    label = day_label(events, when, lang)
     cards = []
     for e in events:
         url = e.get("url", "")
@@ -2575,30 +2695,39 @@ def render_section_html(events: list[dict], when: _date | None = None) -> str:
         title_html = (f'<a href="{url}" target="_blank" rel="noopener">{title}</a>'
                       if url else title)
         match = e.get("match", "exact")
+        cat = e.get("category", "")
+        cat_label = CATEGORY_I18N.get(cat, {}).get(lang) or e.get("category_label", "")
+        kind_label = KIND_I18N.get(e.get("kind", ""), {}).get(lang) or e.get("kind_label", "")
         match_tag = ""
         if match == "near":
-            match_tag = f'<span class="tag t">近邻（本月 {e.get("near_day", when.day)} 日）</span>'
+            nd = e.get("near_day", when.day)
+            txt = (f"Nearby ({when.month}/{nd})" if lang == "en"
+                   else f"Рядом ({when.month}/{nd})" if lang == "ru"
+                   else f"近邻（本月 {nd} 日）")
+            match_tag = f'<span class="tag t">{txt}</span>'
         elif match == "evergreen":
-            match_tag = '<span class="tag t">经典里程碑</span>'
+            match_tag = f'<span class="tag t">{L["badge_classic"]}</span>'
         cards.append(
             '<details class="card otd-card" open>'
             '<summary><span class="chevron"></span><div class="card-main">'
             f'<h3>{title_html}</h3>'
-            f'<div class="meta"><span class="badge b-doc">{e.get("kind_label", "历史事件")}</span>'
+            f'<div class="meta"><span class="badge b-doc">{kind_label}</span>'
             f'<span class="tag tj">{e["year"]}</span>'
-            f'<span class="tag t">{e.get("category_label", "")}</span>'
+            f'<span class="tag t">{cat_label}</span>'
             f'{match_tag}</div>'
             '</div></summary>'
             f'<div class="card-body">{_paragraphs(e.get("body") or e.get("text", ""))}</div>'
             '</details>'
         )
+    note = ""
+    if lang != "zh" and any(not e.get("translated", True) for e in events):
+        note = f'<p class="sec-desc">{L["note"]}</p>'
     return (
         '<section>'
         '<div class="sec-head"><div>'
-        f'<h2 class="sec-title"><span class="dot"></span>📅 历史上的今天'
+        f'<h2 class="sec-title"><span class="dot"></span>{L["title"]}'
         f'<span class="count">({label} · {len(events)})</span></h2>'
-        '<p class="sec-desc">神经科学的历史，常由一次次关键发现、开创性手术与改变病程的新药写成。'
-        '这里每天推送其中一件；若今日无精确记载，则推送最近事件或经典里程碑，并如实标注。</p>'
+        f'<p class="sec-desc">{L["desc"]}</p>{note}'
         '</div></div>'
         + "".join(cards)
         + '</section>'

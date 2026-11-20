@@ -98,7 +98,18 @@ def subject_for(result, cfg: dict) -> str:
 def _item_html(it, accent: str, summary_len: int = 320) -> str:
     title = _esc(it.title)
     link = f'<a href="{_esc(it.url)}" style="color:{accent};text-decoration:none">{title}</a>' if it.url else title
-    tags = " · ".join(x for x in [it.kind_label, it.source, it.date_display] if x)
+    _m = (it.extra or {}).get("metrics") or {}
+    _bits = []
+    if _m.get("if"):
+        _bits.append(f"IF {_m['if']}")
+    if _m.get("jcr"):
+        _bits.append(f"JCR {_m['jcr']}")
+    if _m.get("cas"):
+        _bits.append(f"中科院 {_m['cas']}")
+    if not _m.get("if") and _m.get("oa_2yr"):
+        _bits.append(f"OA 2yr {_m['oa_2yr']}")
+    _metric = " · ".join(_bits)
+    tags = " · ".join(x for x in [it.kind_label, it.source, it.date_display, _metric] if x)
     summary = _truncate(it.summary, summary_len)
     return (
         '<div style="padding:9px 0;border-bottom:1px solid #eeeeee">'
@@ -132,9 +143,14 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
         '<div style="padding:18px 20px;border:1px solid #eeeeee;border-top:none;border-radius:0 0 8px 8px">'
     ]
 
+    _lang = getattr(result, "on_this_day_lang", "zh")
+    _ai_title = {"zh": "🧠 今日 AI 摘要", "en": "🧠 AI daily overview",
+                 "ru": "🧠 ИИ-обзор дня"}.get(_lang, "🧠 今日 AI 摘要")
+    _otd_title = {"zh": "📅 历史上的今天", "en": "📅 On This Day",
+                  "ru": "📅 В этот день"}.get(_lang, "📅 历史上的今天")
     ai = (getattr(result, "ai_summary", "") or "").strip()
     if ai:
-        parts.append(f'<h2 style="font-size:16px;color:{accent};margin:6px 0 10px">🧠 今日 AI 摘要</h2>')
+        parts.append(f'<h2 style="font-size:16px;color:{accent};margin:6px 0 10px">{_ai_title}</h2>')
         for p_ in ai.split("\n"):
             if p_.strip():
                 parts.append(f'<p style="margin:0 0 8px;color:#333;font-size:13px;line-height:1.7">'
@@ -142,7 +158,7 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
 
     otd = getattr(result, "on_this_day", None) or []
     if otd:
-        parts.append(f'<h2 style="font-size:16px;color:{accent};margin:6px 0 10px">📅 历史上的今天</h2>')
+        parts.append(f'<h2 style="font-size:16px;color:{accent};margin:6px 0 10px">{_otd_title}</h2>')
         for e in otd:
             body = (e.get("body") or e.get("text") or "").strip()
             if summary_mode:
@@ -193,7 +209,7 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
 
     lines = [f"NeuroDaily {date} {weekday} — {len(result.items)} 条", ""]
     if ai:
-        lines += ["== 今日 AI 摘要 ==", ai, ""]
+        lines += [f"== {_ai_title.replace('🧠 ','')} ==", ai, ""]
     if otd:
         lines.append("== 历史上的今天 ==")
         for e in otd:

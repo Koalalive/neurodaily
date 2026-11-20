@@ -342,3 +342,83 @@ class RouteTests(unittest.TestCase):
             self.assertEqual(c.get(p).status_code, 200, p)
         self.assertEqual(c.post("/api/config", json={"disciplines": []}).status_code, 400)
         self.assertEqual(c.get("/reports/..%2F..%2Fetc%2Fpasswd").status_code, 404)
+
+
+class JournalMetricsTests(unittest.TestCase):
+    def test_official_overrides_auto(self):
+        from neurodaily import journal_metrics as jm
+        off = tempfile.mktemp(suffix=".json"); auto = tempfile.mktemp(suffix=".json")
+        with open(off, "w") as f:
+            json.dump({"ttl_days": 1, "journals": {"Nature Medicine":
+                       {"if": 58.7, "jcr": "Q1", "cas": "1区", "year": 2023}}}, f)
+        with open(auto, "w") as f:
+            json.dump({"journals": {"Nature Medicine":
+                       {"oa_2yr": 31.6, "fetched_at": "2026-11-20"}}}, f)
+        with mock.patch.object(jm, "OFFICIAL_PATH", off), mock.patch.object(jm, "AUTO_PATH", auto):
+            m = jm.lookup("Nat Med")
+            self.assertEqual(m["if"], 58.7)
+            self.assertEqual(m["oa_2yr"], 31.6)
+            self.assertTrue(m["official"])
+
+    def test_import_csv(self):
+        from neurodaily import journal_metrics as jm
+        off = tempfile.mktemp(suffix=".json")
+        csv_path = tempfile.mktemp(suffix=".csv")
+        with open(csv_path, "w") as f:
+            f.write("journal,if,jcr,cas,year\nNeuron,14.7,Q1,1区,2023\n")
+        with mock.patch.object(jm, "OFFICIAL_PATH", off):
+            out = jm.import_csv(csv_path)
+            self.assertEqual(out["imported"], 1)
+            m = jm.lookup("Neuron")
+            self.assertEqual(m["if"], 14.7)
+            self.assertEqual(m["cas"], "1区")
+
+    def test_render_official_badges(self):
+        r = demo.build_result()
+        r.sections["papers"][0].extra["metrics"] = {"if": 58.7, "jcr": "Q1", "cas": "1区"}
+        h = render_html(r)
+        self.assertIn("IF 58.7", h)
+        self.assertIn("中科院 1区", h)
+
+
+class WindowTests(unittest.TestCase):
+    def test_paper_window_filters_old_papers(self):
+        from neurodaily.digest import _filter_papers_by_window
+        from neurodaily.models import Item
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        items = [
+            Item(title="new paper", kind="paper", date=(now - timedelta(hours=10)).strftime("%Y-%m-%d")),
+            Item(title="old paper", kind="paper", date=(now - timedelta(hours=100)).strftime("%Y-%m-%d")),
+            Item(title="old trial", kind="trial", date=(now - timedelta(days=30)).strftime("%Y-%m-%d")),
+            Item(title="undated paper", kind="paper", date=""),
+        ]
+        out = _filter_papers_by_window(items, 36)
+        titles = {i.title for i in out}
+        self.assertIn("new paper", titles)
+        self.assertNotIn("old paper", titles)
+        self.assertIn("old trial", titles)
+        self.assertIn("undated paper", titles)
+
+    def test_default_windows(self):
+        w = DEFAULT_CONFIG().windows
+        self.assertEqual(w["daily_paper_hours"], 36)
+        self.assertGreaterEqual(w["manual_paper_hours"], 36)
+
+
+class OnThisDayLangTests(unittest.TestCase):
+    def test_labels_switch(self):
+        evs = otd.today_events()
+        en = otd.render_section_html(evs, lang="en")
+        ru = otd.render_section_html(evs, lang="ru")
+        self.assertIn("On This Day", en)
+        self.assertIn("В этот день", ru)
+
+    def test_fallback_without_key(self):
+        from neurodaily import ai_summary
+        with mock.patch.object(ai_summary, "api_key", return_value=""), \
+             mock.patch.object(otd, "_load_translations", return_value={}), \
+             mock.patch.object(otd, "_save_translations"):
+            evs = otd.today_events(lang="en")
+        self.assertTrue(evs)
+        self.assertFalse(all(e.get("translated", True) for e in evs))

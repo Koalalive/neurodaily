@@ -4,6 +4,7 @@ Used by both the CLI (standalone script) and the web app.
 """
 from __future__ import annotations
 
+import math
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -28,6 +29,7 @@ class DigestResult:
     on_this_day: list = field(default_factory=list)   # 中文“历史上的今天”条目
     ai_summary: str = ""                              # AI 每日摘要（可选）
     ai_summary_meta: dict = field(default_factory=dict)
+    on_this_day_lang: str = "zh"
     history_id: int = 0            # id in search_history (0 = not recorded)
     skipped: bool = False          # True if this run was deduped (not executed)
     skipped_reason: str = ""
@@ -56,7 +58,8 @@ _SECTION_BY_KIND = {
 
 
 def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
-        record: bool = True, max_age_hours: int | None = None, force: bool = False) -> DigestResult:
+        record: bool = True, max_age_hours: int | None = None, force: bool = False,
+        mode: str = "manual") -> DigestResult:
     """Run a digest. Optionally skip if an identical query ran recently (dedup),
     and record the run into search_history."""
     config = config or DEFAULT_CONFIG()
@@ -86,6 +89,19 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     errors: list[str] = []
     all_items: list[Item] = []
     health: list[dict] = []
+
+    win = config.windows or {}
+    try:
+        window_hours = int(win.get("daily_paper_hours", 36) if mode == "daily"
+                           else win.get("manual_paper_hours", 168))
+    except (TypeError, ValueError):
+        window_hours = 36
+    needed_days = max(1, math.ceil(window_hours / 24) + 1)
+    import copy as _copy
+    _orig_sources = _copy.deepcopy(config.sources)
+    for _n, _o in list(config.sources.items()):
+        if isinstance(_o, dict) and _o.get("enabled", True) is not False:
+            _o["lookback_days"] = max(int(_o.get("lookback_days", 2) or 2), needed_days)
 
     registry = registry_for(config)
     enabled = [(n, f) for n, f in registry.items()
@@ -137,6 +153,8 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
                           "可将各源 lookback_days 调大后重试。")
 
 
+    config.sources = _orig_sources
+
     # Tag with discipline/keyword focus
     all_items = tag_items(all_items, config)
 
@@ -161,7 +179,17 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
             priority = 0
         return (priority, it.date or "0000-00-00")
 
+    deduped = _filter_papers_by_window(deduped, window_hours)
     deduped.sort(key=_sort_key, reverse=True)
+
+    try:
+        from .journal_metrics import for_item
+        for _it in deduped:
+            _m = for_item(_it)
+            if _m:
+                _it.extra["metrics"] = _m
+    except Exception:
+        pass
 
     # Build sections (uncapped — all items shown)
     sections: dict[str, list[Item]] = {
@@ -172,9 +200,14 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         if sec in sections:
             sections[sec].append(it)
 
+    _lang = "zh"
+    try:
+        _lang = (config.scheduled.get("on_this_day") or {}).get("lang", "zh")
+    except Exception:
+        _lang = "zh"
     try:
         from .onthisday import today_events, is_enabled as _otd_enabled
-        on_this_day = today_events() if _otd_enabled(config) else []
+        on_this_day = today_events(lang=_lang) if _otd_enabled(config) else []
     except Exception:
         on_this_day = []
 
@@ -187,6 +220,7 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         config=config,
         errors=errors,
         on_this_day=on_this_day,
+        on_this_day_lang=_lang,
         fingerprint=fingerprint,
     )
     if record:
@@ -197,6 +231,23 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
             summary=f"{len(deduped)} items",
         )
     return final
+
+
+def _filter_papers_by_window(items: list[Item], hours: int) -> list[Item]:
+    """Keep papers published within `hours`; undated items are kept."""
+    from datetime import timedelta
+    cutoff = datetime.now() - timedelta(hours=max(1, int(hours)))
+    out = []
+    for it in items:
+        if it.kind == "paper" and it.date:
+            try:
+                dtv = datetime.fromisoformat(it.date if len(it.date) > 10 else it.date + "T00:00:00")
+            except Exception:
+                dtv = None
+            if dtv is not None and dtv < cutoff:
+                continue
+        out.append(it)
+    return out
 
 
 def save_report(result: DigestResult, output_path: str) -> str:

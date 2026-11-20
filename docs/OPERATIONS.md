@@ -1,5 +1,9 @@
 # NeuroDaily 运维手册（启动 / 停止 / 配置 / 调度 / GUI）
 
+> **中文** — 启动/停止、调度、配置、排障与维护记录。
+> **English** — Start/stop, scheduling, configuration, troubleshooting and maintenance log.
+> **Русский** — Запуск/остановка, расписание, конфигурация, диагностика и журнал обслуживания.
+
 > 面向本机 macOS。项目根目录：`~/neurodaily`。以下所有命令都在项目根目录执行。
 > Python 虚拟环境：`.venv/`（已 `pip install -e .`）。
 

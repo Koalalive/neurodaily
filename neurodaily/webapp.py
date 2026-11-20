@@ -60,13 +60,43 @@ def create_app(config_path: str | None = None) -> FastAPI:
         cfg = _cfg()
 
         def _do():
-            result = run_digest(cfg, check_duplicate=True, record=True, force=force)
+            try:
+                from .journal_metrics import ensure_fresh
+                ensure_fresh([j.name for j in cfg.journals])
+            except Exception:
+                pass
+            result = run_digest(cfg, check_duplicate=True, record=True, force=force,
+                                mode="manual")
+            try:
+                from .ai_summary import generate as _ai_gen, load_cfg as _ai_cfg
+                _txt = _ai_gen(result)
+                if _txt:
+                    result.ai_summary = _txt
+                    result.ai_summary_meta = {"model": _ai_cfg().get("model", "")}
+            except Exception:
+                pass
             app.state.last_run = result
             from .digest import save_report
             fmt = cfg.output.get("filename_format", "neurodaily_%Y-%m-%d.html")
             path = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
             save_report(result, path)
             app.state.last_report_path = path
+            try:
+                from .mailer import (_password, load_cfg as _mail_cfg,
+                                     render_email, save_last, send_with_retry)
+                _mc = _mail_cfg()
+                _atts = [path] if _mc.get("attach_report", True) else None
+                _subj, _html, _text = render_email(result, _mc)
+                save_last(_subj, _html, _text, path if _atts else None)
+                if _mc.get("enabled", True) and _password(_mc):
+                    send_with_retry(_subj, _html, _text, _mc, _atts)
+            except Exception:
+                pass
+            try:
+                from .webhooks import send_all as _hooks
+                _hooks(result)
+            except Exception:
+                pass
             return result
 
         background_tasks.add_task(_do)
@@ -154,6 +184,70 @@ def create_app(config_path: str | None = None) -> FastAPI:
         cfg = _cfg()
         sched = cfg.scheduled or {}
         return ((sched.get("launchd") or {}).get("label")) or "com.neurodaily.daily"
+
+    @app.get("/api/push")
+    def api_push_get():
+        from .mailer import load_cfg as _mail_cfg, _password as _mail_pw
+        from .webhooks import load_cfg as _hook_cfg
+        e, w = _mail_cfg(), _hook_cfg()
+        keys = ("enabled", "to", "smtp_host", "smtp_port", "use_ssl", "username",
+                "from", "from_name", "subject_template", "attach_report",
+                "attach_max_mb", "summary_papers", "summary_chars")
+        return JSONResponse({
+            "email": {k: e.get(k) for k in keys},
+            "webhooks": {"feishu": w.get("feishu", ""), "wecom": w.get("wecom", ""),
+                         "max_items": w.get("max_items", 8)},
+            "password_set": bool(_mail_pw(e)),
+        })
+
+    @app.post("/api/push")
+    async def api_push_post(request: Request):
+        import json as _json
+        from .mailer import CFG_PATH as EMAIL_PATH, load_cfg as _mail_cfg
+        from .webhooks import CFG_PATH as HOOK_PATH, load_cfg as _hook_cfg
+        try:
+            data = await request.json()
+        except Exception as exc:
+            return JSONResponse({"ok": False, "error": f"invalid json: {exc}"}, status_code=400)
+        email = data.get("email") or {}
+        hooks = data.get("webhooks") or {}
+        if email.get("to") is not None:
+            if isinstance(email["to"], str):
+                email["to"] = [x.strip() for x in email["to"].replace("\n", ",").split(",") if x.strip()]
+            if not email["to"]:
+                return JSONResponse({"ok": False, "error": "收件人不能为空"}, status_code=400)
+        cfg_e = _mail_cfg(); cfg_e.update({k: v for k, v in email.items() if v is not None})
+        cfg_w = _hook_cfg(); cfg_w.update({k: v for k, v in hooks.items() if v is not None})
+
+        def _write(path, obj):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                _json.dump(obj, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, path)
+
+        _write(EMAIL_PATH, cfg_e)
+        _write(HOOK_PATH, cfg_w)
+        return JSONResponse({"ok": True})
+
+    @app.post("/api/push/password")
+    async def api_push_password(request: Request):
+        from .mailer import load_cfg as _mail_cfg
+        try:
+            data = await request.json()
+        except Exception as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        pw = (data.get("password") or "").strip()
+        if not pw:
+            return JSONResponse({"ok": False, "error": "密码不能为空"}, status_code=400)
+        path = os.path.expanduser(_mail_cfg().get("password_file", "~/.neurodaily_smtp"))
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(pw)
+            os.chmod(path, 0o600)
+        except Exception as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        return JSONResponse({"ok": True, "path": path})
 
     @app.get("/api/launchd/status")
     def api_launchd_status():

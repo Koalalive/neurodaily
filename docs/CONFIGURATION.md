@@ -1,5 +1,11 @@
 # 配置参考
 
+> **中文** — 全部配置字段、示例与常用改法。
+> **English** — Full configuration reference with examples and recipes.
+> **Русский** — Полный справочник конфигурации с примерами.
+
+> [中文](CONFIGURATION.md) · [English](en/CONFIGURATION.md) · [Русский](ru/CONFIGURATION.md)
+
 > 所有配置都有默认值；**新增字段均可选**，旧配置文件无需迁移即可运行。
 
 ## 1. 文件位置
@@ -266,3 +272,31 @@ neurodaily config describe
 | 增加收件人 | `neurodaily mail --add a@b.com` 或 `mail --tui` |
 | 改定时时间 | 改 `scheduled.hour/minute` 后 `launchd install` |
 | 导出 BibTeX | `output.extra_formats: ["bibtex"]` 或 `neurodaily export --format bibtex` |
+
+
+---
+
+## 9. 时间窗口与多语言（新增）
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `windows.daily_paper_hours` | `36` | 定时任务只保留最近 36 小时的论文 |
+| `windows.manual_paper_hours` | `168` | 手动 `run --mode manual` 的论文窗口 |
+| `windows.other_lookback_days` | `7` | 非论文（试验/政策/产业）回看天数 |
+| `scheduled.on_this_day.lang` | `zh` | 史论语言：`zh`/`en`/`ru`；CLI 覆盖 `run --lang en` |
+
+论文窗口在抓取后统一过滤；无日期的论文保留（宁可多推，不静默丢）。
+
+## 10. Web 设置页（推送 + 一键检索）
+
+`/settings` 除主配置外新增「推送设置」：
+
+- 邮件：启用开关、收件人（逗号/换行）、SMTP 主机/端口/账号/发件人、主题模板、是否附完整 HTML
+- 凭据：SMTP 授权码输入框 → `POST /api/push/password` 写入 `~/.neurodaily_smtp`（600）
+- Webhook：飞书、企业微信
+
+底部按钮 **保存并立即检索推送** 的流程：保存配置 → 保存推送设置 → `POST /api/run?force=1`
+→ 后台检索 → 写报告 → AI 摘要 → 邮件/Webhook → 页面提示「完成（N 条）· 查看报告」。
+
+报告页入口：右上角 **⚙ 设置 / Settings**；**▶ Run now** 会跳到 `/settings?next=run`。
+macOS 可双击 `scripts/启动 NeuroDaily.command` 启动服务并直接打开设置页，无需命令行。

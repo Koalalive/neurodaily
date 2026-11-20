@@ -84,6 +84,15 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
   </section>
 
   <section>
+    <h2>检索时间窗口</h2>
+    <p class="desc">论文只显示窗口内的条目；每日运行与手动运行可分别设置（小时）。</p>
+    <div class="grid2">
+      <div><label>每日运行：论文小时数</label><input type="number" id="win_daily" min="1" max="720"></div>
+      <div><label>手动运行：论文小时数</label><input type="number" id="win_manual" min="1" max="8760"></div>
+    </div>
+  </section>
+
+  <section>
     <h2>每日定时任务</h2>
     <div class="inline">
       <label><input type="checkbox" id="sch_enabled"> 启用定时</label>
@@ -94,6 +103,14 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
     <div class="inline" style="margin-top:10px">
       <label><input type="checkbox" id="otd_enabled"> 报告含「历史上的今天」</label>
       <label><input type="checkbox" id="otd_notify"> 每天弹桌面通知</label>
+    </div>
+    <div class="inline" style="margin-top:10px">
+      <label>「历史上的今天」语言</label>
+      <select id="otd_lang" style="width:160px">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="ru">Русский</option>
+      </select>
     </div>
     <div class="inline" style="margin-top:12px">
       <span class="pill" id="ldstat">定时状态：…</span>
@@ -117,13 +134,37 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
   </section>
 
   <section>
+    <h2>推送设置（邮件 / Webhook）</h2>
+    <p class="desc">保存后可直接点底部「保存并立即检索推送」。</p>
+    <div class="inline"><label><input type="checkbox" id="push_email_enabled"> 启用邮件</label>
+      <label><input type="checkbox" id="push_attach" checked> 附带完整 HTML</label></div>
+    <div style="margin-top:8px"><label>收件人（逗号或换行分隔）</label>
+      <textarea id="push_to" rows="3" style="width:100%;background:#161616;border:1px solid #262626;color:#e8e8e8;border-radius:8px;padding:8px"></textarea></div>
+    <div class="grid2" style="margin-top:8px">
+      <div><label>SMTP 主机</label><input id="push_host"></div>
+      <div><label>端口</label><input type="number" id="push_port"></div>
+      <div><label>账号 username</label><input id="push_user"></div>
+      <div><label>发件人 from</label><input id="push_from"></div>
+    </div>
+    <div class="inline" style="margin-top:8px"><label>主题模板</label><input id="push_subject" style="flex:1"></div>
+    <div class="inline" style="margin-top:8px"><label>SMTP 授权码</label>
+      <input type="password" id="push_password" placeholder="不修改则留空" style="flex:1">
+      <span class="mini" id="push_pw_state"></span></div>
+    <div class="grid2" style="margin-top:8px">
+      <div><label>飞书 Webhook</label><input id="push_feishu"></div>
+      <div><label>企业微信 Webhook</label><input id="push_wecom"></div>
+    </div>
+  </section>
+
+  <section>
     <h2>恢复默认</h2>
     <p class="desc">把配置重置为内置默认值（会覆盖当前设置）。</p>
     <button class="warn" onclick="resetDefaults()">重置为默认配置</button>
   </section>
 </main>
 <footer>
-  <button class="primary" onclick="save()">保存</button>
+  <button class="primary" id="saveRun" onclick="saveAndRun()">保存并立即检索推送</button>
+  <button onclick="save()">仅保存设置</button>
   <button onclick="load()">重新载入</button>
   <span id="msg"></span>
 </footer>
@@ -187,6 +228,10 @@ function render(){
   el('sch_enabled').checked=!!sc.enabled;
   el('sch_hour').value=(sc.hour!=null?sc.hour:8); el('sch_minute').value=(sc.minute!=null?sc.minute:0);
   el('otd_enabled').checked=(otd.enabled!==false); el('otd_notify').checked=(otd.notify!==false);
+  el('otd_lang').value = otd.lang || 'zh';
+  var w = BASE.windows || {};
+  el('win_daily').value = (w.daily_paper_hours != null ? w.daily_paper_hours : 36);
+  el('win_manual').value = (w.manual_paper_hours != null ? w.manual_paper_hours : 168);
   var pbox=el('policy_feeds'); pbox.innerHTML='';
   (BASE.policy_feeds||[]).forEach(function(u){pbox.appendChild(feedRow(u));});
   var jbox=el('journals'); jbox.innerHTML='';
@@ -199,7 +244,14 @@ async function load(){
     el('cfgpath').textContent='config: ~/neurodaily/config/config.json';
     el('msg').textContent=''; el('msg').className='';
   }catch(e){el('msg').textContent='加载失败: '+e; el('msg').className='bad';}
+  loadPush();
   loadLaunchdStatus();
+  try{
+    if(new URLSearchParams(location.search).get('next')==='run'){
+      el('saveRun').scrollIntoView({block:'center'});
+      el('saveRun').style.boxShadow='0 0 0 3px rgba(56,189,248,.5)';
+    }
+  }catch(e){}
 }
 
 function collect(){
@@ -228,7 +280,11 @@ function collect(){
   data.scheduled.enabled=el('sch_enabled').checked;
   data.scheduled.hour=parseInt(el('sch_hour').value||'8',10);
   data.scheduled.minute=parseInt(el('sch_minute').value||'0',10);
-  data.scheduled.on_this_day={enabled:el('otd_enabled').checked,notify:el('otd_notify').checked};
+  data.scheduled.on_this_day={enabled:el('otd_enabled').checked,notify:el('otd_notify').checked,
+    lang:el('otd_lang').value};
+  data.windows=Object.assign({},data.windows||{});
+  data.windows.daily_paper_hours=parseInt(el('win_daily').value||'36',10);
+  data.windows.manual_paper_hours=parseInt(el('win_manual').value||'168',10);
   data.policy_feeds=[].slice.call(el('policy_feeds').querySelectorAll('.feed')).map(function(i){return i.value.trim();}).filter(Boolean);
   data.journals=[].slice.call(el('journals').querySelectorAll('.row')).map(function(r){
     return {name:r.querySelector('.j-name').value.trim(),
@@ -245,9 +301,9 @@ async function save(){
   try{
     var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     var out=await r.json();
-    if(out.ok){el('msg').textContent='✅ 已保存 → '+out.path; el('msg').className='ok';}
-    else{el('msg').textContent='❌ 保存失败: '+(out.error||'unknown'); el('msg').className='bad';}
-  }catch(e){el('msg').textContent='❌ '+e; el('msg').className='bad';}
+    if(out.ok){el('msg').textContent='✅ 已保存 → '+out.path; el('msg').className='ok'; return true;}
+    el('msg').textContent='❌ 保存失败: '+(out.error||'unknown'); el('msg').className='bad'; return false;
+  }catch(e){el('msg').textContent='❌ '+e; el('msg').className='bad'; return false;}
 }
 
 async function resetDefaults(){
@@ -274,7 +330,77 @@ async function launchd(action){
   var out=await r.json();
   el('msg').textContent = out.ok ? ('✅ '+(action==='install'?'已安装/更新':'已卸载')) : '❌ 操作失败';
   el('msg').className = out.ok?'ok':'bad';
+  loadPush();
   loadLaunchdStatus();
+  try{
+    if(new URLSearchParams(location.search).get('next')==='run'){
+      el('saveRun').scrollIntoView({block:'center'});
+      el('saveRun').style.boxShadow='0 0 0 3px rgba(56,189,248,.5)';
+    }
+  }catch(e){}
+}
+
+function pushPayload(){
+  return {email:{enabled:el('push_email_enabled').checked,
+      to:el('push_to').value,
+      smtp_host:el('push_host').value.trim(),
+      smtp_port:parseInt(el('push_port').value||'587',10),
+      username:el('push_user').value.trim(),
+      from:el('push_from').value.trim(),
+      subject_template:el('push_subject').value.trim(),
+      attach_report:el('push_attach').checked},
+    webhooks:{feishu:el('push_feishu').value.trim(),
+      wecom:el('push_wecom').value.trim()}};
+}
+async function loadPush(){
+  try{
+    var d=await (await fetch('/api/push')).json();
+    var e=d.email||{};
+    el('push_email_enabled').checked=e.enabled!==false;
+    el('push_to').value=(e.to||[]).join('\n');
+    el('push_host').value=e.smtp_host||'';
+    el('push_port').value=e.smtp_port||587;
+    el('push_user').value=e.username||'';
+    el('push_from').value=e.from||'';
+    el('push_subject').value=e.subject_template||'';
+    el('push_attach').checked=e.attach_report!==false;
+    el('push_pw_state').textContent=d.password_set?'（已设置）':'（未设置）';
+    var w=d.webhooks||{};
+    el('push_feishu').value=w.feishu||'';
+    el('push_wecom').value=w.wecom||'';
+  }catch(e){}
+}
+async function savePush(){
+  var r=await fetch('/api/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pushPayload())});
+  var out=await r.json();
+  if(!out.ok) throw new Error(out.error||'推送设置保存失败');
+  var pw=el('push_password').value;
+  if(pw){
+    var r2=await fetch('/api/push/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+    var o2=await r2.json();
+    if(!o2.ok) throw new Error(o2.error||'密码保存失败');
+    el('push_password').value=''; el('push_pw_state').textContent='（已设置）';
+  }
+}
+async function saveAndRun(){
+  el('msg').textContent='保存并启动检索…'; el('msg').className='';
+  try{
+    var okc=await save(); if(okc===false) throw new Error('配置保存失败');
+    await savePush();
+    var r=await fetch('/api/run?force=1',{method:'POST'});
+    var d=await r.json(); var started=d.started_at;
+    el('msg').textContent='检索中…（约 2–4 分钟）';
+    var timer=setInterval(async function(){
+      try{
+        var s=await (await fetch('/api/status')).json();
+        if(s.last_run && s.last_run>=started){
+          clearInterval(timer);
+          el('msg').className='ok';
+          el('msg').innerHTML='✅ 完成（'+s.item_count+' 条）· <a href="/">查看报告</a>';
+        }
+      }catch(e){}
+    },2000);
+  }catch(e){ el('msg').className='bad'; el('msg').textContent='❌ '+e; }
 }
 
 load();

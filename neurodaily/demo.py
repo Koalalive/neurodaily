@@ -72,6 +72,14 @@ def _items() -> list[Item]:
 def build_result(config=None) -> DigestResult:
     cfg = config or DEFAULT_CONFIG()
     items = tag_items(_items(), cfg)
+    try:
+        from .journal_metrics import for_item
+        for it in items:
+            m = for_item(it)
+            if m:
+                it.extra["metrics"] = m
+    except Exception:
+        pass
     sections = {"papers": [], "industry": [], "trials_conferences": [], "policy": []}
     for it in items:
         sections[_SECTION_BY_KIND.get(it.kind, "papers")].append(it)

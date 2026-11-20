@@ -81,6 +81,7 @@ class Config:
     sources: dict[str, dict]                       # per-source options
     output: dict[str, Any]
     scheduled: dict[str, Any]
+    windows: dict[str, Any] = field(default_factory=dict)   # retrieval time windows
     policy_feeds: list[str] = field(default_factory=list)   # RSS/news/policy URLs
     journals: list[Journal] = field(default_factory=list)   # top journals
 
@@ -97,6 +98,7 @@ class Config:
             sources=dict(data.get("sources", {})),
             output=dict(data.get("output", {})),
             scheduled=dict(data.get("scheduled", {})),
+            windows=dict(data.get("windows", {})),
             policy_feeds=list(data.get("policy_feeds", [])),
             journals=[Journal.from_dict(j) for j in data.get("journals", [])],
         )
@@ -120,6 +122,7 @@ class Config:
             sources=dict(data.get("sources", {})),
             output=dict(data.get("output", {})),
             scheduled=dict(data.get("scheduled", {})),
+            windows=dict(data.get("windows", {})),
             policy_feeds=list(data.get("policy_feeds", [])),
             journals=[Journal.from_dict(j) for j in data.get("journals", [])],
         )
@@ -145,6 +148,7 @@ class Config:
             "sources": self.sources,
             "output": self.output,
             "scheduled": self.scheduled,
+            "windows": self.windows,
             "policy_feeds": self.policy_feeds,
             "journals": [j.to_dict() for j in self.journals],
         }
@@ -423,6 +427,11 @@ def DEFAULT_CONFIG() -> Config:
         "https://www.nature.com/ncomms.rss",
         "https://www.cell.com/action/showFeed?type=etoc&feed=rss&jc=neuron",
     ]
+    windows = {
+        "daily_paper_hours": 36,
+        "manual_paper_hours": 168,
+        "other_lookback_days": 7,
+    }
     journals = JOURNALS()
     return Config(
         profile="neuro",
@@ -435,6 +444,7 @@ def DEFAULT_CONFIG() -> Config:
         sources=sources,
         output=output,
         scheduled=scheduled,
+        windows=windows,
         policy_feeds=policy_feeds,
         journals=journals,
     )

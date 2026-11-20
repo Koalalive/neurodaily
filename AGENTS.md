@@ -1,5 +1,9 @@
 # AGENTS.md
 
+> **中文** — Agent 入口与配置协议。
+> **English** — Agent entry point and configuration protocol.
+> **Русский** — Точка входа агента и протокол конфигурации.
+
 Agent 入口。**改配置前先读 [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md)**。
 
 ## 非交互配置协议

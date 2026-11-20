@@ -71,6 +71,7 @@ class ConfigModel(BaseModel):
     sources: dict[str, SourceModel] = Field(default_factory=dict)
     output: dict = Field(default_factory=dict)
     scheduled: dict = Field(default_factory=dict)
+    windows: dict = Field(default_factory=dict)
     policy_feeds: list[str] = Field(default_factory=list)
     journals: list[JournalModel] = Field(default_factory=list)
 

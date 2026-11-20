@@ -1,5 +1,11 @@
 # 架构说明
 
+> **中文** — 架构、数据流、模块职责与扩展点。
+> **English** — Architecture, data flow, module responsibilities and extension points.
+> **Русский** — Архитектура, поток данных, обязанности модулей и точки расширения.
+
+> [中文](ARCHITECTURE.md) · [English](en/ARCHITECTURE.md) · [Русский](ru/ARCHITECTURE.md)
+
 > 目标：**一台机器、一次部署、每天自动产出可读日报**；所有环节可降级，任何单点失败都不应让整份报告消失。
 
 ## 1. 总览

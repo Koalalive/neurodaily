@@ -23,6 +23,8 @@ def render_html(result: DigestResult, config: Config | None = None) -> str:
     if env is None:
         return _fallback_plain(result)
     try:
+        from . import journal_metrics
+        env.globals["jm"] = journal_metrics.lookup
         template = env.get_template("report.html.j2")
         ctx = {
             "result": result,
@@ -67,7 +69,7 @@ def _inject_on_this_day(html: str, result: DigestResult) -> str:
     if not events:
         return html
     from .onthisday import render_section_html
-    section = render_section_html(events)
+    section = render_section_html(events, lang=getattr(result, "on_this_day_lang", "zh"))
     if not section:
         return html
     for marker in ('<main class="wrap">', "<main>", "<main "):

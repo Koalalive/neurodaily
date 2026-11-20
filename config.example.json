@@ -257,7 +257,8 @@
     "minute": 0,
     "on_this_day": {
       "enabled": true,
-      "notify": true
+      "notify": true,
+      "lang": "zh"
     },
     "launchd": {
       "label": "com.neurodaily.daily",
@@ -456,5 +457,10 @@
       "category": "cognition"
     }
   ],
-  "version": 2
+  "version": 2,
+  "windows": {
+    "daily_paper_hours": 36,
+    "manual_paper_hours": 168,
+    "other_lookback_days": 7
+  }
 }
