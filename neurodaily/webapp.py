@@ -299,12 +299,20 @@ def create_app(config_path: str | None = None) -> FastAPI:
     @app.get("/report/latest")
     def report_latest():
         from fastapi.responses import FileResponse
+        import glob
+
+        def _is_demo(path: str) -> bool:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    return "(demo)" in f.read(4000)
+            except Exception:
+                return False
+
         p = getattr(app.state, "last_report_path", None)
-        if not p or not os.path.exists(p):
-            import glob
+        if not p or not os.path.exists(p) or _is_demo(p):
             files = sorted(glob.glob(os.path.join(_cfg().output_dir(), "neurodaily_*.html")),
-                           key=os.path.getmtime)
-            p = files[-1] if files else None
+                           key=os.path.getmtime, reverse=True)
+            p = next((f for f in files if not _is_demo(f)), files[0] if files else None)
         if not p:
             return JSONResponse({"error": "no report yet"}, status_code=404)
         return FileResponse(p, media_type="text/html")
