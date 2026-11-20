@@ -1,6 +1,6 @@
 [project]
 name = "neurodaily"
-version = "1.0.1"
+version = "1.0.2"
 description = "Daily neuroscience/psychiatry literature & industry digest (arXiv, PubMed, bioRxiv, FDA, ClinicalTrials, policy news) → HTML report."
 requires-python = ">=3.10"
 license = {file = "LICENSE"}

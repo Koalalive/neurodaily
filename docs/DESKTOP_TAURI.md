@@ -96,6 +96,29 @@ Each job builds and smoke-tests the sidecar, builds Tauri, and uploads its
 installers. On macOS, the workflow creates and verifies the DMG from the Tauri
 app bundle. The publish job attaches the installers after all builds pass.
 
+### Private desktop updates
+
+Install v1.0.2 or later from the private GitHub Releases page once. In the app,
+choose **更新 → 更新授权…** and save your own GitHub fine-grained personal access
+token. Select `Koalalive` as the resource owner, limit repository access to
+`neurodaily`, and grant **Contents: Read-only**. If GitHub does not offer the
+repository for your account's token, download new installers from Releases
+using your signed-in browser.
+
+NeuroDaily stores the credential in the system credential store and checks for
+updates on startup and every 12 hours. On Linux this uses a Secret Service
+provider such as GNOME Keyring or KWallet. **检查更新…** runs a check immediately.
+When a newer version is available, the app asks to download it, verifies its
+version-bound signature, and asks again before installing and restarting.
+Configuration and report data live outside the installation directory.
+
+Release tags must match the desktop app version. The release workflow builds
+signed update packages for macOS, Windows NSIS/MSI and Linux AppImage/deb,
+checks that the complete set is available, and publishes the draft release.
+Configure `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+as Actions secrets. Keep a backup of the original signing key so later
+versions can update existing installations.
+
 ## 5. Signing & notarization
 
 Unsigned builds work locally but trigger OS warnings:

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src ipc: http://ipc.localhost https://ipc.localhost">
+<title>NeuroDaily 更新授权</title>
+<style>
+  :root { color-scheme: light dark; font: 15px system-ui, sans-serif; }
+  body { max-width: 480px; margin: 28px auto; padding: 0 20px; line-height: 1.6; }
+  h1 { margin: 0 0 12px; font-size: 24px; }
+  input { display: block; box-sizing: border-box; width: 100%; padding: 8px; margin: 5px 0 14px; }
+  button { padding: 6px 12px; font: inherit; }
+  #status { min-height: 2em; }
+</style>
+<script src="update-auth.js" defer></script>
+<main>
+  <h1>更新授权</h1>
+  <p>使用有权访问 NeuroDaily 的 GitHub 账号，创建仅能读取 <strong>Koalalive/neurodaily</strong> 的细粒度令牌，将 <strong>Contents</strong> 设为 <strong>Read-only</strong>。</p>
+  <p><a href="https://github.com/settings/personal-access-tokens/new?name=NeuroDaily%20Updates&amp;target_name=Koalalive&amp;contents=read">在 GitHub 创建只读令牌 ↗</a></p>
+  <form id="authorization" autocomplete="off">
+    <label for="token">GitHub 只读令牌</label>
+    <input id="token" type="password" autocomplete="off" required spellcheck="false" maxlength="512">
+    <button type="submit">验证并保存</button>
+    <button type="button" id="clear">移除授权</button>
+  </form>
+  <p role="status" id="status"></p>
+</main>
+</html>

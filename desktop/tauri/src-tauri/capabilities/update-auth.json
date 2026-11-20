@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "update-auth",
+  "description": "Save update credentials from the bundled authorization window",
+  "windows": ["update-auth"],
+  "permissions": ["allow-set-update-token"]
+}

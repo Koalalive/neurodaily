@@ -1,12 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "NeuroDaily",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "identifier": "com.neurodaily.app",
   "build": {
     "frontendDist": "../frontend"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
@@ -50,5 +51,11 @@
     "externalBin": [
       "binaries/neurodaily-server"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwMzhDMzcxNTM2ODc5QTMKUldTamVXaFRjY000Z01DUmdUWWFSTXdIT1dheXI1MENxVTNrN3NkYkxWMmtTTVc1UEh5cFRqRisK",
+      "requireSignedVersion": true
+    }
   }
 }
