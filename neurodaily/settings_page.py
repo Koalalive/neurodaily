@@ -277,9 +277,12 @@ function collect(){
   data.global_keywords=split(el('global_keywords').value);
   data.sources={};
   [].slice.call(el('sources').querySelectorAll('.row')).forEach(function(r){
-    data.sources[r.dataset.key]={enabled:r.querySelector('.s-en').checked,
+    var key=r.dataset.key;
+    var prev=(BASE.sources&&BASE.sources[key])||{};
+    data.sources[key]=Object.assign({},prev,{
+      enabled:r.querySelector('.s-en').checked,
       max_results:parseInt(r.querySelector('.s-max').value||'0',10),
-      lookback_days:parseInt(r.querySelector('.s-look').value||'1',10)};
+      lookback_days:parseInt(r.querySelector('.s-look').value||'1',10)});
   });
   data.output=Object.assign({},data.output||{});
   data.output.dir=el('out_dir').value.trim();

@@ -758,3 +758,10 @@ class SectionButtonTests(unittest.TestCase):
         self.assertNotIn('class="sec-actions"', h)
         self.assertNotIn("toggleAll(", h)
         self.assertIn("initCollapsibleSections", h)
+
+
+class SettingsSourcePreserveTests(unittest.TestCase):
+    def test_settings_preserves_custom_source_fields(self):
+        from neurodaily.settings_page import SETTINGS_HTML
+        self.assertIn("Object.assign({},prev", SETTINGS_HTML)
+        self.assertIn("BASE.sources&&BASE.sources[key]", SETTINGS_HTML)
