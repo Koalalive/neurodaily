@@ -1,9 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::ffi::OsStr;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
@@ -11,9 +12,9 @@ use std::time::{Duration, Instant};
 
 use tauri::{
     webview::{DownloadEvent, NewWindowResponse},
-    AppHandle, Manager, RunEvent, Url, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Manager, RunEvent, Url, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_dialog::{DialogExt, FilePath, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_opener::OpenerExt;
 
 #[cfg(target_os = "macos")]
@@ -61,6 +62,62 @@ fn is_config_download(url: &Url, sidecar_port: u16) -> bool {
         && sidecar_port != 0
         && url.port_or_known_default() == Some(sidecar_port)
         && url.path() == "/api/config/export"
+}
+
+fn save_config_download(window: &WebviewWindow, url: Url, suggested: &Path) {
+    let name = suggested
+        .file_name()
+        .and_then(OsStr::to_str)
+        .unwrap_or("neurodaily-config.json");
+    let app = window.app_handle().clone();
+    app.dialog()
+        .file()
+        .set_parent(window)
+        .set_title("导出已保存的配置")
+        .set_file_name(name)
+        .add_filter("JSON", &["json"])
+        .save_file(move |target| {
+            let Some(target) = target else { return };
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = download_config(url, target).await {
+                    eprintln!("Could not export config: {error}");
+                    app.dialog()
+                        .message("无法保存配置文件。请检查所选目录的写入权限，或稍后再试。")
+                        .title("导出失败")
+                        .kind(MessageDialogKind::Error)
+                        .show(|_| {});
+                }
+            });
+        });
+}
+
+async fn download_config(
+    url: Url,
+    target: FilePath,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = target.into_path()?;
+    let response = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(10))
+        .build()?
+        .get(url)
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        return Err(format!("Config export returned HTTP {}", response.status()).into());
+    }
+    let bytes = response.bytes().await?;
+    tauri::async_runtime::spawn_blocking(move || write_config_export(&path, &bytes)).await??;
+    Ok(())
+}
+
+fn write_config_export(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let folder = path.parent().ok_or(std::io::ErrorKind::InvalidInput)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(folder)?;
+    temporary.write_all(bytes)?;
+    temporary.persist(path)?;
+    Ok(())
 }
 
 fn open_in_browser(app: &AppHandle, url: &Url) {
@@ -128,9 +185,14 @@ fn create_main_window(app: &tauri::App, sidecar_port: Arc<AtomicU16>) -> tauri::
             }
             NewWindowResponse::Deny
         })
-        .on_download(move |_, event| match event {
-            DownloadEvent::Requested { url, .. } => {
-                is_config_download(&url, download_port.load(Ordering::Relaxed))
+        .on_download(move |webview, event| match event {
+            DownloadEvent::Requested { url, destination } => {
+                if is_config_download(&url, download_port.load(Ordering::Relaxed)) {
+                    if let Some(window) = webview.app_handle().get_webview_window("main") {
+                        save_config_download(&window, url, destination);
+                    }
+                }
+                false
             }
             _ => true,
         })
@@ -342,6 +404,17 @@ mod tests {
             &local.join("/api/config").unwrap(),
             1234
         ));
+    }
+
+    #[test]
+    fn config_export_writes_to_the_selected_directory_and_filename() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("研究配置.json");
+        let shared_config = br#"{"format":"neurodaily.profile","version":1,"config":{}}"#;
+        std::fs::write(&path, b"previous export").unwrap();
+        super::write_config_export(&path, shared_config).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), shared_config);
+        assert_eq!(std::fs::read_dir(folder.path()).unwrap().count(), 1);
     }
 
     #[cfg(windows)]

@@ -9,7 +9,9 @@ import html as _html
 import json
 import os
 import smtplib
+import socket
 import ssl
+from contextlib import contextmanager
 from datetime import datetime
 from email import encoders
 from email.header import Header
@@ -318,6 +320,67 @@ def _build_message(cfg: dict, subject: str, html: str, text: str,
     return msg
 
 
+@contextmanager
+def _smtp_connection(cfg: dict, timeout: int):
+    host, port = cfg["smtp_host"], int(cfg["smtp_port"])
+    context = ssl.create_default_context()
+    if cfg.get("use_ssl"):
+        server = smtplib.SMTP_SSL(host, port, timeout=timeout, context=context)
+    else:
+        server = smtplib.SMTP(host, port, timeout=timeout)
+    try:
+        if not cfg.get("use_ssl"):
+            server.starttls(context=context)
+        yield server
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            server.close()
+
+
+def test_connection(draft: dict) -> dict:
+    """Check the configured SMTP transport and login without sending mail."""
+    saved = load_cfg()
+    fields = ("smtp_host", "smtp_port", "use_ssl", "username")
+    cfg = {**saved, **{name: draft[name] for name in fields if name in draft}}
+    host, port, username = (cfg[name] for name in ("smtp_host", "smtp_port", "username"))
+    password = draft.get("password", "")
+    if not isinstance(host, str) or not host.strip() or any(c.isspace() or c in "/@\\" for c in host):
+        return {"ok": False, "message": "请输入 SMTP 主机名。"}
+    if (type(port) is not int or not 1 <= port <= 65535 or type(cfg.get("use_ssl")) is not bool
+            or not isinstance(username, str) or not username.strip()):
+        return {"ok": False, "message": "请填写有效的 SMTP 端口、加密方式和登录账号。"}
+    if not isinstance(password, str):
+        return {"ok": False, "message": "请输入有效的 SMTP 授权码。"}
+    password = password.strip()
+    if not password:
+        if (host.lower().rstrip(".") != str(saved.get("smtp_host", "")).lower().rstrip(".")
+                or username != saved.get("username")):
+            return {"ok": False, "message": "更改服务器或账号后，请输入对应的 SMTP 授权码再测试。"}
+        password = _password(saved)
+    if not password:
+        return {"ok": False, "message": "请填写 SMTP 授权码或应用专用密码。"}
+    try:
+        with _smtp_connection(cfg, timeout=8) as server:
+            server.login(username, password)
+    except (smtplib.SMTPAuthenticationError, UnicodeError):
+        message = "服务器拒绝登录，请核对账号和 SMTP 授权码。"
+    except ssl.SSLError:
+        message = "TLS 握手或证书校验失败，请核对端口和加密方式。"
+    except smtplib.SMTPNotSupportedError:
+        message = "服务器不支持所选的加密或登录方式。"
+    except socket.gaierror:
+        message = "无法解析 SMTP 主机名，请核对服务器地址。"
+    except TimeoutError:
+        message = "SMTP 连接超时，请检查网络、端口和加密方式。"
+    except OSError:
+        message = "无法连接或登录 SMTP 服务器，请检查网络和服务器配置。"
+    else:
+        return {"ok": True, "message": "SMTP 连接和登录成功。本次测试没有发送邮件。"}
+    return {"ok": False, "message": message}
+
+
 def send(subject: str, html: str, text: str, cfg: dict | None = None,
          attachments: list[str] | None = None) -> None:
     cfg = cfg or load_cfg()
@@ -330,22 +393,9 @@ def send(subject: str, html: str, text: str, cfg: dict | None = None,
             f"或设置环境变量 {cfg.get('password_env')}。"
         )
     msg = _build_message(cfg, subject, html, text, attachments)
-    host, port = cfg["smtp_host"], int(cfg["smtp_port"])
-    timeout = int(cfg.get("smtp_timeout", 120))
-    context = ssl.create_default_context()
-    if cfg.get("use_ssl"):
-        server = smtplib.SMTP_SSL(host, port, timeout=timeout, context=context)
-    else:
-        server = smtplib.SMTP(host, port, timeout=timeout)
-        server.starttls(context=context)
-    try:
+    with _smtp_connection(cfg, int(cfg.get("smtp_timeout", 120))) as server:
         server.login(cfg["username"], pw)
         server.sendmail(cfg["from"], cfg["to"], msg.as_string())
-    finally:
-        try:
-            server.quit()
-        except Exception:
-            pass
 
 
 def send_with_retry(subject: str, html: str, text: str, cfg: dict | None = None,

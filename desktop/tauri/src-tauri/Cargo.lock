@@ -2457,7 +2457,7 @@ dependencies = [
 
 [[package]]
 name = "neurodaily-desktop"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "keyring",
  "objc2",
@@ -2470,6 +2470,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-updater",
+ "tempfile",
  "tokio",
 ]
 

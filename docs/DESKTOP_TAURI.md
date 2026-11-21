@@ -121,15 +121,14 @@ versions can update existing installations.
 
 ## 5. Signing & notarization
 
-Unsigned builds work locally but trigger OS warnings:
-
-- macOS: right-click → Open, or `xattr -dr com.apple.quarantine /Applications/NeuroDaily.app`
-- Windows: SmartScreen → More info → Run anyway
-
-For clean distribution:
-
-- macOS: Apple Developer ID Application certificate + `notarytool` (Tauri supports
-  `APPLE_CERTIFICATE`, `APPLE_ID`, `APPLE_TEAM_ID`).
+- macOS builds use ad hoc bundle signing by default. Packaging checks the app
+  code signature before and after copying it into the DMG and runs the signed
+  sidecar. The ad hoc build uses `hardenedRuntime: false` so the sidecar can load
+  the bundled Python libraries. An ad hoc build downloaded from a trusted source
+  may still require approval in Privacy & Security.
+- For Apple notarization, sign the frozen Python libraries and the app with the
+  same Developer ID Application identity, enable `hardenedRuntime` in the release
+  configuration, and configure Tauri's Apple notarization credentials.
 - Windows: Authenticode certificate (Tauri supports `WINDOWS_CERTIFICATE`).
 - Linux: no OS-level signing required; publish checksums.
 
@@ -139,7 +138,7 @@ For clean distribution:
 |---|---|
 | Window stays on splash | Sidecar failed; run `neurodaily-server` manually and check stderr |
 | `failed to start .../neurodaily-server` | Sidecar missing or wrong target triple; rebuild with `desktop/build_sidecar.sh` |
-| macOS “app is damaged” | Unsigned/quarantine; remove quarantine or sign/notarize |
+| macOS “app is damaged” | Verify the download hash and run `codesign --verify --deep --strict /Applications/NeuroDaily.app`. If the signature fails, replace it with a verified build. |
 | Windows SmartScreen | Unsigned installer; use More info → Run anyway |
 | Linux webview error | Install `libwebkit2gtk-4.1-0` / `libgtk-3-0` |
 | Port conflict | Sidecar chooses a free localhost port automatically |

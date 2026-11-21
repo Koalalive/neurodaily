@@ -33,9 +33,8 @@ NeuroDaily 提供 macOS、Windows 和 Linux 桌面安装包。终端用户**不�
 ## 3. macOS
 
 - macOS 12 Monterey 及以上；Apple Silicon 与 Intel 分别提供安装包。
-- 首次打开未签名/未公证版本时：
-  - 右键 App → **打开**，或
-  - `xattr -dr com.apple.quarantine /Applications/NeuroDaily.app`
+- 下载已通过签名校验的临时签名版本时，macOS 可能要求在「系统设置 → 隐私与安全性」中单独批准该应用。
+- 如果系统提示「应用已损坏」，先核对 Release 下载摘要，并运行 `codesign --verify --deep --strict /Applications/NeuroDaily.app`。签名校验失败时请更换安装包。
 - 数据目录：`~/Library/Application Support/NeuroDaily/`
   - `config/`、`output/`、`last_email.json`
 - 端口：仅监听 `127.0.0.1` 随机端口，不触发防火墙入站提示。

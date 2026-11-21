@@ -14,10 +14,13 @@ Config: config/ai_summary.json (gitignored)
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import re
 from datetime import datetime
+from tempfile import NamedTemporaryFile
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -60,16 +63,103 @@ def load_cfg() -> dict:
     return cfg
 
 
-def api_key(cfg: dict | None = None) -> str:
-    cfg = cfg or load_cfg()
-    key = os.environ.get(cfg.get("api_key_env", ""), "")
-    if key:
-        return key
+def _key_and_source(cfg: dict) -> tuple[str, str]:
+    key = cfg.get("api_key")
+    if isinstance(key, str) and key:
+        return key, "settings"
+    if key := os.environ.get(cfg.get("api_key_env", ""), ""):
+        return key, "environment"
     try:
         with open(os.path.expanduser(cfg.get("api_key_file", "")), encoding="utf-8") as f:
-            return f.read().strip()
-    except Exception:
-        return ""
+            key = f.read().strip()
+            if key:
+                return key, "file"
+    except (OSError, TypeError, ValueError):
+        pass
+    return "", ""
+
+
+def api_key(cfg: dict | None = None) -> str:
+    cfg = cfg or load_cfg()
+    return _key_and_source(cfg)[0]
+
+
+def _api_base(value: str) -> str:
+    if not isinstance(value, str) or not value.strip() or any(c.isspace() for c in value.strip()):
+        raise ValueError("请输入 API 基础地址，例如 https://api.example.com/v1。")
+    base = value.strip().rstrip("/").removesuffix("/chat/completions").rstrip("/")
+    try:
+        parts = urlsplit(base)
+        host = parts.hostname
+        _ = parts.port
+    except ValueError:
+        raise ValueError("API 地址或端口格式无效。") from None
+    if not host or parts.username is not None or parts.query or parts.fragment:
+        raise ValueError("请填写不含账号、密钥或查询参数的 API 地址。")
+    if parts.scheme == "http":
+        try:
+            local = ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            local = host == "localhost"
+        if local:
+            return base
+    if parts.scheme != "https":
+        raise ValueError("远程 API 地址请使用 HTTPS。本机模型可以使用 HTTP。")
+    return base
+
+
+def _origin(value: str) -> tuple:
+    try:
+        parts = urlsplit(value)
+        return parts.scheme, parts.hostname, parts.port or (443 if parts.scheme == "https" else 80)
+    except (ValueError, TypeError, AttributeError):
+        return ()
+
+
+def public_settings(cfg: dict | None = None) -> dict:
+    cfg = load_cfg() if cfg is None else cfg
+    _, source = _key_and_source(cfg)
+    try:
+        base = _api_base(cfg.get("base_url", ""))
+    except ValueError:
+        base = ""
+    return {"enabled": cfg.get("enabled", True), "base_url": base, "model": cfg.get("model", ""),
+            "key_source": source}
+
+
+def _settings_draft(draft: dict, current: dict) -> tuple[dict, str]:
+    base = _api_base(draft.get("base_url", current.get("base_url", "")))
+    model = draft.get("model", current.get("model", ""))
+    enabled = draft.get("enabled", current.get("enabled", True))
+    key = draft.get("api_key", "")
+    if not isinstance(model, str) or not model.strip() or len(model.strip()) > 200:
+        raise ValueError("请填写模型 ID，长度不超过 200 个字符。")
+    if type(enabled) is not bool:
+        raise ValueError("AI 摘要开关无效。")
+    if not isinstance(key, str) or len(key) > 4096 or any(not 33 <= ord(c) <= 126 for c in key.strip()):
+        raise ValueError("API 密钥无效，请检查是否复制了多余的字符。")
+    key = key.strip()
+    if not key and _origin(base) != _origin(current.get("base_url")) and api_key(current):
+        raise ValueError("更换 API 服务后，请输入该服务的密钥。")
+    return {**current, "enabled": enabled, "base_url": base, "model": model.strip()}, key
+
+
+def save_settings(draft: dict) -> dict:
+    cfg, key = _settings_draft(draft, load_cfg())
+    if key:
+        cfg["api_key"] = key
+    folder = os.path.dirname(CFG_PATH)
+    os.makedirs(folder, exist_ok=True)
+    temp_path = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=folder, delete=False) as temp:
+            temp_path = temp.name
+            json.dump(cfg, temp, ensure_ascii=False, indent=2)
+        os.replace(temp_path, CFG_PATH)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+    return public_settings(cfg)
 
 
 def _truncate(s: str, n: int) -> str:
@@ -365,27 +455,57 @@ def _write_cache(path: str, text: str, model: str, refs: dict | None = None) -> 
         pass
 
 
+def _chat_request(base_url: str, model: str, key: str, messages: list[dict],
+                  max_tokens: int, timeout: int) -> dict:
+    url = base_url.rstrip("/").removesuffix("/chat/completions") + "/chat/completions"
+    response = httpx.post(
+        url, headers={"Authorization": f"Bearer {key}"},
+        json={"model": model, "temperature": 0.4, "max_tokens": max_tokens, "messages": messages},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    message = response.json()["choices"][0]["message"]
+    if not isinstance(message, dict):
+        raise ValueError("Invalid chat response")
+    return message
+
+
+def test_connection(draft: dict) -> dict:
+    try:
+        cfg, key = _settings_draft(draft, load_cfg())
+    except ValueError as exc:
+        return {"ok": False, "message": str(exc)}
+    key = key or api_key(cfg)
+    if not key:
+        return {"ok": False, "message": "请先填写 API 密钥。"}
+    try:
+        message = _chat_request(cfg["base_url"], cfg["model"], key,
+                                [{"role": "user", "content": "Reply with OK."}], 24, 15)
+        if not any(isinstance(message.get(field), str) and message[field].strip()
+                   for field in ("content", "reasoning_content")):
+            raise ValueError("Empty chat response")
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        messages = {400: "请求参数或模型 ID 被服务拒绝。", 401: "API 密钥无效。",
+                    403: "API 密钥没有调用该模型的权限。", 404: "找不到 API 接口或模型。",
+                    429: "API 请求受限，请检查配额或稍后重试。"}
+        return {"ok": False, "message": f"HTTP {status} · {messages.get(status, '模型服务返回错误。')}"}
+    except httpx.TimeoutException:
+        return {"ok": False, "message": "请求模型超时，请检查网络和服务状态。"}
+    except (httpx.RequestError, httpx.InvalidURL):
+        return {"ok": False, "message": "无法连接模型 API，请检查地址、网络和 HTTPS 证书。"}
+    except (IndexError, KeyError, TypeError, ValueError):
+        return {"ok": False, "message": "接口没有返回可识别的 Chat Completions 回复。"}
+    return {"ok": True, "message": "API 连通，模型已返回测试回复。"}
+
+
 def _call_llm(text: str, cfg: dict, key: str, base_url: str, model: str) -> str:
-    url = base_url.rstrip("/") + "/chat/completions"
     last = None
     for attempt in range(3):
         try:
-            r = httpx.post(
-                url,
-                headers={"Authorization": f"Bearer {key}"},
-                json={
-                    "model": model,
-                    "temperature": 0.4,
-                    "max_tokens": int(cfg.get("max_tokens", 8000)),
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": text},
-                    ],
-                },
-                timeout=120,
-            )
-            r.raise_for_status()
-            out = (r.json()["choices"][0]["message"]["content"] or "").strip()
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": text}]
+            message = _chat_request(base_url, model, key, messages, int(cfg.get("max_tokens", 8000)), 120)
+            out = (message["content"] or "").strip()
             if len(out) < 120:
                 raise ValueError("summary too short")
             return out
@@ -404,8 +524,7 @@ def generate(result, cfg: dict | None = None, force: bool = False,
         return ""
     key = api_key_override or api_key(cfg)
     if not key:
-        raise RuntimeError("缺少 AI API key：请写入 ~/.neurodaily_llm（chmod 600）"
-                           "或设置 NEURODAILY_LLM_API_KEY。")
+        raise RuntimeError("缺少 AI API 密钥。请在设置页填写，或配置 AI 的环境变量或密钥文件。")
     base = base_url or cfg.get("base_url", DEFAULT_CFG["base_url"])
     mdl = model or cfg.get("model", DEFAULT_CFG["model"])
     text, refs = build_context(result, cfg)
