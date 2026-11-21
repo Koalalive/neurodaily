@@ -196,6 +196,9 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
         line = " · ".join(f"{name} {n} 条" for name, n in counts if n)
         if line:
             parts.append(f'<div style="margin:16px 0;color:#555;font-size:13px">{line}</div>')
+        max_other = int(cfg.get("max_other", 15))
+        for item in industry[:max_other] + trials[:max_other] + policy[:max_other]:
+            parts.append(_item_html(item, accent, summary_len=120))
     else:
         for title, items in [("💊 商业与监管", industry), ("🧪 临床试验与会议", trials),
                              ("🏛️ 政策与新闻", policy)]:
@@ -234,6 +237,9 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
                 lines.append(f"  {it.url}")
         lines.append("")
     lines.append(f"商业/监管 {len(industry)} · 试验/会议 {len(trials)} · 政策/新闻 {len(policy)}")
+    limit = int(cfg.get("max_other", 15))
+    for item in industry[:limit] + trials[:limit] + policy[:limit]:
+        lines.append(f"- {item.title}" + (f"  {item.url}" if item.url else ""))
     text = "\n".join(lines)
     return subject_for(result, cfg), html, text
 

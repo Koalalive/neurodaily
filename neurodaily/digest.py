@@ -7,12 +7,15 @@ from __future__ import annotations
 import math
 import os
 import time
+from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from .config import Config, DEFAULT_CONFIG
 from .models import Item, tag_items
+from .records import merge_records
+from .search import compile_search
 from .sources import registry_for
 from . import history as hist
 
@@ -56,6 +59,151 @@ _SECTION_BY_KIND = {
     "funding": "industry",
 }
 
+_LITERATURE_SOURCES = {"journal", "pubmed", "arxiv", "biorxiv"}
+
+
+def _literature_source(config: Config, name: str) -> bool:
+    return name in _LITERATURE_SOURCES or config.source_opts(name).get("kind") == "paper"
+
+
+def _windows(config: Config, mode: str) -> tuple[dict, int]:
+    win = config.windows
+
+    def hours(key, default):
+        try:
+            return max(1, int(win.get(key, default)))
+        except (ValueError, TypeError):
+            return default
+
+    daily = mode == "daily"
+    return {
+        "paper": hours("daily_paper_hours" if daily else "manual_paper_hours", 36 if daily else 168),
+        "trial": hours("trials_hours", 36),
+        "conference": hours("trials_hours", 36),
+        "funding": hours("funding_hours", 36),
+        "industry": hours("funding_hours", 36),
+        "drug": hours("news_hours", 36),
+        "device": hours("news_hours", 36),
+        "news": hours("news_hours", 36),
+        "policy": hours("news_hours", 36),
+    }, hours("other_lookback_days", 7) * 24
+
+
+def _candidate_config(config, windows, other, *, preview=False, fallback=False, date_range=None):
+    cfg = deepcopy(config)
+    for name in registry_for(cfg):
+        options = cfg.sources.setdefault(name, {})
+        literature = _literature_source(cfg, name)
+        hours = windows["paper"] if literature else max(windows.values())
+        days = math.ceil(hours / 24) + 1
+        if not literature:
+            days = max(days, math.ceil(other / 24))
+        options["lookback_days"] = max(int(options.get("lookback_days") or 2), days, 7 if fallback else 1)
+        if literature and options.get("type") in ("rss", "json", "json_api"):
+            options["paper_date_range"] = date_range
+        if preview:
+            options["preview"] = True
+            options["max_results"] = min(int(options.get("max_results") or 30), 30)
+    return cfg
+
+
+def _mark_match(item, plan) -> str:
+    if item.kind != "paper" or not plan.active:
+        return "match"
+    matched = plan.match(item)
+    item.extra.update(search_match=matched.status, matched_rules=list(matched.evidence),
+                      missing_fields=list(matched.missing_fields))
+    return matched.status
+
+
+def _fetch_sources(config, plan, windows, other, *, logger=None, preview=False):
+    from .sources.http import capture_requests
+
+    registry = registry_for(config)
+    enabled = [(name, fetch) for name, fetch in registry.items()
+               if config.source_opts(name).get("enabled", True) is not False
+               and (not preview or _literature_source(config, name))]
+    if not enabled:
+        return [], []
+    bounds = plan.date_range
+
+    def fetch_one(name, fetch):
+        started = time.monotonic()
+        error = None
+        literature = _literature_source(config, name)
+        with capture_requests() as stats:
+            try:
+                items = [] if bounds and bounds[0] > bounds[1] and literature else list(
+                    fetch(config, logger=logger))
+            except Exception as exc:
+                items, error = [], str(exc)
+        diagnostics = stats.as_dict(len(items))
+        if error is not None:
+            diagnostics.update(status="failed", ok=False, error=error)
+        filtered = _filter_by_windows(items, windows, other, keep_dated_papers=bool(bounds))
+        matches, uncertain = [], []
+        for item in filtered:
+            status = _mark_match(item, plan)
+            if status == "match":
+                matches.append(item)
+            elif status == "unknown":
+                uncertain.append(item)
+        if diagnostics["status"] == "ok" and not matches:
+            diagnostics["status"] = "empty"
+        diagnostics.update(source=name, count=len(matches), fetched=len(items),
+                           candidates=diagnostics.get("candidate_count") if diagnostics.get("candidate_count") is not None else len(items),
+                           unknown=len(uncertain), ms=int((time.monotonic() - started) * 1000),
+                           lookback_days=config.source_opts(name).get("lookback_days"))
+        if bounds and literature:
+            diagnostics["date_range"] = list(bounds)
+        if preview:
+            diagnostics["examples"] = [
+                {"title": it.title, "url": it.url, "matched_rules": it.extra.get("matched_rules", []),
+                 "missing_fields": it.extra.get("missing_fields", []),
+                 "search_match": it.extra.get("search_match", "match")}
+                for it in matches[:4] + uncertain[:2]
+            ]
+        return filtered, diagnostics
+
+    items, health = [], []
+    with ThreadPoolExecutor(max_workers=min(8, len(enabled))) as executor:
+        futures = [executor.submit(fetch_one, name, fetch) for name, fetch in enabled]
+        for future in as_completed(futures):
+            found, diagnostics = future.result()
+            items.extend(found)
+            health.append(diagnostics)
+    health.sort(key=lambda row: row["source"])
+    return items, health
+
+
+def preview_search(config: Config) -> dict:
+    """Fetch bounded literature samples without history, reports, AI or delivery."""
+    plan = compile_search(config.search, config.journals)
+    windows, other = _windows(config, "manual")
+    candidates = _candidate_config(config, windows, other, preview=True, date_range=plan.date_range)
+    items, sources = _fetch_sources(candidates, plan, windows, other, preview=True)
+    counts = {"match": 0, "unknown": 0, "miss": 0}
+    for item in merge_records(items):
+        status = item.extra.get("search_match")
+        counts["match" if status == "match" else _mark_match(item, plan)] += 1
+    return {"profile": config.profile, "sources": sources, "unique_candidates": counts}
+
+
+def _rank(item: Item, plan) -> tuple:
+    date_key = item.date or "0000-00-00"
+    journal = (item.kind == "paper" and plan.journal_mode == "prefer"
+               and plan.preferred_journal(item))
+    top = item.kind == "paper" and "top-journal" in item.tags
+    evidence = item.extra.get("matched_rules") or item.tags
+    if plan.sort == "latest":
+        return journal, date_key, item.title.casefold()
+    if plan.sort == "relevance":
+        return journal, len(evidence), date_key, item.title.casefold()
+    if plan.sort == "journal":
+        return journal, top, date_key, item.title.casefold()
+    priority = 2 if top else int(item.source in ("pubmed", "biorxiv", "medrxiv"))
+    return journal, priority, date_key, item.title.casefold()
+
 
 def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         record: bool = True, max_age_hours: int | None = None, force: bool = False,
@@ -86,116 +234,23 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
                 )
             return final
 
-    errors: list[str] = []
-    all_items: list[Item] = []
-    health: list[dict] = []
+    plan = compile_search(config.search, config.journals)
+    windows, other = _windows(config, mode)
+    candidates = _candidate_config(config, windows, other, date_range=plan.date_range)
+    items, health = _fetch_sources(candidates, plan, windows, other, logger=logger)
+    if (not items and health and not plan.active
+            and all(row["status"] == "empty" for row in health)
+            and any(row["lookback_days"] < 7 for row in health)):
+        candidates = _candidate_config(config, windows, other, fallback=True)
+        items, health = _fetch_sources(candidates, plan, windows, other, logger=logger)
+    errors = [
+        f'{row["source"]}: {row.get("error") or ", ".join(row.get("request_errors", [])) or row["status"]}'
+        for row in health if row["status"] in ("timeout", "limited", "failed", "partial")
+    ]
 
-    win = config.windows or {}
-
-    def _win(key: str, default: int) -> int:
-        try:
-            return max(1, int(win.get(key, default)))
-        except (TypeError, ValueError):
-            return default
-
-    hours_by_kind = {
-        "paper": _win("daily_paper_hours" if mode == "daily" else "manual_paper_hours",
-                      36 if mode == "daily" else 168),
-        "trial": _win("trials_hours", 36),
-        "conference": _win("trials_hours", 36),
-        "funding": _win("funding_hours", 36),
-        "industry": _win("funding_hours", 36),
-        "drug": _win("news_hours", 36),
-        "device": _win("news_hours", 36),
-        "news": _win("news_hours", 36),
-        "policy": _win("news_hours", 36),
-    }
-    other_hours = _win("other_lookback_days", 7) * 24
-    needed_days = max(1, math.ceil(max(hours_by_kind.values()) / 24) + 1)
-    import copy as _copy
-    _orig_sources = _copy.deepcopy(config.sources)
-    for _n, _o in list(config.sources.items()):
-        if isinstance(_o, dict) and _o.get("enabled", True) is not False:
-            _o["lookback_days"] = max(int(_o.get("lookback_days", 2) or 2), needed_days)
-
-    registry = registry_for(config)
-    enabled = [(n, f) for n, f in registry.items()
-               if config.source_opts(n).get("enabled", True) is not False]
-
-    def _fetch(name: str, fn):
-        t0 = time.time()
-        try:
-            got = fn(config, logger=logger)
-            return name, list(got), None, int((time.time() - t0) * 1000)
-        except Exception as e:  # noqa: BLE001
-            return name, [], str(e), int((time.time() - t0) * 1000)
-
-    def _fetch_all_sources():
-        items: list[Item] = []
-        heal: list[dict] = []
-        errs: list[str] = []
-        if not enabled:
-            return items, heal, errs
-        with ThreadPoolExecutor(max_workers=min(8, len(enabled))) as ex:
-            futures = [ex.submit(_fetch, n, f) for n, f in enabled]
-            for fut in as_completed(futures):
-                name, got, err, ms = fut.result()
-                if err:
-                    errs.append(f"{name}: {err}")
-                    heal.append({"source": name, "ok": False, "count": 0,
-                                 "ms": ms, "error": err})
-                else:
-                    heal.append({"source": name, "ok": True, "count": len(got), "ms": ms})
-                    items.extend(got)
-        heal.sort(key=lambda h: h["source"])
-        return items, heal, errs
-
-    all_items, health, errors = _fetch_all_sources()
-
-    if not all_items and enabled:
-        import copy
-        original_sources = copy.deepcopy(config.sources)
-        try:
-            for name, opts in list(config.sources.items()):
-                if isinstance(opts, dict):
-                    cur = int(opts.get("lookback_days", 2) or 2)
-                    opts["lookback_days"] = max(cur, 7)
-            all_items, health, errors = _fetch_all_sources()
-        finally:
-            config.sources = original_sources
-        if not all_items:
-            errors.append("本次未抓取到新条目（可能是上游当日无更新或网络限流）；"
-                          "可将各源 lookback_days 调大后重试。")
-
-
-    config.sources = _orig_sources
-
-    # Tag with discipline/keyword focus
-    all_items = tag_items(all_items, config)
-
-    # Dedupe by (source, title-lower) / (url)
-    seen: set[str] = set()
-    deduped: list[Item] = []
-    for it in all_items:
-        key = it.url or f"{it.source}:{it.title.lower()}"
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(it)
-
-    # Sort: top-journal papers first, then peer-reviewed lit (pubmed/biorxiv),
-    # then preprints (arxiv). With reverse=True, higher priority sorts first.
-    def _sort_key(it: Item) -> tuple[int, str]:
-        if it.kind == "paper" and "top-journal" in it.tags:
-            priority = 2
-        elif it.source in ("pubmed", "biorxiv", "medrxiv"):
-            priority = 1
-        else:
-            priority = 0
-        return (priority, it.date or "0000-00-00")
-
-    deduped = _filter_by_windows(deduped, hours_by_kind, other_hours)
-    deduped.sort(key=_sort_key, reverse=True)
+    deduped = [item for item in merge_records(tag_items(items, config))
+               if item.extra.get("search_match") == "match" or _mark_match(item, plan) == "match"]
+    deduped.sort(key=lambda item: _rank(item, plan), reverse=True)
 
     try:
         from .journal_metrics import for_item
@@ -240,21 +295,24 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     )
     if record:
         final.history_id = hist.record_run(
-            fingerprint, config.profile, "completed", started_at,
-            datetime.now().isoformat(), item_count=len(deduped),
+            fingerprint, config.profile,
+            "failed" if health and all(not row["ok"] for row in health) else "completed",
+            started_at, datetime.now().isoformat(), item_count=len(deduped),
             source_counts=final.counts(),
             summary=f"{len(deduped)} items",
+            snapshot=hist.search_snapshot(config, mode, health, deduped, windows),
         )
     return final
 
 
-def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int = 7 * 24) -> list[Item]:
+def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int = 7 * 24,
+                       *, keep_dated_papers: bool = False) -> list[Item]:
     """Keep each kind within its own window; undated items are kept."""
     from datetime import timedelta
     now = datetime.now()
     out = []
     for it in items:
-        if not it.date:
+        if not it.date or (keep_dated_papers and it.kind == "paper"):
             out.append(it)
             continue
         hours = max(1, int(hours_by_kind.get(it.kind, other_hours)))

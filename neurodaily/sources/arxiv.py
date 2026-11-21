@@ -1,8 +1,7 @@
 """arXiv API source.
 
-Atom feed from http://export.arxiv.org/api/query
-Query strategy: one or more category filters ANDed with keyword filters for
-the configured disciplines, sorted by submission time.
+Fetch recent category pages for legacy profiles and bounded pages for advanced
+fielded searches. Complete abstracts are retained for local rule evaluation.
 """
 from __future__ import annotations
 
@@ -10,12 +9,13 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
-from .http import get, parse_date_any
+from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
 from ..models import Item
 
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
     "arxiv": "http://arxiv.org/schemas/atom",
+    "open": "http://a9.com/-/spec/opensearch/1.1/",
 }
 
 
@@ -31,85 +31,144 @@ def build_search_query(cats: list[str], keywords: list[str]) -> str:
     if cats:
         parts.append("(" + " OR ".join(f"cat:{_escape_query(c)}" for c in cats) + ")")
     if keywords:
-        kw = [f"all:\"{k}\"" for k in keywords if k.strip()]
+        kw = [f'all:"{_escape_query(k)}"' for k in keywords if k.strip()]
         if kw:
             parts.append("(" + " OR ".join(kw) + ")")
     return " AND ".join(parts)
 
 
+def _parse_entry(entry) -> Item | None:
+    title = " ".join(entry.findtext("atom:title", "", NS).split())
+    idurl = entry.findtext("atom:id", "", NS).strip()
+    if not title or not idurl:
+        return None
+    summary = entry.findtext("atom:summary", "", NS).strip()
+    published = entry.findtext("atom:published", "", NS)
+    arxiv_id = idurl.rsplit("/abs/", 1)[-1]
+    version = re.search(r"v(\d+)$", arxiv_id)
+    extra = {"arxiv_id": re.sub(r"v\d+$", "", arxiv_id), "published_online": published}
+    if version:
+        extra["version"] = version[1]
+    if summary:
+        extra["abstract"] = summary
+    doi = entry.findtext("arxiv:doi", "", NS).strip()
+    if not doi:
+        for link in entry.findall("atom:link", NS):
+            href = link.get("href", "")
+            if "doi.org/" in href:
+                doi = href.split("doi.org/", 1)[1]
+                break
+    if doi and not doi.casefold().startswith("10.48550/arxiv."):
+        extra["published_doi"] = doi
+        doi = ""
+    primary = entry.find("arxiv:primary_category", NS)
+    category = primary.get("term", "") if primary is not None else ""
+    if category:
+        extra["category"] = category
+    categories = [cat.get("term") for cat in entry.findall("atom:category", NS) if cat.get("term")]
+    if categories:
+        extra["categories"] = categories
+    authors = [a.findtext("atom:name", "", NS) for a in entry.findall("atom:author", NS)]
+    return Item(
+        title=title, url=idurl, summary=summary[:1200], authors=[a for a in authors if a],
+        source="arxiv", kind="paper", date=parse_date_any(published), doi=doi,
+        tags=[category] if category else [], extra=extra,
+    )
+
+
+def _page(query: str, offset: int, size: int, preview: bool):
+    record_query(query)
+    response = get("https://export.arxiv.org/api/query", params={
+        "search_query": query,
+        "start": offset,
+        "max_results": size,
+        "sortBy": "submittedDate",
+        "sortOrder": "descending",
+    }, timeout=8.0 if preview else 60.0, retries=0 if preview else 2)
+    if response is None:
+        return None
+    try:
+        root = ET.fromstring(response.text)
+        if root.tag != f"{{{NS['atom']}}}feed":
+            raise ValueError("expected Atom feed")
+        entries = root.findall("atom:entry", NS)
+        if any(entry.findtext("atom:id", "", NS).startswith(("http://arxiv.org/api/errors", "https://arxiv.org/api/errors"))
+               for entry in entries):
+            raise ValueError("arXiv rejected the API query")
+        total = root.findtext("open:totalResults", "", NS)
+        return entries, int(total) if total.isdigit() else None
+    except (ET.ParseError, ValueError):
+        record_failure("Invalid arXiv API response")
+        return None
+
+
 def fetch(config, logger=None) -> list[Item]:
     opts = config.source_opts("arxiv")
+    preview = opts.get("preview", False)
+    max_results = int(opts.get("max_results", 60))
     lookback = int(opts.get("lookback_days", 14))
-
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=lookback)
     cats = config.all_arxiv_cats()
-    keywords = [k.lower() for k in config.all_keywords()]
-    if not cats:
-        return []
+    plan = None
+    if getattr(config, "search", None):
+        from ..search import compile_search
+        plan = compile_search(config.search)
+    advanced = bool(plan and plan.active)
+    if advanced:
+        native = plan.remote_query("arxiv") or build_search_query(cats, [])
+        start, end = plan.date_range or (cutoff.date().isoformat(), now.date().isoformat())
+        date_term = f"submittedDate:[{start.replace('-', '')}0000 TO {end.replace('-', '')}2359]"
+        queries = [f"({native}) AND {date_term}" if native else date_term]
+        limit = min(max_results, 30 if preview else 240)
+        keywords = []
+    else:
+        queries = [f"cat:{_escape_query(cat)}" for cat in cats]
+        if preview and len(queries) > 4:
+            queries = queries[:4]
+            mark_sampled(truncated=True)
+        limit = min(max_results, 30 if preview else 60)
+        keywords = [k.casefold() for k in config.all_keywords()]
 
-    # Simple per-category query (fast, ~1-2s) then filter by recency + keywords
-    # client-side. arXiv's API is slow when given long keyword OR queries, so we
-    # let the date-sorted category feed provide candidates and filter locally.
     items: list[Item] = []
     seen_urls: set[str] = set()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback)
-
-    for cat in cats:
-        params = {
-            "search_query": f"cat:{cat}",
-            "start": 0,
-            # arXiv API response time grows sharply with max_results (500 entries
-            # took ~80s vs ~2s for 20). A single day has few papers, so 60 covers
-            # the full day; the digest shows ALL of them (no cap downstream).
-            "max_results": 60,
-            "sortBy": "submittedDate",
-            "sortOrder": "descending",
-        }
-        resp = get("https://export.arxiv.org/api/query", params=params, timeout=60.0)
-        if resp is None:
-            continue
-        try:
-            root = ET.fromstring(resp.text)
-        except ET.ParseError:
-            continue
-        for entry in root.findall("atom:entry", NS):
-            title = (entry.findtext("atom:title", "", NS) or "").strip().replace("\n", " ")
-            idurl = (entry.findtext("atom:id", "", NS) or "").strip()
-            if idurl in seen_urls:
-                continue
-            summary = (entry.findtext("atom:summary", "", NS) or "").strip()
-            published = entry.findtext("atom:published", "", NS)
-            # recency filter
-            if published:
-                try:
-                    pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
-                    if pub_dt < cutoff:
-                        continue
-                except ValueError:
-                    pass
-            # keyword filter (client-side)
-            if keywords:
-                hay = (title + " " + summary).lower()
-                if not any(k in hay for k in keywords):
+    for query in queries:
+        offset = 0
+        total = None
+        while offset < limit:
+            size = min(60, limit - offset)
+            result = _page(query, offset, size, preview)
+            if result is None:
+                break
+            entries, reported_total = result
+            if offset == 0:
+                total = reported_total
+                if advanced and total is not None:
+                    record_candidates(total)
+            if not advanced or total is None:
+                record_candidates(len(entries))
+            for entry in entries:
+                item = _parse_entry(entry)
+                if item is None or item.url in seen_urls:
                     continue
-            seen_urls.add(idurl)
-            doi = ""
-            for l in entry.findall("atom:link", NS):
-                if l.get("title") == "doi" or "doi.org" in (l.get("href") or ""):
-                    doi = l.get("href", "").split("doi.org/")[-1]
-                    break
-            authors = [a.findtext("atom:name", "", NS) for a in entry.findall("atom:author", NS)]
-            primary = entry.find("arxiv:primary_category", NS)
-            cat_label = primary.get("term", "") if primary is not None else ""
-            items.append(Item(
-                title=title,
-                url=idurl,
-                summary=summary[:1200],
-                authors=[a for a in authors if a],
-                source="arxiv",
-                kind="paper",
-                date=parse_date_any(published),
-                doi=doi,
-                tags=[cat_label] if cat_label else [],
-                extra={"category": cat_label},
-            ))
+                if not advanced and item.extra.get("published_online"):
+                    try:
+                        published = datetime.fromisoformat(item.extra["published_online"].replace("Z", "+00:00"))
+                        if published.tzinfo is None:
+                            published = published.replace(tzinfo=timezone.utc)
+                        if published < cutoff:
+                            continue
+                    except ValueError:
+                        pass
+                if keywords:
+                    hay = f"{item.title} {item.extra.get('abstract', '')}".casefold()
+                    if not any(k in hay for k in keywords):
+                        continue
+                seen_urls.add(item.url)
+                items.append(item)
+            offset += len(entries)
+            if not advanced or len(entries) < size or (total is not None and offset >= total):
+                break
+        if offset >= limit and (total is None or offset < total):
+            mark_sampled(truncated=True)
     return items

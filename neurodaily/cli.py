@@ -75,7 +75,7 @@ def cmd_run(args) -> int:
         return 0
     print(f"[neurodaily] ✅ wrote {len(result.items)} items → {path}")
     for h in result.health:
-        status = "ok" if h["ok"] else "FAILED"
+        status = h.get("status", "ok" if h["ok"] else "failed")
         print(f"    {h['source']:<16} {status:<8} {h['count']:>3} items  {h['ms']}ms")
     if result.errors:
         print("[neurodaily] ⚠ source errors:")
@@ -83,23 +83,12 @@ def cmd_run(args) -> int:
             print(f"    - {e}")
     if not getattr(args, "demo", False):
         try:
-            from .mailer import _password, load_cfg as _mail_cfg, render_email, save_last, send_with_retry
-            _mc = _mail_cfg()
-            _atts = [path] if _mc.get("attach_report", True) else None
-            _subj, _html, _text = render_email(result, _mc)
-            save_last(_subj, _html, _text, path if _atts else None)
-            if _mc.get("enabled", True) and _password(_mc):
-                send_with_retry(_subj, _html, _text, _mc, _atts)
-                print("[neurodaily] 📧 email sent")
+            from .delivery import deliver_report
+            outcomes = deliver_report(result, path)
+            if outcomes:
+                print(f"[neurodaily] delivery: {outcomes}")
         except Exception as e:
-            print(f"[neurodaily] ⚠ email not sent: {e}")
-        try:
-            from .webhooks import send_all
-            wr = send_all(result)
-            if wr:
-                print(f"[neurodaily] webhook: {wr}")
-        except Exception as e:
-            print(f"[neurodaily] ⚠ webhook not sent: {e}")
+            print(f"[neurodaily] ⚠ delivery failed: {e}")
     try:
         from .onthisday import should_notify as _should_notify, is_enabled as _otd_enabled, day_label
         from .notify import notify_on_this_day

@@ -46,17 +46,27 @@ def build_text(result, max_items: int = 8) -> str:
     other = {k: len(v) for k, v in (result.sections or {}).items() if k != "papers" and v}
     if other:
         lines.append("其他：" + " · ".join(f"{k} {v}" for k, v in other.items()))
+        remaining = max(0, max_items - len(papers))
+        other_items = [item for key, items in (result.sections or {}).items()
+                       if key != "papers" for item in items]
+        for item in other_items[:remaining]:
+            lines.append(f"- {item.title}" + (f"  {item.url}" if item.url else ""))
     return "\n".join(lines)
 
 
 def send_feishu(url: str, text: str) -> None:
     r = httpx.post(url, json={"msg_type": "text", "content": {"text": text}}, timeout=15)
     r.raise_for_status()
+    reply = r.json()
+    if reply.get("code", reply.get("StatusCode")) != 0:
+        raise ValueError("Feishu did not acknowledge delivery")
 
 
 def send_wecom(url: str, text: str) -> None:
     r = httpx.post(url, json={"msgtype": "text", "text": {"content": text}}, timeout=15)
     r.raise_for_status()
+    if r.json().get("errcode") != 0:
+        raise ValueError("WeCom did not acknowledge delivery")
 
 
 def send_all(result, cfg: dict | None = None) -> dict:

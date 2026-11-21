@@ -1,14 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::{
-    webview::NewWindowResponse, AppHandle, Manager, RunEvent, Url, WebviewWindowBuilder,
-    WindowEvent,
+    webview::{DownloadEvent, NewWindowResponse},
+    AppHandle, Manager, RunEvent, Url, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_opener::OpenerExt;
@@ -18,6 +21,18 @@ mod macos_quit;
 mod updates;
 
 struct Sidecar(Mutex<Option<Child>>);
+
+fn background_command(program: impl AsRef<OsStr>) -> Command {
+    let command = Command::new(program);
+    #[cfg(windows)]
+    let command = {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut command = command;
+        command.creation_flags(CREATE_NO_WINDOW);
+        command
+    };
+    command
+}
 
 #[derive(Debug, PartialEq, Eq)]
 enum LinkDestination {
@@ -40,6 +55,14 @@ fn link_destination(url: &Url, sidecar_port: u16) -> LinkDestination {
     }
 }
 
+fn is_config_download(url: &Url, sidecar_port: u16) -> bool {
+    url.scheme() == "http"
+        && url.host_str() == Some("127.0.0.1")
+        && sidecar_port != 0
+        && url.port_or_known_default() == Some(sidecar_port)
+        && url.path() == "/api/config/export"
+}
+
 fn open_in_browser(app: &AppHandle, url: &Url) {
     if let Err(error) = app.opener().open_url(url.as_str(), None::<&str>) {
         eprintln!("Could not open external link: {error}");
@@ -60,9 +83,14 @@ fn create_main_window(app: &tauri::App, sidecar_port: Arc<AtomicU16>) -> tauri::
         .find(|window| window.label == "main")
         .expect("main window configuration");
     let navigation_port = Arc::clone(&sidecar_port);
+    let download_port = Arc::clone(&sidecar_port);
     let navigation_app = app.handle().clone();
     let popup_app = app.handle().clone();
-    WebviewWindowBuilder::from_config(app, config)?
+    let mut builder = WebviewWindowBuilder::from_config(app, config)?;
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone())?;
+    }
+    builder
         .initialization_script(
             r#"
             document.addEventListener('click', (event) => {
@@ -99,6 +127,12 @@ fn create_main_window(app: &tauri::App, sidecar_port: Arc<AtomicU16>) -> tauri::
                 LinkDestination::Block => {}
             }
             NewWindowResponse::Deny
+        })
+        .on_download(move |_, event| match event {
+            DownloadEvent::Requested { url, .. } => {
+                is_config_download(&url, download_port.load(Ordering::Relaxed))
+            }
+            _ => true,
         })
         .build()?;
     Ok(())
@@ -151,6 +185,18 @@ fn stop_sidecar(app: &AppHandle) {
             _ => break,
         }
     }
+    #[cfg(windows)]
+    if background_command("taskkill")
+        .args(["/PID", &child.id().to_string(), "/T", "/F"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+    {
+        let _ = child.wait();
+        return;
+    }
     if child.kill().is_ok() {
         let _ = child.wait();
     }
@@ -185,7 +231,7 @@ fn main() {
             let sidecar_port = Arc::new(AtomicU16::new(0));
             create_main_window(app, Arc::clone(&sidecar_port))?;
             let path = sidecar_path();
-            let mut cmd = Command::new(&path);
+            let mut cmd = background_command(&path);
             cmd.env("NEURODAILY_NO_OPEN", "1")
                 .env("NEURODAILY_MANAGED", "1")
                 .stdin(Stdio::piped())
@@ -281,5 +327,45 @@ mod tests {
                 "{url}"
             );
         }
+    }
+
+    #[test]
+    fn only_the_active_sidecar_can_download_a_config() {
+        let path = "/api/config/export";
+        let local = Url::parse(&format!("http://127.0.0.1:1234{path}")).unwrap();
+        let external = Url::parse(&format!("https://example.org{path}")).unwrap();
+        assert!(super::is_config_download(&local, 1234));
+        assert!(!super::is_config_download(&local, 0));
+        assert!(!super::is_config_download(&local, 1235));
+        assert!(!super::is_config_download(&external, 1234));
+        assert!(!super::is_config_download(
+            &local.join("/api/config").unwrap(),
+            1234
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_background_command_keeps_pipes_without_a_console() {
+        let output = super::background_command("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                r#"
+                Add-Type -Namespace NeuroDaily -Name ConsoleProbe -MemberDefinition '
+                    [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+                '
+                if ([NeuroDaily.ConsoleProbe]::GetConsoleWindow() -ne [IntPtr]::Zero) { exit 1 }
+                Write-Output 'hidden console with stdout'
+                "#,
+            ])
+            .output()
+            .expect("launch hidden Windows helper");
+        assert!(output.status.success(), "{:?}", output);
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "hidden console with stdout"
+        );
     }
 }

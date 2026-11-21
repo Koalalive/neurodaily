@@ -15,20 +15,24 @@ Routes:
 from __future__ import annotations
 
 import logging
+import json
 import os
+import re
 import subprocess
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import datetime, timedelta
+from html import escape
 from pathlib import Path
 from threading import Event, Lock, Thread
 
 from fastapi import FastAPI, BackgroundTasks, Request
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Config, DEFAULT_CONFIG
-from .desktop_schedule import run_schedule, scheduled_time
-from .digest import run as run_digest, render_html_for
+from .desktop_schedule import RETRY_DELAY, run_schedule, scheduled_time
+from .digest import preview_search, run as run_digest, render_html_for
 from .presets import research_presets
 from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
 from .run_page import RUN_HTML
@@ -94,9 +98,11 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
     def run_now_page():
         return RUN_HTML
 
-    def _begin_search():
+    def _begin_search(scheduled_for: datetime | None = None):
         started_at = datetime.now().isoformat()
         attempt = {"started_at": started_at, "status": "running"}
+        if scheduled_for is not None:
+            attempt["scheduled_for"] = scheduled_for.isoformat()
         with search_lock:
             current = app.state.search_attempt
             if current and current["status"] == "running":
@@ -114,6 +120,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
                             mode=mode)
         if result.skipped:
             attempt.update(status="skipped", error=result.skipped_reason)
+            return
+        if mode == "daily" and not any(row["ok"] for row in result.health):
+            error = "All enabled sources failed." if result.health else "No sources are enabled."
+            attempt.update(status="failed", error=error, health=result.health)
             return
         try:
             from .ai_summary import generate as _ai_gen, load_cfg as _ai_cfg
@@ -140,21 +150,11 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
         app.state.last_report_path = path
         app.state.last_run = result
         try:
-            from .mailer import (_password, load_cfg as _mail_cfg,
-                                 render_email, save_last, send_with_retry)
-            _mc = _mail_cfg()
-            _atts = [path] if _mc.get("attach_report", True) else None
-            _subj, _html, _text = render_email(result, _mc)
-            save_last(_subj, _html, _text, path if _atts else None)
-            if _mc.get("enabled", True) and _password(_mc):
-                send_with_retry(_subj, _html, _text, _mc, _atts)
+            from .delivery import deliver_report
+            attempt["delivery"] = deliver_report(result, path)
         except Exception:
-            pass
-        try:
-            from .webhooks import send_all as _hooks
-            _hooks(result)
-        except Exception:
-            pass
+            logging.getLogger(__name__).exception("Could not deliver report")
+            attempt["delivery"] = {"status": "failed"}
         try:
             if cfg.output.get("open_on_finish", True) and os.environ.get("NEURODAILY_NO_OPEN") != "1":
                 import subprocess
@@ -171,23 +171,29 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
             pass
         attempt.update(status="completed", item_count=len(result.items))
 
-    def _execute_search(cfg: Config, attempt: dict, force: bool = False,
-                        mode: str = "manual", scheduled_day: str | None = None):
+    def _execute_search(cfg: Config, attempt: dict, force: bool = False, mode: str = "manual"):
         try:
-            if scheduled_day is not None and not hist.claim_desktop_schedule(scheduled_day):
-                attempt.update(status="skipped", error="Today's desktop schedule already ran.")
-                return
             _search_and_deliver(cfg, attempt, force, mode)
         except Exception:
             logging.getLogger(__name__).exception("Search or report generation failed")
             attempt.update(status="failed", error="Report generation failed. See the server log.")
 
-    def _start_scheduled_search(cfg: Config, day: date) -> bool:
-        attempt = _begin_search()
-        if attempt is None:
-            return False
-        _execute_search(cfg, attempt, mode="daily", scheduled_day=day.isoformat())
-        return True
+    def _start_scheduled_search(cfg: Config, due: datetime) -> bool:
+        with hist.delivery_lease(cfg.profile, f"desktop-schedule:{due.isoformat()}") as acquired:
+            if not acquired:
+                return False
+            previous = hist.desktop_schedule_result(cfg.profile, due)
+            if previous:
+                if previous["status"] == "completed":
+                    return True
+                if datetime.now() < datetime.fromisoformat(previous["finished_at"]) + RETRY_DELAY:
+                    return False
+            attempt = _begin_search(scheduled_for=due)
+            if attempt is None:
+                return False
+            _execute_search(cfg, attempt, force=True, mode="daily")
+            hist.save_desktop_schedule_result(cfg.profile, due, attempt["status"], attempt.get("error"))
+            return attempt["status"] == "completed"
 
     @app.post("/api/run")
     def api_run(background_tasks: BackgroundTasks, force: bool = False,
@@ -256,6 +262,48 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
     def api_config_presets():
         return research_presets()
 
+    @app.get("/api/config/export")
+    def api_config_export():
+        from .profile_exchange import export_profile
+        cfg = _cfg()
+        name = re.sub(r"[^a-zA-Z0-9_-]+", "-", cfg.profile).strip("-") or "research"
+        return JSONResponse(export_profile(cfg), headers={
+            "Content-Disposition": f'attachment; filename="neurodaily-{name}.json"',
+            "Cache-Control": "no-store",
+        })
+
+    @app.post("/api/config/import")
+    async def api_config_import(request: Request, apply: bool = False):
+        from .profile_exchange import MAX_BYTES, import_profile
+        payload = bytearray()
+        async for block in request.stream():
+            payload.extend(block)
+            if len(payload) > MAX_BYTES:
+                return JSONResponse({"error": "配置文件不能超过 256 KB"}, status_code=413)
+        try:
+            data = json.loads(payload)
+        except (ValueError, UnicodeError):
+            return JSONResponse({"error": "无法读取 JSON 配置文件"}, status_code=400)
+        try:
+            config, summary = import_profile(data, _cfg())
+            if apply:
+                config.save(config_path)
+        except (ValueError, OSError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        return {"ok": True, "applied": apply, "summary": summary}
+
+    @app.post("/api/search/preview")
+    async def api_search_preview(request: Request):
+        from .schema import validate
+        try:
+            data = await request.json()
+        except ValueError:
+            return JSONResponse({"error": "无效 JSON"}, status_code=400)
+        errors = validate(data)
+        if errors:
+            return JSONResponse({"error": errors[0], "errors": errors}, status_code=400)
+        return await run_in_threadpool(preview_search, Config.from_dict(data))
+
     @app.post("/api/config")
     async def api_config_post(request: Request):
         try:
@@ -280,7 +328,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
     @app.post("/api/config/reset")
     def api_config_reset():
         try:
-            path = DEFAULT_CONFIG().save(config_path) if config_path else DEFAULT_CONFIG().save()
+            defaults = DEFAULT_CONFIG()
+            if desktop:
+                defaults.scheduled["enabled"] = False
+            path = defaults.save(config_path)
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
         return JSONResponse({"ok": True, "path": path})
@@ -392,9 +443,30 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
         cfg = _cfg()
         sched = cfg.scheduled or {}
         if desktop:
-            due = scheduled_time(sched)
+            schedule = scheduled_time(sched)
+            current = datetime.now()
+            due = datetime.combine(current.date(), schedule) if schedule is not None else None
+            slot = hist.desktop_schedule_result(cfg.profile, due) if due is not None else None
+            next_run = due
+            if slot and slot["status"] == "completed":
+                next_run += timedelta(days=1)
+            if slot and slot["status"] != "completed":
+                next_run = max(current, datetime.fromisoformat(slot["finished_at"]) + RETRY_DELAY)
+                if next_run.date() != current.date():
+                    next_run = due + timedelta(days=1)
+            attempt = app.state.search_attempt or {}
+            state = "off" if due is None else "scheduled"
+            if due is not None and due <= current:
+                if attempt.get("status") == "running" and attempt.get("scheduled_for") == due.isoformat():
+                    state = "running"
+                elif slot and slot["status"] != "completed":
+                    state = "retrying"
+                elif not slot:
+                    state = "waiting"
             return JSONResponse({"backend": "desktop", "loaded": due is not None,
-                                 "schedule": due.strftime("%H:%M") if due else ""})
+                                 "schedule": schedule.strftime("%H:%M") if schedule is not None else "",
+                                 "state": state, "next_run": next_run.isoformat() if next_run else None,
+                                 "last_run": hist.desktop_schedule_result(cfg.profile)})
         label = _launchd_label()
         dest = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
         loaded = False
@@ -455,7 +527,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
         rows = []
         for r in runs:
             status_cls = "ok" if r["status"] == "completed" else ("bad" if r["status"] == "failed" else "warn")
-            src_summary = ", ".join(f"{k}:{v}" for k, v in
+            src_summary = ", ".join(f"{escape(k)}:{v}" for k, v in
                                     sorted(r.get("source_counts", {}).items()))
             detail = f"/history/{r['id']}"
             rows.append(
@@ -466,7 +538,19 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
                 f"<td class='hist-src'>{src_summary}</td>"
                 f"<td><a href='{detail}'>view</a> · "
                 f"<a href='#' class='del' data-id='{r['id']}'>delete</a></td></tr>")
-        body = f"<div class='wrap'><h2>Search History</h2>"
+        body = "<div class='wrap'><h2>Search History</h2>"
+        snapshots = [r for r in runs if r["has_snapshot"]]
+        if len(snapshots) >= 2:
+            before, after = snapshots[1]["id"], snapshots[0]["id"]
+            def options(selected):
+                return "".join(f"<option value='{r['id']}'{' selected' if r['id'] == selected else ''}>"
+                               f"#{r['id']} · {escape(r['profile'])}</option>" for r in snapshots)
+            body += (
+                "<form action='/history/compare' method='get'>"
+                f"<label>基准 <select name='before'>{options(before)}</select></label> "
+                f"<label>比较 <select name='after'>{options(after)}</select></label> "
+                "<button type='submit'>比较检索</button></form>"
+            )
         if rows:
             body += ("<p><button id='clearAll' class='btn-danger'>Clear all history</button></p>"
                      "<table class='hist'><thead><tr><th>#</th><th>Time</th><th>Status</th>"
@@ -498,6 +582,47 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
         return f"<!DOCTYPE html><html><head><meta charset='utf-8'>" \
                f"<title>NeuroDaily — History</title>{_css()}</head><body>" \
                f"<header class='mini'><h1>NeuroDaily History</h1></header><main>{body}</main></body></html>"
+
+    @app.get("/api/history/compare")
+    @app.get("/history/compare", response_class=HTMLResponse)
+    def history_compare(request: Request, before: int, after: int):
+        older, newer = hist.get_run(before), hist.get_run(after)
+        if not older or not newer:
+            return JSONResponse({"error": "所选历史记录不存在"}, status_code=404)
+        try:
+            result = hist.compare_runs(older, newer)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(result)
+        def run_summary(run):
+            snapshot = run["snapshot"]
+            query = snapshot["search"].get("query") or "按学科及全局关键词"
+            sets = snapshot["search"].get("sets", {})
+            sources = "".join(
+                f"<li>{escape(row['source'])} · {escape(row['status'])} · "
+                f"{escape(str(row.get('coverage') or ''))}<br>"
+                f"<code>{escape('; '.join(row.get('queries') or [row.get('query') or '']) or '—')}</code></li>"
+                for row in snapshot["sources"]
+            )
+            return (f"<h3>#{run['id']} · {escape(run['profile'])}</h3><pre>{escape(query)}</pre>"
+                    + "".join(f"<div>#{escape(key.lstrip('#'))} · {escape(value)}</div>"
+                              for key, value in sets.items())
+                    + f"<ul>{sources}</ul>")
+        def records(label, items):
+            entries = "".join(f"<li>{escape(item['title'])}</li>" for item in items)
+            return f"<h3>{label} {len(items)}</h3><ol>{entries}</ol>"
+        return ("<!doctype html><html lang='zh'><meta charset='utf-8'><title>比较检索</title>"
+                f"{_css()}<main class='wrap'><h2>比较检索</h2>"
+                f"<p>两次均命中 {result['in_both']} 条。来源状态和时间窗口见各次记录。</p>"
+                f"{run_summary(older)}{run_summary(newer)}"
+                f"{records('此次新增', result['added'])}{records('此次未出现', result['removed'])}"
+                "<a href='/history'>返回历史</a></main></html>")
+
+    @app.get("/api/history/{run_id}")
+    def api_history_detail(run_id: int):
+        row = hist.get_run(run_id)
+        return JSONResponse(row) if row else JSONResponse({"error": "记录不存在"}, status_code=404)
 
     @app.get("/history/{run_id}", response_class=HTMLResponse)
     def history_detail(run_id: int):

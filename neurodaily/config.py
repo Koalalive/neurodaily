@@ -12,6 +12,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field, asdict
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 _HOME = os.environ.get("NEURODAILY_HOME")
@@ -62,6 +63,8 @@ class Journal:
     jcr: str = ""
     cas: str = ""
     metric_year: int | None = None
+    aliases: list[str] = field(default_factory=list)
+    issns: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -87,6 +90,8 @@ class Journal:
             jcr=str(d.get("jcr", "") or "").strip(),
             cas=str(d.get("cas", "") or "").strip(),
             metric_year=year,
+            aliases=list(d.get("aliases", [])),
+            issns=list(d.get("issns", [])),
         )
 
 
@@ -104,6 +109,7 @@ class Config:
     windows: dict[str, Any] = field(default_factory=dict)   # retrieval time windows
     policy_feeds: list[str] = field(default_factory=list)   # RSS/news/policy URLs
     journals: list[Journal] = field(default_factory=list)   # top journals
+    search: dict = field(default_factory=dict)
 
     # --------------------------------------------------------------- load
     @staticmethod
@@ -121,6 +127,7 @@ class Config:
             windows=dict(data.get("windows", {})),
             policy_feeds=list(data.get("policy_feeds", [])),
             journals=[Journal.from_dict(j) for j in data.get("journals", [])],
+            search=dict(data.get("search") or {}),
         )
 
     @staticmethod
@@ -145,13 +152,22 @@ class Config:
             windows=dict(data.get("windows", {})),
             policy_feeds=list(data.get("policy_feeds", [])),
             journals=[Journal.from_dict(j) for j in data.get("journals", [])],
+            search=dict(data.get("search") or {}),
         )
 
     def save(self, path: str | None = None) -> str:
         p = path or self.default_path()
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+        directory = os.path.dirname(p) or "."
+        os.makedirs(directory, exist_ok=True)
+        temporary = None
+        try:
+            with NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory, delete=False) as f:
+                temporary = f.name
+                json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+            os.replace(temporary, p)
+        finally:
+            if temporary and os.path.exists(temporary):
+                os.unlink(temporary)
         return p
 
     # ------------------------------------------------------------- accessors
@@ -171,6 +187,7 @@ class Config:
             "windows": self.windows,
             "policy_feeds": self.policy_feeds,
             "journals": [j.to_dict() for j in self.journals],
+            "search": self.search,
         }
 
     def output_dir(self) -> str:
@@ -183,7 +200,7 @@ class Config:
     def all_keywords(self) -> list[str]:
         """global keywords + per-discipline keywords, de-duplicated."""
         kws: list[str] = []
-        for d in self.disciplines:
+        for d in self.active_disciplines():
             kws.extend(d.keywords)
         kws.extend(self.global_keywords)
         seen, out = set(), []
@@ -196,7 +213,7 @@ class Config:
 
     def all_arxiv_cats(self) -> list[str]:
         cats: list[str] = []
-        for d in self.disciplines:
+        for d in self.active_disciplines():
             cats.extend(d.arxiv_cats)
         # de-dup preserving order
         seen, out = set(), []
@@ -208,7 +225,7 @@ class Config:
 
     def all_mesh_terms(self) -> list[str]:
         terms: list[str] = []
-        for d in self.disciplines:
+        for d in self.active_disciplines():
             terms.extend(d.mesh_terms)
         seen, out = set(), []
         for t in terms:
@@ -251,6 +268,10 @@ class Config:
         lines.append("## Global keywords")
         lines.append(", ".join(self.global_keywords) if self.global_keywords else "(none)")
         lines.append("")
+        if self.search.get("query"):
+            lines.extend(["## Advanced literature query", self.search["query"]])
+            lines.extend(f"- #{key.lstrip('#')} = {value}" for key, value in self.search.get("sets", {}).items())
+            lines.append("")
         lines.append("## Sources & limits")
         for name, opts in self.sources.items():
             enabled = opts.get("enabled", True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from .http import get, parse_date_any
+from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
 from ..models import Item
 
 DRUGS_URL = "https://api.fda.gov/drug/drugsfda.json"
@@ -30,6 +30,34 @@ def _date_range(back_days: int) -> tuple[str, str]:
     return start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
 
 
+def _fetch_rows(url: str, search: str) -> list[dict]:
+    record_query(search)
+    response = get(url, params={"search": search, "limit": 100}, accepted_statuses=(404,))
+    if response is None:
+        return []
+    try:
+        data = response.json()
+        if response.status_code == 404:
+            error = data.get("error") or {}
+            if (error.get("code") == "NOT_FOUND"
+                    and str(error.get("message", "")).casefold().startswith("no matches found")):
+                record_candidates(0)
+                return []
+            record_failure("openFDA endpoint returned HTTP 404")
+            return []
+        rows = data["results"]
+        if not isinstance(rows, list):
+            raise ValueError("invalid result list")
+        total = int(data.get("meta", {}).get("results", {}).get("total", len(rows)))
+    except (ValueError, KeyError, TypeError, AttributeError):
+        record_failure("Invalid openFDA API response")
+        return []
+    record_candidates(total)
+    if total > len(rows):
+        mark_sampled(truncated=True)
+    return rows
+
+
 def fetch_drugs(config, logger=None, max_results: int = 8, lookback: int = 60) -> list[Item]:
     opts = config.source_opts("fda_drugs")
     max_results = int(opts.get("max_results", max_results))
@@ -38,17 +66,7 @@ def fetch_drugs(config, logger=None, max_results: int = 8, lookback: int = 60) -
     # openFDA interprets a literal "+" as %2B (HTTP 500); use space-separated TO.
     search = (f"submissions.submission_status_date:[{s} TO {e}] "
               f"AND submissions.submission_status:AP")
-    resp = get(DRUGS_URL, params={
-        "search": search,
-        "limit": 100,  # pull more, filter client-side for focus
-    })
-    if resp is None:
-        return []
-    try:
-        data = resp.json()
-    except ValueError:
-        return []
-    rows = data.get("results", [])
+    rows = _fetch_rows(DRUGS_URL, search)
     items: list[Item] = []
     for r in rows:
         brand = r.get("openfda", {}).get("brand_name") or r.get("openfda", {}).get("generic_name") or []
@@ -60,6 +78,9 @@ def fetch_drugs(config, logger=None, max_results: int = 8, lookback: int = 60) -
         appno = r.get("application_number", "")
         if not _focus_hit(f"{name} {generic} {sponsor}"):
             continue
+        if len(items) >= max_results:
+            mark_sampled(truncated=True)
+            break
         sub_date = ""
         for sub in r.get("submissions", []):
             if sub.get("submission_status") == "AP":
@@ -75,9 +96,8 @@ def fetch_drugs(config, logger=None, max_results: int = 8, lookback: int = 60) -
             date=parse_date_any(sub_date),
             doi="",
             tags=["fda", "drug"],
+            extra={"application_number": appno},
         ))
-        if len(items) >= max_results:
-            break
     return items
 
 
@@ -86,23 +106,16 @@ def fetch_devices(config, logger=None, max_results: int = 8, lookback: int = 60)
     max_results = int(opts.get("max_results", max_results))
     lookback = int(opts.get("lookback_days", lookback))
     s, e = _date_range(lookback)
-    resp = get(DEVICE_URL, params={
-        "search": f"decision_date:[{s} TO {e}]",
-        "limit": 100,
-    })
-    if resp is None:
-        return []
-    try:
-        data = resp.json()
-    except ValueError:
-        return []
-    rows = data.get("results", [])
+    rows = _fetch_rows(DEVICE_URL, f"decision_date:[{s} TO {e}]")
     items: list[Item] = []
     for r in rows:
         name = r.get("device_name", "")
         applicant = r.get("applicant", "")
         if not _focus_hit(f"{name} {applicant}"):
             continue
+        if len(items) >= max_results:
+            mark_sampled(truncated=True)
+            break
         items.append(Item(
             title=name,
             url=f"https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfpmn/pmn.cfm?id={r.get('k_number','')}",
@@ -117,8 +130,6 @@ def fetch_devices(config, logger=None, max_results: int = 8, lookback: int = 60)
             extra={"k_number": r.get("k_number"), "product_code": r.get("product_code"),
                    "product_description": r.get("product_description")},
         ))
-        if len(items) >= max_results:
-            break
     return items
 
 

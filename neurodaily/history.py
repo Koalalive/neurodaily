@@ -13,10 +13,13 @@ import sqlite3
 import threading
 import time
 import hashlib
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import datetime
+from uuid import uuid4
 
 from .config import DEFAULT_DIRS
+from .records import record_ids
+from .search import QUERY_VERSION
 
 _LOCK = threading.Lock()
 
@@ -31,18 +34,32 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
-def claim_desktop_schedule(day: str) -> bool:
-    """Allow at most one desktop scheduled attempt per day for this data directory."""
-    os.makedirs(os.path.dirname(db_path()), exist_ok=True)
+def desktop_schedule_result(profile: str, due: datetime | None = None) -> dict | None:
+    """Read one slot, or the latest completed/failed slot for the profile."""
+    init_db()
     with _LOCK, closing(_connect()) as conn, conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS desktop_schedule (day TEXT PRIMARY KEY)")
-        cursor = conn.execute("INSERT OR IGNORE INTO desktop_schedule VALUES (?)", (day,))
-        return cursor.rowcount == 1
+        if due is None:
+            row = conn.execute("SELECT * FROM desktop_schedule_runs WHERE profile=? "
+                               "ORDER BY finished_at DESC LIMIT 1", (profile,)).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM desktop_schedule_runs WHERE profile=? AND due=?",
+                               (profile, due.isoformat())).fetchone()
+    return dict(row) if row else None
+
+
+def save_desktop_schedule_result(profile: str, due: datetime, status: str, error=None) -> None:
+    init_db()
+    with _LOCK, closing(_connect()) as conn, conn:
+        conn.execute("INSERT INTO desktop_schedule_runs VALUES (?, ?, ?, ?, ?) "
+                     "ON CONFLICT(profile, due) DO UPDATE SET status=excluded.status, "
+                     "finished_at=excluded.finished_at, error=excluded.error",
+                     (profile, due.isoformat(), status, datetime.now().isoformat(), error))
 
 
 def init_db() -> None:
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS search_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +75,37 @@ def init_db() -> None:
                 summary TEXT
             )
         """)
-        conn.commit()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS delivery_leases (
+                profile TEXT NOT NULL,
+                destination TEXT NOT NULL,
+                token TEXT NOT NULL,
+                expires_at REAL NOT NULL,
+                PRIMARY KEY (profile, destination)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS desktop_schedule_runs (
+                profile TEXT NOT NULL,
+                due TEXT NOT NULL,
+                status TEXT NOT NULL,
+                finished_at TEXT NOT NULL,
+                error TEXT,
+                PRIMARY KEY (profile, due)
+            )
+        """)
+        columns = {column["name"] for column in conn.execute("PRAGMA table_info(search_history)")}
+        if "snapshot" not in columns:
+            conn.execute("ALTER TABLE search_history ADD COLUMN snapshot TEXT")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS delivered_records (
+                profile TEXT NOT NULL,
+                destination TEXT NOT NULL,
+                record_id TEXT NOT NULL,
+                delivered_at TEXT NOT NULL,
+                PRIMARY KEY (profile, destination, record_id)
+            )
+        """)
 
 
 def compute_fingerprint(config, mode: str = "manual") -> str:
@@ -71,7 +118,9 @@ def compute_fingerprint(config, mode: str = "manual") -> str:
         "sources": config.sources,
         "windows": config.windows,
         "policy_feeds": config.policy_feeds,
-        "journals": [(j.name, j.rss) for j in config.journals if j.rss],
+        "journals": [(j.name, j.rss, j.aliases, j.issns) for j in config.journals],
+        "query_version": QUERY_VERSION,
+        "search": config.search,
     }
     raw = json.dumps(query, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
@@ -79,19 +128,91 @@ def compute_fingerprint(config, mode: str = "manual") -> str:
 
 def record_run(fingerprint: str, profile: str, status: str, started_at: str,
                finished_at: str, item_count: int = 0, source_counts: dict | None = None,
-               report_path: str = "", skipped_reason: str = "", summary: str = "") -> int:
+               report_path: str = "", skipped_reason: str = "", summary: str = "",
+               snapshot: dict | None = None) -> int:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn, conn:
         cur = conn.execute(
             """INSERT INTO search_history
                (fingerprint, profile, started_at, finished_at, status, skipped_reason,
-                item_count, source_counts, report_path, summary)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                item_count, source_counts, report_path, summary, snapshot)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (fingerprint, profile, started_at, finished_at, status, skipped_reason,
-             item_count, json.dumps(source_counts or {}), report_path, summary),
+             item_count, json.dumps(source_counts or {}), report_path, summary,
+             json.dumps(snapshot, ensure_ascii=False) if snapshot is not None else None),
         )
-        conn.commit()
         return cur.lastrowid
+
+
+def search_snapshot(config, mode, health, items, windows) -> dict:
+    return {
+        "query_version": QUERY_VERSION,
+        "mode": mode,
+        "search": config.search,
+        "disciplines": [item.to_dict() for item in config.active_disciplines()],
+        "global_keywords": config.global_keywords,
+        "windows": windows,
+        "sources": health,
+        "journals": [{"name": j.name, "aliases": j.aliases, "issns": j.issns}
+                     for j in config.journals],
+        "records": [{"ids": item.extra.get("record_ids") or record_ids(item),
+                     "title": item.title, "url": item.url,
+                     "matched_rules": item.extra.get("matched_rules", []),
+                     "missing_fields": item.extra.get("missing_fields", [])} for item in items],
+    }
+
+
+def compare_runs(before: dict, after: dict) -> dict:
+    old = before.get("snapshot")
+    new = after.get("snapshot")
+    if old is None or new is None:
+        raise ValueError("所选历史记录缺少检索快照")
+    old_items, new_items = old["records"], new["records"]
+    old_ids = {key for item in old_items for key in item["ids"]}
+    new_ids = {key for item in new_items for key in item["ids"]}
+    added = [item for item in new_items if old_ids.isdisjoint(item["ids"])]
+    removed = [item for item in old_items if new_ids.isdisjoint(item["ids"])]
+    return {"before": before["id"], "after": after["id"], "added": added, "removed": removed,
+            "in_both": len(new_items) - len(added), "before_rules": old["search"],
+            "after_rules": new["search"], "before_sources": old["sources"],
+            "after_sources": new["sources"]}
+
+
+def delivered_ids(profile: str, destination: str) -> set[str]:
+    init_db()
+    with _LOCK, closing(_connect()) as conn:
+        return {row[0] for row in conn.execute(
+            "SELECT record_id FROM delivered_records WHERE profile=? AND destination=?",
+            (profile, destination),
+        )}
+
+
+@contextmanager
+def delivery_lease(profile: str, destination: str, seconds: int = 900):
+    """Serialize delivery for a profile/destination across desktop and CLI processes."""
+    init_db()
+    token = uuid4().hex
+    now = time.time()
+    with _LOCK, closing(_connect()) as conn, conn:
+        conn.execute("DELETE FROM delivery_leases WHERE profile=? AND destination=? AND expires_at<=?",
+                     (profile, destination, now))
+        acquired = conn.execute("INSERT OR IGNORE INTO delivery_leases VALUES (?, ?, ?, ?)",
+                                (profile, destination, token, now + seconds)).rowcount == 1
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            with _LOCK, closing(_connect()) as conn, conn:
+                conn.execute("DELETE FROM delivery_leases WHERE profile=? AND destination=? AND token=?",
+                             (profile, destination, token))
+
+
+def mark_delivered(profile: str, destination: str, ids) -> None:
+    init_db()
+    with _LOCK, closing(_connect()) as conn, conn:
+        now = datetime.now().isoformat()
+        conn.executemany("INSERT OR IGNORE INTO delivered_records VALUES (?, ?, ?, ?)",
+                         ((profile, destination, key, now) for key in ids))
 
 
 def is_duplicate(fingerprint: str, max_age_hours: int | None = None) -> dict | None:
@@ -101,7 +222,7 @@ def is_duplicate(fingerprint: str, max_age_hours: int | None = None) -> dict | N
     cutoff = None
     if max_age_hours is not None:
         cutoff = datetime.fromtimestamp(time.time() - max_age_hours * 3600).isoformat()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         if cutoff:
             row = conn.execute(
                 """SELECT * FROM search_history
@@ -123,7 +244,7 @@ def is_duplicate(fingerprint: str, max_age_hours: int | None = None) -> dict | N
 
 def list_runs(limit: int = 100, profile: str | None = None) -> list[dict]:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         if profile:
             rows = conn.execute(
                 "SELECT * FROM search_history WHERE profile=? ORDER BY id DESC LIMIT ?",
@@ -137,13 +258,14 @@ def list_runs(limit: int = 100, profile: str | None = None) -> list[dict]:
     for r in rows:
         d = dict(r)
         d["source_counts"] = json.loads(d.get("source_counts") or "{}")
+        d["has_snapshot"] = bool(d.pop("snapshot", None))
         out.append(d)
     return out
 
 
 def get_run(run_id: int) -> dict | None:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         row = conn.execute(
             "SELECT * FROM search_history WHERE id=?", (run_id,)
         ).fetchone()
@@ -151,12 +273,13 @@ def get_run(run_id: int) -> dict | None:
         return None
     d = dict(row)
     d["source_counts"] = json.loads(d.get("source_counts") or "{}")
+    d["snapshot"] = json.loads(d["snapshot"]) if d.get("snapshot") else None
     return d
 
 
 def set_report_path(run_id: int, report_path: str) -> None:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         conn.execute("UPDATE search_history SET report_path=? WHERE id=?",
                      (report_path, run_id))
         conn.commit()
@@ -165,7 +288,7 @@ def set_report_path(run_id: int, report_path: str) -> None:
 def delete_run(run_id: int) -> bool:
     """Delete one history record. Returns True if a row was removed."""
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         cur = conn.execute("DELETE FROM search_history WHERE id=?", (run_id,))
         conn.commit()
         return cur.rowcount > 0
@@ -174,7 +297,7 @@ def delete_run(run_id: int) -> bool:
 def clear_history() -> int:
     """Delete all history records. Returns number of rows removed."""
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         cur = conn.execute("DELETE FROM search_history")
         conn.commit()
         return cur.rowcount
@@ -182,7 +305,7 @@ def clear_history() -> int:
 
 def count_runs(profile: str | None = None) -> int:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         if profile:
             row = conn.execute(
                 "SELECT COUNT(*) AS n FROM search_history WHERE profile=?", (profile,)

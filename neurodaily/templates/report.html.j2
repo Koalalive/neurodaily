@@ -5,10 +5,24 @@
   {% if it.extra.get('journal') and it.extra.get('journal') != it.source %}<span class="tag tj">{{ it.extra.get('journal') }}</span>{% endif %}
   {% if it.extra.get('metrics') %}{% set m = it.extra.get('metrics') %}{% if m.get('if') %}<span class="tag tj" title="官方 JCR 影响因子">IF {{ m['if'] }}</span>{% endif %}{% if m.get('jcr') %}<span class="tag t">JCR {{ m['jcr'] }}</span>{% endif %}{% if m.get('cas') %}<span class="tag t">中科院 {{ m['cas'] }}</span>{% endif %}{% if not m.get('if') and m.get('oa_2yr') %}<span class="tag t" title="OpenAlex 2yr mean citedness（非 JCR IF）">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}{% endif %}
   <span class="tag t">{{ it.source }}</span>
+  {% if it.extra.get('search_match') == 'unknown' %}<span class="tag bad">待确认</span>{% endif %}
   {% if it.date_display %}<span class="tag t">{{ it.date_display }}</span>{% endif %}
   {% if it.doi %}<span class="tag t">doi:{{ it.doi }}</span>{% endif %}
   {% for t in it.tags[:4] if t != "top-journal" %}<span class="tag">{{ t }}</span>{% endfor %}
 </div>
+{%- endmacro %}
+
+{% macro record_links(records, versions=false) -%}
+{% for record in records if record is mapping %}
+  {% set url = external_url(record.get('url')) %}
+  {% set label = record.get('label') or record.get('source') or record.get('title') or record.get('doi') or '记录' %}
+  {% if versions %}
+    {% set version = {'published': '正式发表', 'preprint': '预印本'}.get(record.get('kind')) %}
+    {% if version and not label.startswith(version) %}{% set label = version ~ ' · ' ~ label %}{% endif %}
+  {% endif %}
+  {% if url %}<a class="ext" href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ label }}</a>{% else %}<span>{{ label }}</span>{% endif %}
+  {% if not loop.last %}<span aria-hidden="true"> · </span>{% endif %}
+{% endfor %}
 {%- endmacro %}
 
 {% macro block_section(key, title, desc, badge_class) -%}
@@ -18,6 +32,7 @@
       <h2 class="sec-title"><span class="dot"></span>{{ title }}
         <span class="count">({{ result.sections.get(key, [])|length }})</span></h2>
       <p class="sec-desc">{{ desc }}</p>
+      {% if key == 'papers' and sort_label %}<p class="sec-desc">排序 · {{ sort_label }}</p>{% endif %}
     </div>
   </div>
   {% set entries = result.sections.get(key, []) %}
@@ -32,9 +47,22 @@
         </div>
       </summary>
       <div class="card-body">
+        {% set rules = it.extra.get('matched_rules') or [] %}
+        {% set missing = it.extra.get('missing_fields') or [] %}
+        {% if rules or missing %}
+          <div class="evidence">
+            {% if rules %}
+              <b>命中依据</b>
+              <ul>{% for rule in rules %}<li>{{ rule }}</li>{% endfor %}</ul>
+            {% endif %}
+            {% if missing %}<p><b>无法判断的字段</b> · {{ missing|join('、') }}</p>{% endif %}
+          </div>
+        {% endif %}
         {% if it.summary %}<p class="summary">{{ it.summary }}</p>{% endif %}
         {% if it.author_display %}<div class="byline"><b>Authors:</b> {{ it.author_display }}{% if it.corresponding_display %} <span class="corr">✉ corresponding: {{ it.corresponding_display }}</span>{% endif %}</div>{% endif %}
         {% if it.affiliation_display %}<div class="byline aff"><b>Affiliations:</b> {{ it.affiliation_display }}</div>{% endif %}
+        {% if it.extra.get('provenance')|default([], true)|length > 1 %}<div class="byline"><b>合并来源</b> · {{ record_links(it.extra.get('provenance')) }}</div>{% endif %}
+        {% if it.extra.get('related_versions') %}<div class="byline"><b>相关版本</b> · {{ record_links(it.extra.get('related_versions'), versions=true) }}</div>{% endif %}
         <div class="foot">
           {% if it.url %} · <a class="ext" href="{{ it.url }}" target="_blank" rel="noopener">Read ↗</a>{% endif %}
         </div>
@@ -122,6 +150,11 @@
   .tag.tj { background:#38260a; color:#fbbf24; border:1px solid #5a3d12; }
   .card-body { padding: 0 18px 14px 42px; }
   .summary { color: var(--muted); font-size:.88rem; margin:0 0 8px; }
+  .evidence { margin:0 0 10px; padding:8px 12px; border-left:2px solid var(--accent);
+              background:var(--panel2); font-size:.82rem; overflow-wrap:anywhere; }
+  .evidence ul { margin:4px 0 0; padding-left:20px; }
+  .evidence p { margin:0; }
+  .evidence ul + p { margin-top:4px; }
   .byline { font-size:.8rem; color: var(--accent2); margin:0 0 4px; }
   .byline b { color: var(--muted); font-weight:600; }
   .byline.aff { color: var(--muted); }
@@ -142,10 +175,13 @@
   .journal .cat { color: var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
 
   .health { background: var(--panel); border:1px solid var(--border); border-radius:12px;
-            padding:16px; margin-top: 8px; }
+            padding:16px; margin-top: 8px; overflow-x:auto; }
   .health table { width:100%; border-collapse:collapse; font-size:.82rem; }
   .health th, .health td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
   .health th { color: var(--muted); font-weight:600; }
+  .health td.source-detail { color:var(--muted); }
+  .source-detail p { margin:4px 0; }
+  .source-detail code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; }
   .ok { color: var(--ok); } .bad { color: var(--warn); }
   .prompt { background: #0a0a0a; border:1px solid var(--border); border-radius:12px;
             padding:16px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -195,6 +231,7 @@
   <a href="#trials_conferences">🧪 临床试验</a>
   <a href="#policy">🏛️ 政策 / 新闻</a>
   {% if result.config and result.config.journals %}<a href="#journals">📚 期刊</a>{% endif %}
+  {% if result.health %}<a href="#source-health">来源状态</a>{% endif %}
 </nav>
 <header>
   <div class="wrap">
@@ -253,24 +290,43 @@
   </section>
   {% endif %}
 
-  <section>
+  {% if result.health %}
+  <section id="source-health">
     <h2 class="sec-title"><span class="dot"></span>Source Health</h2>
-    <div class="health">
+    {% set state_labels = {'ok': '正常', 'empty': '无命中', 'partial': '部分覆盖', 'timeout': '超时', 'limited': '限流', 'failed': '抓取失败', 'disabled': '已停用'} %}
+    {% set coverage_labels = {'full': '已按设置完成抓取', 'sampled': '样本范围内的结果', 'partial': '仅覆盖部分请求'} %}
+    <div class="health" role="region" aria-label="各来源检索状态" tabindex="0">
       <table>
-        <thead><tr><th>Source</th><th>Status</th><th>Retrieved</th><th>Time</th></tr></thead>
+        <thead><tr><th>来源</th><th>状态</th><th>候选</th><th>已抓取</th><th>命中</th><th>耗时</th></tr></thead>
         <tbody>
         {% for h in result.health %}
+          {% set state = h.get('status') or ('ok' if h.get('ok') else 'failed') %}
+          {% set candidates = h.get('candidate_count', h.get('candidates')) %}
+          {% set queries = h.get('queries') or ([h.query] if h.get('query') else []) %}
           <tr>
             <td>{{ h.source }}</td>
-            <td>{% if h.ok %}<span class="ok">✓ OK</span>{% else %}<span class="bad">✗ failed</span>{% endif %}</td>
-            <td>{{ h.count }}</td>
+            <td><span class="{{ 'ok' if state == 'ok' else 'bad' if state in ('failed', 'timeout', 'limited', 'partial') else 't' }}">{{ state_labels.get(state, state) }}</span></td>
+            <td>{{ candidates if candidates is not none else '—' }}</td>
+            <td>{{ h.get('fetched') if h.get('fetched') is not none else '—' }}</td>
+            <td>{{ h.get('count', '—') }}</td>
             <td>{{ h.ms }} ms</td>
           </tr>
+          {% if queries or h.get('coverage') or h.get('error') or h.get('truncated') or h.get('unknown') or h.get('lookback_days') %}
+            <tr><td colspan="6" class="source-detail">
+              {% if h.get('coverage') %}<p>{{ coverage_labels.get(h.coverage, h.coverage) }}</p>{% endif %}
+              {% if h.get('truncated') %}<p>已到达抓取上限。</p>{% endif %}
+              {% if h.get('unknown') %}<p>{{ h.unknown }} 条因字段不足待确认。</p>{% endif %}
+              {% if h.get('lookback_days') %}<p>请求回溯 · {{ h.lookback_days }} 天</p>{% endif %}
+              {% if h.get('error') %}<p>{{ h.error }}</p>{% endif %}
+              {% if queries %}<details><summary>实际查询</summary>{% for query in queries %}<code>{{ query }}</code>{% endfor %}</details>{% endif %}
+            </td></tr>
+          {% endif %}
         {% endfor %}
         </tbody>
       </table>
     </div>
   </section>
+  {% endif %}
 
   {% if result.config %}
   <section id="prompt">

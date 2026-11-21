@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from .http import get, parse_date_any, strip_html
+from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
 from ..models import Item
 
 
@@ -44,6 +44,12 @@ def _too_old(date_str: str, lookback_days: int) -> bool:
     return d < datetime.now() - timedelta(days=lookback_days)
 
 
+def _excluded_date(date: str, lookback: int, bounds) -> bool:
+    if bounds:
+        return bool(date and not (bounds[0] <= date[:10] <= bounds[1]))
+    return _too_old(date, lookback)
+
+
 def _entry_date(entry) -> str:
     for key in ("published_parsed", "updated_parsed"):
         st = entry.get(key)
@@ -62,19 +68,28 @@ def fetch_rss(name: str, config, logger=None) -> list[Item]:
     url = (opts.get("url") or "").strip()
     if not url:
         return []
+    record_query("Configured RSS feed")
+    mark_sampled()
     resp = get(url, timeout=15.0, retries=1, user_agent="python-httpx")
     if resp is None:
         if logger:
             logger.warning("generic rss %s: fetch failed", name)
         return []
-    parsed = feedparser.parse(resp.content)
-    if parsed.get("bozo") and not parsed.get("entries"):
+    try:
+        parsed = feedparser.parse(resp.content)
+    except Exception:
+        record_failure("The configured RSS feed could not be parsed")
         return []
+    if not parsed.entries and (parsed.get("bozo") or not parsed.get("version")):
+        record_failure("The configured RSS endpoint did not return a valid feed")
+        return []
+    record_candidates(len(parsed.entries))
 
     lookback = int(opts.get("lookback_days", 7) or 7)
     kind = _kind(opts)
     out: list[Item] = []
     seen: set[str] = set()
+    limit = _limit(opts)
     for e in parsed.entries:
         link = e.get("link", "")
         title = e.get("title", "")
@@ -82,23 +97,28 @@ def fetch_rss(name: str, config, logger=None) -> list[Item]:
             continue
         seen.add(link)
         raw = e.get("summary") or e.get("description") or ""
+        summary = strip_html(raw)
         date = _entry_date(e)
-        if _too_old(date, lookback):
+        if _excluded_date(date, lookback, opts.get("paper_date_range")):
             continue
-        if not _matches(f"{title} {raw}", opts.get("filter_keywords")):
+        if not _matches(f"{title} {summary}", opts.get("filter_keywords")):
             continue
+        if len(out) >= limit:
+            mark_sampled(truncated=True)
+            break
+        extra = {"feed": parsed.get("feed", {}).get("title", url), "source_url": url}
+        if kind == "paper" and summary:
+            extra["abstract"] = summary
         out.append(Item(
             title=title,
             url=link,
-            summary=strip_html(raw[:1500]),
+            summary=summary[:1500],
             authors=[a.get("name", "") for a in e.get("authors", []) if a.get("name")],
             source=name,
             kind=kind,
             date=date,
-            extra={"feed": parsed.get("feed", {}).get("title", url), "source_url": url},
+            extra=extra,
         ))
-        if len(out) >= _limit(opts):
-            break
     return out
 
 
@@ -120,6 +140,8 @@ def fetch_json(name: str, config, logger=None) -> list[Item]:
     url = (opts.get("url") or "").strip()
     if not url:
         return []
+    record_query("Configured JSON API")
+    mark_sampled()
     resp = get(url, timeout=20.0, retries=1, user_agent="python-httpx")
     if resp is None:
         if logger:
@@ -127,17 +149,23 @@ def fetch_json(name: str, config, logger=None) -> list[Item]:
         return []
     try:
         payload = resp.json()
-    except Exception:
+    except ValueError:
+        record_failure("The configured API did not return valid JSON")
         return []
 
     rows = _dig(payload, opts.get("items_path") or "")
     if not isinstance(rows, list):
-        rows = payload if isinstance(payload, list) else []
+        if not isinstance(payload, list):
+            record_failure("The configured API items path did not contain a list")
+            return []
+        rows = payload
+    record_candidates(len(rows))
 
     mapping = opts.get("map") or {}
     lookback = int(opts.get("lookback_days", 7) or 7)
     kind = _kind(opts)
     out: list[Item] = []
+    limit = _limit(opts)
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -145,12 +173,15 @@ def fetch_json(name: str, config, logger=None) -> list[Item]:
         link = str(row.get(mapping.get("url", "url"), "") or "").strip()
         if not title:
             continue
-        summary = strip_html(str(row.get(mapping.get("summary", "summary"), "") or "")[:1500])
+        summary = strip_html(str(row.get(mapping.get("summary", "summary"), "") or ""))
         date = parse_date_any(str(row.get(mapping.get("date", "date"), "") or ""))
-        if _too_old(date, lookback):
+        if _excluded_date(date, lookback, opts.get("paper_date_range")):
             continue
         if not _matches(f"{title} {summary}", opts.get("filter_keywords")):
             continue
+        if len(out) >= limit:
+            mark_sampled(truncated=True)
+            break
         doi = str(row.get(mapping.get("doi", "doi"), "") or "").strip()
         authors_raw = row.get(mapping.get("authors", "authors"), [])
         if isinstance(authors_raw, str):
@@ -159,9 +190,10 @@ def fetch_json(name: str, config, logger=None) -> list[Item]:
             authors = [str(a) for a in authors_raw]
         else:
             authors = []
-        out.append(Item(title=title, url=link, summary=summary, authors=authors,
+        extra = {"api": url}
+        if kind == "paper" and summary:
+            extra["abstract"] = summary
+        out.append(Item(title=title, url=link, summary=summary[:1500], authors=authors,
                         source=name, kind=kind, date=date, doi=doi,
-                        extra={"api": url}))
-        if len(out) >= _limit(opts):
-            break
+                        extra=extra))
     return out
