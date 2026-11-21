@@ -109,7 +109,7 @@ def render_html(result: DigestResult, config: Config | None = None, *, locale: s
                 section = env.get_template("research_activity.html.j2").render(
                     activity=report_activity(result, _cfg, _external_url), language=language,
                 )
-                offset = re.search(r"<main\b[^>]*>", html).end()
+                offset = html.index("</main>")
                 html = html[:offset] + section + html[offset:]
             except Exception:
                 import logging
