@@ -55,7 +55,8 @@ def _cfg_with_hours(cfg: Config, hours: int) -> Config:
     return c
 
 
-def create_app(config_path: str | None = None, *, desktop: bool = False) -> FastAPI:
+def create_app(config_path: str | None = None, *, desktop: bool = False,
+               open_report_browser: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         stop = Event()
@@ -280,7 +281,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
             stage("delivery", "failed", "投递未完成，请查看任务详情。")
 
         task_runs.finish(attempt, "completed")
-        if cfg.output.get("open_on_finish", True) and os.environ.get("NEURODAILY_NO_OPEN") != "1":
+        if (open_report_browser and cfg.output.get("open_on_finish", True)
+                and os.environ.get("NEURODAILY_NO_OPEN") != "1"):
             try:
                 from webbrowser import open as open_browser
                 open_browser(base.rstrip("/") + f"/history/{attempt['id']}/report")

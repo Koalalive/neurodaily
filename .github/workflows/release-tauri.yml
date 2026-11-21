@@ -1,4 +1,4 @@
-name: Release Tauri desktop
+name: Release NeuroDaily
 
 on:
   workflow_dispatch:
@@ -19,14 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15
-            target: aarch64-apple-darwin
-            bundles: app
-            dmg_arch: aarch64
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            bundles: app
-            dmg_arch: x64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: nsis,msi
@@ -127,37 +119,33 @@ jobs:
           test -x /usr/bin/neurodaily-server
           xvfb-run -a python desktop/sidecar/smoke.py --desktop --expect-version "$version" /usr/bin/neurodaily-desktop
 
-      - name: Create and verify macOS disk image
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          BUNDLE_DIR: desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle
-          DMG_ARCH: ${{ matrix.dmg_arch }}
-        run: |
-          version=$(node -p "require('./desktop/tauri/src-tauri/tauri.conf.json').version")
-          python desktop/sidecar/smoke.py "$BUNDLE_DIR/macos/NeuroDaily.app/Contents/MacOS/neurodaily-server"
-          image="$BUNDLE_DIR/dmg/NeuroDaily_${version}_${DMG_ARCH}.dmg"
-          bash desktop/build_dmg.sh "$BUNDLE_DIR/macos/NeuroDaily.app" "$image"
-          python desktop/sidecar/installer_smoke.py "$image" "$version"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            updater="$BUNDLE_DIR/macos/NeuroDaily_${version}_${DMG_ARCH}.app.tar.gz"
-            mv "$BUNDLE_DIR/macos/NeuroDaily.app.tar.gz" "$updater"
-            mv "$BUNDLE_DIR/macos/NeuroDaily.app.tar.gz.sig" "$updater.sig"
-          fi
-
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: neurodaily-${{ matrix.target }}
           if-no-files-found: error
           path: |
-            desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
-            desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
+
+  homebrew:
+    name: Verify macOS Homebrew (${{ matrix.os }})
+    if: ${{ !startsWith(github.ref, 'refs/heads/verify/') || startsWith(github.ref, 'refs/heads/verify/homebrew-') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install the formula and verify the localhost workspace
+        run: bash scripts/test_homebrew.sh
 
   windows-installer:
     name: Verify Windows installer (${{ matrix.scenario }})
@@ -216,7 +204,7 @@ jobs:
   extra-installer:
     name: Verify ${{ matrix.scenario }}
     needs: build
-    if: ${{ !cancelled() && (startsWith(github.ref, 'refs/heads/verify/') || needs.build.result == 'success') }}
+    if: ${{ !cancelled() && (needs.build.result == 'success' || (startsWith(github.ref, 'refs/heads/verify/') && !startsWith(github.ref, 'refs/heads/verify/homebrew-'))) }}
     permissions:
       contents: read
       actions: read
@@ -300,7 +288,7 @@ jobs:
           xvfb-run -a python desktop/sidecar/native_ui_smoke.py /usr/bin/neurodaily-desktop "$version"
 
   publish:
-    needs: [build, windows-installer, extra-installer]
+    needs: [build, homebrew, windows-installer, extra-installer]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     permissions:
@@ -323,22 +311,20 @@ jobs:
           draft: true
           generate_release_notes: true
           body: |
-            Windows 验证了 NSIS 和 MSI 全新安装，以及从 v1.0.4 覆盖升级。macOS 验证了 Apple Silicon 和 Intel DMG 安装。Ubuntu 验证了 DEB 安装和覆盖升级，以及 AppImage 解包运行。启用定时并保存后，最小化窗口可继续运行。
+            macOS 使用私有 Homebrew tap 安装命令行，并用 `neurodaily web` 在默认浏览器打开本机工作区。支持 Apple Silicon 和 Intel。安装与旧版数据迁移见 [macOS Homebrew 指南](https://github.com/Koalalive/neurodaily/blob/main/docs/MACOS_HOMEBREW.md)。
+
+            Windows 验证了 NSIS 和 MSI 全新安装，以及从 v1.0.4 覆盖升级。Ubuntu 验证了 DEB 安装和覆盖升级，以及 AppImage 解包运行。
 
             桌面工作区默认中文，可在设置切换英文或俄文。每次检索生成独立日报标签页，返回首页可恢复最近的日报。
 
             新增重症医学检索预设和离线文献计量。运行历史显示各来源进度和投递回执，失败渠道可单独重试。CLI 的 search-quality 命令使用固定标注样本比较检索规则。
 
-            macOS 安装包使用临时签名。首次打开时，macOS 可能要求在「系统设置 → 隐私与安全性」中单独批准。
-
           fail_on_unmatched_files: true
           files: |
-            installers/**/*.dmg
             installers/**/*.msi
             installers/**/*.exe
             installers/**/*.AppImage
             installers/**/*.deb
-            installers/**/*.app.tar.gz
             installers/**/*.sig
       - name: Publish the complete release
         env:

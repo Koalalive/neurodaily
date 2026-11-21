@@ -3,6 +3,7 @@
 Usage:
     neurodaily run [--output PATH]          # generate today's HTML report
     neurodaily serve [--port PORT]          # start the FastAPI web app
+    neurodaily web [--port PORT] [--no-open] # run the localhost workspace
     neurodaily config show                  # print the structured prompt
     neurodaily config init [--force]        # write default config + prompt file
     neurodaily launchd install [--dry-run]  # register 08:00 launchd job
@@ -15,6 +16,7 @@ import os
 import subprocess
 import sys
 
+from . import __version__
 from .config import Config, DEFAULT_CONFIG, DEFAULT_DIRS
 
 
@@ -127,6 +129,78 @@ def cmd_serve(args) -> int:
         threading.Timer(2.0, lambda: webbrowser.open(f"http://{host}:{args.port}/settings")).start()
     uvicorn.run(app, host=host, port=args.port, log_level="info")
     return 0
+
+
+def _valid_web_port(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("port must be an integer from 1 to 65535") from None
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be an integer from 1 to 65535")
+    return port
+
+
+def cmd_web(args) -> int:
+    from pathlib import Path
+    from threading import Thread
+    import webbrowser
+
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+    from starlette.responses import JSONResponse
+    import uvicorn
+
+    from .webapp import create_app
+
+    host = "127.0.0.1"
+    base_url = f"http://{host}:{args.port}"
+    workspace_url = f"{base_url}/desktop"
+    config_path = Path(args.config or Config.default_path()).expanduser()
+    app = create_app(str(config_path), desktop=True, open_report_browser=False)
+
+    @app.middleware("http")
+    async def local_origin(request, call_next):
+        origin = request.headers.get("origin")
+        if origin is not None and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            expected = "http://" + request.headers.get("host", "").lower()
+            if origin != expected:
+                return JSONResponse({"error": "Only same-origin browser requests can change the workspace."},
+                                    status_code=403)
+        return await call_next(request)
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[host, "localhost"])
+    app.state.base_url = base_url
+
+    def open_workspace() -> None:
+        try:
+            if webbrowser.open(workspace_url):
+                return
+        except (OSError, webbrowser.Error):
+            pass
+        print(f"[neurodaily] Open {workspace_url} in your browser.", file=sys.stderr)
+
+    class WorkspaceServer(uvicorn.Server):
+        async def startup(self, sockets=None):
+            await super().startup(sockets=sockets)
+            if self.started:
+                print(f"[neurodaily] Workspace ready at {workspace_url}", flush=True)
+                if not args.no_open:
+                    Thread(target=open_workspace, name="neurodaily-browser", daemon=True).start()
+
+    server_config = uvicorn.Config(app, host=host, port=args.port, log_level="info",
+                                   access_log=False, proxy_headers=False)
+    with server_config.bind_socket() as listener:
+        if not config_path.exists():
+            cfg = DEFAULT_CONFIG()
+            cfg.scheduled["enabled"] = False
+            try:
+                cfg.save(str(config_path))
+            except OSError as exc:
+                print(f"[neurodaily] Could not initialise {config_path}: {exc}", file=sys.stderr)
+                return 1
+        server = WorkspaceServer(server_config)
+        server.run(sockets=[listener])
+    return 0 if server.started else 1
 
 
 # ---------------------------------------------------------------------------
@@ -519,6 +593,7 @@ def cmd_search_quality(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="neurodaily",
                                 description="Daily neuroscience/psychiatry digest → HTML.")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     p.add_argument("--config", help="path to config.json (default: ~/neurodaily/config/config.json)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -540,6 +615,11 @@ def build_parser() -> argparse.ArgumentParser:
     serve_p.add_argument("--demo", action="store_true", help="dashboard uses offline demo data")
     serve_p.add_argument("--open", action="store_true", help="open the settings page in a browser")
     serve_p.set_defaults(func=cmd_serve)
+
+    web_p = sub.add_parser("web", help="run the scheduled workspace on localhost")
+    web_p.add_argument("--port", type=_valid_web_port, default=8031, help="local port (default: 8031)")
+    web_p.add_argument("--no-open", action="store_true", help="do not open the workspace in a browser")
+    web_p.set_defaults(func=cmd_web)
 
     cfg_p = sub.add_parser("config", help="view or init config")
     cfg_sub = cfg_p.add_subparsers(dest="config_action", required=True)

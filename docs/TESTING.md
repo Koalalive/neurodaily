@@ -87,29 +87,29 @@ make test                    # 等价
 - 矩阵：Python **3.12 / 3.13**
 - 步骤：`pip install -e .` → `bash scripts/test_all.sh`
 
-`.github/workflows/release-tauri.yml` 在发布前检查桌面安装包：
+`.github/workflows/release-tauri.yml` 在发布前检查各平台的发行方式。
 
 - Windows 在两台独立的临时运行器执行 NSIS `setup.exe`，分别验证全新安装和从已发布的 v1.0.4 覆盖升级。升级前先生成一份真实报告和定时检索记录，再检查候选版能读取原配置、报告、历史记录和启用的定时设置。
 - Windows MSI 在另一台临时运行器全新安装，验证系统登记、定时检索和卸载。
-- macOS 两种架构均挂载最终 DMG，将应用复制到临时目录，从复制后的应用启动并验证定时检索。
+- Apple Silicon 与 Intel macOS 的运行器通过 Homebrew 安装本次提交的 CLI，启动 `neurodaily web` 并检查本机网页工作区。
 - Linux 使用 `apt` 安装最终 DEB，再从 `/usr/bin` 启动安装后的应用，在虚拟显示器下验证定时检索。
 - 发布回归还验证 Linux DEB 从 v1.0.4 覆盖升级，核对配置、历史、原日报与定时设置，并通过 AppImage 自带运行时解包启动。Linux WebView 回归检查外部链接交给系统打开器，以及系统保存对话框的保存与取消。
-- 三个平台均使用隔离数据目录和本地 RSS，检查定时触发、手动检索冲突、报告生成及主程序退出后服务停止。
-- 发布工作流在上传前逐个核验更新包签名，并检查签名绑定本次版本号。
+- Windows 和 Linux 桌面回归使用隔离数据目录和本地 RSS，检查定时触发、手动检索冲突、报告生成及主程序退出后服务停止。
+- 发布工作流在上传前逐个核验 Windows 和 Linux 更新包签名，并检查签名绑定本次版本号。macOS 通过 Homebrew 升级。
 
-可在 macOS 本机或 Windows 一次性测试环境复跑：
+可在一次性测试环境复跑。
 
 ```bash
-python desktop/sidecar/installer_smoke.py NeuroDaily_1.0.5_aarch64.dmg 1.0.5
-python desktop/sidecar/installer_smoke.py NeuroDaily_1.0.5_x64-setup.exe 1.0.5 --baseline NeuroDaily_1.0.4_x64-setup.exe --baseline-version 1.0.4
+bash scripts/test_homebrew.sh
+python desktop/sidecar/installer_smoke.py NeuroDaily_1.0.6_x64-setup.exe 1.0.6 --baseline NeuroDaily_1.0.4_x64-setup.exe --baseline-version 1.0.4
 ```
 
 ## 6. 已知未覆盖 / 未验证
 
 | 项 | 说明 |
 |---|---|
-| 其他安装及升级方式 | AppImage 的 FUSE 挂载、Windows MSI 覆盖升级与 Intel macOS 覆盖升级需在对应环境验证 |
-| 原生打开浏览器和保存对话框 | Linux 桌面自动化使用测试打开器接收外部网址，并操作原生保存对话框。Windows 和 macOS 对应的原生交互需在桌面环境验证 |
+| 其他安装及升级方式 | AppImage 的 FUSE 挂载与 Windows MSI 覆盖升级需在对应环境验证 |
+| 原生打开浏览器和保存对话框 | Linux 桌面自动化使用测试打开器接收外部网址，并操作原生保存对话框。Windows 对应的原生交互需在桌面环境验证。macOS 本机 WebApp 使用浏览器的下载与链接设置 |
 | 真实飞书/企微推送 | 没有可用 webhook URL，只测了失败降级路径 |
 | 直连 DeepSeek | 使用 SJTU 网关的 `deepseek-chat` 测试；协议同为 OpenAI 兼容 |
 | 936 篇 LLM 长文事实核查 | 抽样人工看过；提示词禁止编造，但未逐条核对 |

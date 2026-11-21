@@ -1,16 +1,16 @@
 # 安装要求与发行版
 
-NeuroDaily 提供 macOS、Windows 和 Linux 桌面安装包。终端用户**不需要安装 Python、Node 或 Rust**，应用所用的 Python 运行时已随安装包打包。
+macOS 用户通过私有 Homebrew tap 安装 NeuroDaily。Windows 和 Linux 用户使用附带 Python 运行时的桌面安装包。
 
 ## 1. 发行矩阵
 
-| 平台 | 安装包 | 架构 | 最低系统 |
+| 平台 | 安装方式 | 架构 | 系统要求 |
 |---|---|---|---|
-| macOS | `.dmg`（拖入 Applications） | Apple Silicon（arm64）、Intel（x86_64） | macOS 12 Monterey |
+| macOS | 私有 Homebrew tap | Apple Silicon（arm64）、Intel（x86_64） | 可运行 Homebrew 与公式依赖的 macOS。详见 [Homebrew 安装要求](https://docs.brew.sh/Installation) |
 | Windows | `.msi` / `.exe`（NSIS） | x86_64 | Windows 10 1809+ / Windows 11 |
 | Linux | `.AppImage` / `.deb` | x86_64 | Ubuntu 24.04（构建基线） |
 
-> 所有安装包均附带本地 Web UI + Python sidecar；启动后不依赖外部 Web 服务。
+Windows 和 Linux 安装包内置 Web UI 与 Python sidecar。macOS 公式由 Homebrew 准备 Python 3.13 和运行依赖。三平台的界面均由本机服务提供。
 
 ## 2. 通用软硬件要求
 
@@ -32,12 +32,9 @@ NeuroDaily 提供 macOS、Windows 和 Linux 桌面安装包。终端用户**不�
 
 ## 3. macOS
 
-- macOS 12 Monterey 及以上；Apple Silicon 与 Intel 分别提供安装包。
-- 下载已通过签名校验的临时签名版本时，macOS 可能要求在「系统设置 → 隐私与安全性」中单独批准该应用。
-- 如果系统提示「应用已损坏」，先核对 Release 下载摘要，并运行 `codesign --verify --deep --strict /Applications/NeuroDaily.app`。签名校验失败时请更换安装包。
-- 数据目录：`~/Library/Application Support/NeuroDaily/`
-  - `config/`、`output/`、`last_email.json`
-- 端口：仅监听 `127.0.0.1` 随机端口，不触发防火墙入站提示。
+准备 Homebrew 和可以读取私有仓库的 GitHub SSH 密钥。完整命令见 [macOS 安装指南](MACOS_HOMEBREW.md)。
+
+运行 `neurodaily web` 后，通过默认浏览器访问 `http://127.0.0.1:8031/desktop`。数据目录为 `~/Library/Application Support/NeuroDaily/`，可沿用旧版在该位置保存的配置、历史和日报。在启动服务的终端按 **Ctrl+C** 停止检索和定时推送。
 
 ## 4. Windows
 
@@ -58,20 +55,19 @@ NeuroDaily 提供 macOS、Windows 和 Linux 桌面安装包。终端用户**不�
   ```
 - AppImage：
   ```bash
-  chmod +x NeuroDaily_1.0.1_amd64.AppImage
-  ./NeuroDaily_1.0.1_amd64.AppImage
+  chmod +x NeuroDaily_1.0.6_amd64.AppImage
+  ./NeuroDaily_1.0.6_amd64.AppImage
   ```
 - 数据目录：`~/.local/share/neurodaily/`（或 `$XDG_DATA_HOME/neurodaily`）。
 
 ## 6. 首次启动与数据位置
 
-1. 双击安装后的 NeuroDaily。
-2. 每次启动先打开设置页。可选「神经科学」或「肿瘤学」预设，也可沿用保存的设置。
-3. 确认学科、期刊、RSS 和时间窗口，点击 **Save & continue to search**。
-4. 点击 **开始检索**。报告成功生成后自动打开。
+1. Windows 和 Linux 双击安装后的 NeuroDaily。macOS 在终端运行 `neurodaily web`。
+2. 在设置页选「神经科学」「肿瘤学」或「重症医学」预设，也可沿用保存的设置。
+3. 确认学科、期刊、RSS 和时间窗口，保存设置并进入检索页。
+4. 点击 **开始检索**。报告生成后自动在新标签页打开。
 
-在设置页开启 **Enable schedule** 并保存后，桌面应用按本地时间运行定时推送。最小化窗口会继续运行。关闭窗口或退出应用时会显示确认提示，确认后定时推送停止，正在进行的检索或推送也会中断。
-独立安装的系统定时任务仍由系统调度器管理。
+在设置页启用定时检索并保存后，NeuroDaily 按本地时间运行。Windows 和 Linux 最小化窗口时服务继续运行，退出应用前会提示。macOS 的服务随终端进程运行，浏览器页面关闭后仍可按时检索。独立系统定时任务由系统调度器管理。
 
 配置与输出都在用户数据目录，卸载应用不会删除；备份该目录即可迁移。
 
@@ -85,5 +81,4 @@ NeuroDaily 提供 macOS、Windows 和 Linux 桌面安装包。终端用户**不�
 ## 8. 构建者要求（不是终端用户要求）
 
 - Python 3.12+、Node 20+、Rust stable、PyInstaller。
-- macOS 需 Xcode Command Line Tools；Windows 需 MSVC Build Tools；Linux 需 WebKitGTK 开发包。
-- 详见 [`DESKTOP_TAURI.md`](DESKTOP_TAURI.md) 与 `.github/workflows/release-tauri.yml`。
+- Windows 需 MSVC Build Tools，Linux 需 WebKitGTK 开发包。桌面构建见 [Tauri 桌面指南](DESKTOP_TAURI.md)，各平台自动化见 [GitHub Actions 手册](GITHUB_ACTIONS.md)。
