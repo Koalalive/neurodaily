@@ -222,7 +222,7 @@ def is_duplicate(fingerprint: str, max_age_hours: int | None = None) -> dict | N
     cutoff = None
     if max_age_hours is not None:
         cutoff = datetime.fromtimestamp(time.time() - max_age_hours * 3600).isoformat()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         if cutoff:
             row = conn.execute(
                 """SELECT * FROM search_history
@@ -244,7 +244,7 @@ def is_duplicate(fingerprint: str, max_age_hours: int | None = None) -> dict | N
 
 def list_runs(limit: int = 100, profile: str | None = None) -> list[dict]:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         if profile:
             rows = conn.execute(
                 "SELECT * FROM search_history WHERE profile=? ORDER BY id DESC LIMIT ?",
@@ -265,7 +265,7 @@ def list_runs(limit: int = 100, profile: str | None = None) -> list[dict]:
 
 def get_run(run_id: int) -> dict | None:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         row = conn.execute(
             "SELECT * FROM search_history WHERE id=?", (run_id,)
         ).fetchone()
@@ -279,7 +279,7 @@ def get_run(run_id: int) -> dict | None:
 
 def set_report_path(run_id: int, report_path: str) -> None:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         conn.execute("UPDATE search_history SET report_path=? WHERE id=?",
                      (report_path, run_id))
         conn.commit()
@@ -288,7 +288,7 @@ def set_report_path(run_id: int, report_path: str) -> None:
 def delete_run(run_id: int) -> bool:
     """Delete one history record. Returns True if a row was removed."""
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         cur = conn.execute("DELETE FROM search_history WHERE id=?", (run_id,))
         conn.commit()
         return cur.rowcount > 0
@@ -297,7 +297,7 @@ def delete_run(run_id: int) -> bool:
 def clear_history() -> int:
     """Delete all history records. Returns number of rows removed."""
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         cur = conn.execute("DELETE FROM search_history")
         conn.commit()
         return cur.rowcount
@@ -305,7 +305,7 @@ def clear_history() -> int:
 
 def count_runs(profile: str | None = None) -> int:
     init_db()
-    with _LOCK, _connect() as conn:
+    with _LOCK, closing(_connect()) as conn:
         if profile:
             row = conn.execute(
                 "SELECT COUNT(*) AS n FROM search_history WHERE profile=?", (profile,)

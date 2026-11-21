@@ -93,6 +93,50 @@ class ResearchWorkflowTests(unittest.TestCase):
         self.assertEqual(result.status, "unknown")
         self.assertEqual(result.missing_fields, ("AB",))
 
+    def test_incremental_delivery_retries_only_the_failed_destination(self):
+        from neurodaily.delivery import deliver_report
+        from neurodaily.digest import DigestResult
+
+        paper = Item(title="Fixture paper", url="https://example.test/paper", source="pubmed",
+                     doi="10.1234/fixture")
+        result = DigestResult(items=[paper], sections={"papers": [paper]}, health=[],
+                              generated_at="2026-11-20T08:00:00", config_profile=self.config.profile,
+                              config=self.config)
+        hooks = {"feishu": "https://example.test/feishu", "wecom": "https://example.test/wecom"}
+        acknowledgements = [{"feishu": "ok"}, {"wecom": "failed"}, {"wecom": "ok"}]
+        with patch("neurodaily.history.db_path", return_value=str(self.folder / "history.db")), \
+             patch("neurodaily.mailer.load_cfg", return_value={"enabled": False}), \
+             patch("neurodaily.mailer.render_email", return_value=("", "", "")), \
+             patch("neurodaily.mailer.save_last"), \
+             patch("neurodaily.webhooks.load_cfg", return_value=hooks), \
+             patch("neurodaily.webhooks.send_all", side_effect=acknowledgements) as send:
+            self.assertEqual(deliver_report(result, "report.html"), {"feishu": "ok", "wecom": "failed"})
+            self.assertEqual(deliver_report(result, "report.html"), {"wecom": "ok"})
+            self.assertEqual(deliver_report(result, "report.html"), {})
+        self.assertEqual(send.call_count, 3)
+
+    def test_history_comparison_uses_cross_source_identifiers(self):
+        from neurodaily.history import record_run, search_snapshot
+
+        stamp = "2026-11-20T08:00:00"
+        first = Item(title="Same paper from journal", url="https://example.test/paper", source="journal",
+                     doi="10.1234/fixture")
+        second = Item(title="Same paper from PubMed", url="https://pubmed.ncbi.nlm.nih.gov/123/",
+                      source="pubmed", doi="https://doi.org/10.1234/fixture")
+        new = Item(title="New paper", url="https://example.test/new", source="journal")
+        profile = self.config.profile
+        with patch("neurodaily.history.db_path", return_value=str(self.folder / "history.db")):
+            ids = []
+            for items in ([first], [second, new]):
+                snapshot = search_snapshot(self.config, "manual", [], items, {"paper": 36})
+                ids.append(record_run("fixture", profile, "completed", stamp, stamp, snapshot=snapshot))
+            response = self.client.get("/api/history/compare", params={"before": ids[0], "after": ids[1]})
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertEqual(result["in_both"], 1)
+        self.assertEqual(result["removed"], [])
+        self.assertEqual([row["title"] for row in result["added"]], ["New paper"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::{
-    webview::NewWindowResponse, AppHandle, Manager, RunEvent, Url, WebviewWindowBuilder,
-    WindowEvent,
+    webview::{DownloadEvent, NewWindowResponse},
+    AppHandle, Manager, RunEvent, Url, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_opener::OpenerExt;
@@ -55,6 +55,14 @@ fn link_destination(url: &Url, sidecar_port: u16) -> LinkDestination {
     }
 }
 
+fn is_config_download(url: &Url, sidecar_port: u16) -> bool {
+    url.scheme() == "http"
+        && url.host_str() == Some("127.0.0.1")
+        && sidecar_port != 0
+        && url.port_or_known_default() == Some(sidecar_port)
+        && url.path() == "/api/config/export"
+}
+
 fn open_in_browser(app: &AppHandle, url: &Url) {
     if let Err(error) = app.opener().open_url(url.as_str(), None::<&str>) {
         eprintln!("Could not open external link: {error}");
@@ -75,6 +83,7 @@ fn create_main_window(app: &tauri::App, sidecar_port: Arc<AtomicU16>) -> tauri::
         .find(|window| window.label == "main")
         .expect("main window configuration");
     let navigation_port = Arc::clone(&sidecar_port);
+    let download_port = Arc::clone(&sidecar_port);
     let navigation_app = app.handle().clone();
     let popup_app = app.handle().clone();
     let mut builder = WebviewWindowBuilder::from_config(app, config)?;
@@ -118,6 +127,12 @@ fn create_main_window(app: &tauri::App, sidecar_port: Arc<AtomicU16>) -> tauri::
                 LinkDestination::Block => {}
             }
             NewWindowResponse::Deny
+        })
+        .on_download(move |_, event| match event {
+            DownloadEvent::Requested { url, .. } => {
+                is_config_download(&url, download_port.load(Ordering::Relaxed))
+            }
+            _ => true,
         })
         .build()?;
     Ok(())
@@ -312,6 +327,21 @@ mod tests {
                 "{url}"
             );
         }
+    }
+
+    #[test]
+    fn only_the_active_sidecar_can_download_a_config() {
+        let path = "/api/config/export";
+        let local = Url::parse(&format!("http://127.0.0.1:1234{path}")).unwrap();
+        let external = Url::parse(&format!("https://example.org{path}")).unwrap();
+        assert!(super::is_config_download(&local, 1234));
+        assert!(!super::is_config_download(&local, 0));
+        assert!(!super::is_config_download(&local, 1235));
+        assert!(!super::is_config_download(&external, 1234));
+        assert!(!super::is_config_download(
+            &local.join("/api/config").unwrap(),
+            1234
+        ));
     }
 
     #[cfg(windows)]
