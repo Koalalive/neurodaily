@@ -224,6 +224,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
             "search": app.state.search_attempt,
         }
 
+    @app.get("/api/search/status")
+    def api_search_status():
+        return JSONResponse({"search": app.state.search_attempt}, headers={"Cache-Control": "no-store"})
+
     @app.get("/api/prompt")
     def api_prompt():
         cfg = _cfg()
@@ -408,6 +412,53 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
         except Exception as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
         return JSONResponse({"ok": True, "path": path})
+
+    async def _service_draft(request: Request) -> dict | None:
+        if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+            return None
+        try:
+            draft = await request.json()
+        except (ValueError, UnicodeError):
+            return None
+        return draft if isinstance(draft, dict) else None
+
+    @app.post("/api/push/test")
+    async def api_push_test(request: Request):
+        from .mailer import test_connection
+
+        draft = await _service_draft(request)
+        if draft is None:
+            return JSONResponse({"ok": False, "message": "邮件设置格式无效。"}, status_code=400)
+        return await run_in_threadpool(test_connection, draft)
+
+    @app.get("/api/ai/settings")
+    def api_ai_settings():
+        from .ai_summary import public_settings
+
+        return JSONResponse(public_settings(), headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/ai/settings")
+    async def api_ai_settings_save(request: Request):
+        from .ai_summary import save_settings
+
+        draft = await _service_draft(request)
+        if draft is None:
+            return JSONResponse({"ok": False, "message": "AI 设置格式无效。"}, status_code=400)
+        try:
+            return {"ok": True, **save_settings(draft)}
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "message": str(exc)}, status_code=400)
+        except OSError:
+            return JSONResponse({"ok": False, "message": "无法写入本机 AI 设置。"}, status_code=500)
+
+    @app.post("/api/ai/test")
+    async def api_ai_test(request: Request):
+        from .ai_summary import test_connection
+
+        draft = await _service_draft(request)
+        if draft is None:
+            return JSONResponse({"ok": False, "message": "AI 设置格式无效。"}, status_code=400)
+        return await run_in_threadpool(test_connection, draft)
 
     @app.get("/report/latest")
     def report_latest():

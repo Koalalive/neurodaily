@@ -1,20 +1,26 @@
-"""Check frozen sidecar startup, scheduled retrieval and shutdown."""
+"""Check packaged desktop startup, scheduled retrieval and shutdown."""
 
+import argparse
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
-import sys
 import tempfile
-from threading import Thread
+from threading import Event, Thread
 import time
 from urllib.request import ProxyHandler, Request, build_opener
+from urllib.error import HTTPError
 
 
 class Feed(BaseHTTPRequestHandler):
     def do_GET(self):
+        self.server.search_started.set()
+        if not self.server.finish_search.wait(15):
+            self.send_error(503)
+            return
         feed = b'''<rss version="2.0"><channel><title>Scheduler test feed</title>
         <link>https://example.test/</link><description>Offline fixture</description>
         <item><title>Scheduled smoke result</title><link>https://example.test/paper</link>
@@ -37,6 +43,8 @@ def check_scheduled_search(opener, base_url, home):
     assert status["backend"] == "desktop" and status["state"] == "off", status
     cfg = fetch_json("/api/config")
     with ThreadingHTTPServer(("127.0.0.1", 0), Feed) as feed:
+        feed.search_started = Event()
+        feed.finish_search = Event()
         Thread(target=feed.serve_forever, daemon=True).start()
         try:
             cfg["sources"] = {name: {**opts, "enabled": False} for name, opts in cfg["sources"].items()}
@@ -47,6 +55,16 @@ def check_scheduled_search(opener, base_url, home):
             cfg["scheduled"].update(enabled=True, hour=now.hour, minute=now.minute,
                                     on_this_day={"enabled": False})
             assert fetch_json("/api/config", cfg)["ok"]
+            assert feed.search_started.wait(15), "The configured schedule did not contact the feed"
+            run = fetch_json("/api/search/status")["search"]
+            assert run["status"] == "running" and run["scheduled_for"], run
+            try:
+                fetch_json("/api/run?force=1", {})
+            except HTTPError as exc:
+                assert exc.code == 409, exc.code
+            else:
+                raise AssertionError("A manual search started during the scheduled run")
+            feed.finish_search.set()
             deadline = time.monotonic() + 25
             while time.monotonic() < deadline:
                 status = fetch_json("/api/launchd/status")
@@ -60,11 +78,26 @@ def check_scheduled_search(opener, base_url, home):
             with opener.open(base_url + "/report/latest", timeout=5) as response:
                 assert b"Scheduled smoke result" in response.read()
             assert list((home / "output").glob("*.html"))
+            assert fetch_json("/api/search/status")["search"]["status"] == "completed"
         finally:
+            feed.finish_search.set()
             feed.shutdown()
 
 
-def smoke(executable: Path) -> None:
+def check_settings(opener, base_url, home):
+    assert (home / "config" / "config.json").is_file()
+    for route in ("/settings", "/api/status", "/run", "/api/ai/settings"):
+        with opener.open(base_url + route, timeout=5) as response:
+            assert response.status == 200, route
+    with opener.open(base_url + "/api/config/presets", timeout=5) as response:
+        profiles = {preset["config"]["profile"] for preset in json.load(response)}
+        assert {"neuro", "oncology"} <= profiles, profiles
+    with opener.open(base_url + "/api/config/export", timeout=5) as response:
+        assert response.headers["Content-Disposition"].startswith("attachment;")
+        assert json.load(response)["format"] == "neurodaily.profile"
+
+
+def smoke(executable: Path, *, desktop=False) -> None:
     with tempfile.TemporaryDirectory() as workdir:
         home = Path(workdir) / "home"
         config_dir = home / "config"
@@ -75,14 +108,29 @@ def smoke(executable: Path) -> None:
         log = Path(workdir) / "sidecar.log"
         env = {**os.environ, "NEURODAILY_HOME": str(home), "NEURODAILY_PORT": "0",
                "NEURODAILY_MANAGED": "1", "NO_PROXY": "127.0.0.1,localhost"}
+        if desktop:
+            # Use the real shell and its adjacent bundled sidecar. A fixed test
+            # port avoids depending on GUI process stdout on Windows.
+            with socket.socket() as port_probe:
+                port_probe.bind(("127.0.0.1", 0))
+                env["NEURODAILY_PORT"] = str(port_probe.getsockname()[1])
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         with log.open("wb") as output:
             process = subprocess.Popen([str(executable.resolve())], cwd=workdir,
                                        env=env, stdin=subprocess.PIPE, stdout=output,
                                        stderr=subprocess.STDOUT, creationflags=flags)
         try:
+            opener = build_opener(ProxyHandler({}))
             deadline = time.monotonic() + 90
             while process.poll() is None and time.monotonic() < deadline:
+                if desktop:
+                    port = env["NEURODAILY_PORT"]
+                    try:
+                        with opener.open(f"http://127.0.0.1:{port}/api/search/status", timeout=1):
+                            break
+                    except OSError:
+                        time.sleep(0.25)
+                        continue
                 lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
                 port = next((line.partition("=")[2] for line in lines
                              if line.startswith("NEURODAILY_PORT=")), None)
@@ -90,21 +138,17 @@ def smoke(executable: Path) -> None:
                     assert "NEURODAILY_FIRST_RUN=1" in lines
                     if os.name == "nt":
                         assert "NEURODAILY_CONSOLE=0" in lines, lines
-                    assert (home / "config" / "config.json").is_file()
-                    opener = build_opener(ProxyHandler({}))
-                    for route in ("/settings", "/api/status", "/run"):
-                        with opener.open(f"http://127.0.0.1:{port}{route}", timeout=5) as response:
-                            assert response.status == 200, route
-                    with opener.open(f"http://127.0.0.1:{port}/api/config/presets", timeout=5) as response:
-                        profiles = {preset["config"]["profile"] for preset in json.load(response)}
-                        assert {"neuro", "oncology"} <= profiles, profiles
-                    check_scheduled_search(opener, f"http://127.0.0.1:{port}", home)
                     break
                 time.sleep(0.25)
             else:
                 raise RuntimeError(log.read_text(encoding="utf-8", errors="replace"))
+            base_url = f"http://127.0.0.1:{port}"
+            check_settings(opener, base_url, home)
+            check_scheduled_search(opener, base_url, home)
         finally:
             process.stdin.close()
+            if desktop and process.poll() is None:
+                process.terminate()
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
@@ -115,9 +159,25 @@ def smoke(executable: Path) -> None:
                     process.kill()
                 process.wait(timeout=5)
                 raise
-            assert process.returncode == 0, log.read_text(encoding="utf-8", errors="replace")
-        print("Frozen sidecar started, ran a scheduled search, wrote a report and stopped on parent pipe closure")
+            if not desktop:
+                assert process.returncode == 0, log.read_text(encoding="utf-8", errors="replace")
+        if desktop:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                try:
+                    with socket.create_connection(("127.0.0.1", int(port)), timeout=0.5):
+                        pass
+                except OSError:
+                    break
+                time.sleep(0.25)
+            else:
+                raise AssertionError("The desktop sidecar continued listening after its parent stopped")
+        print("Packaged service ran a scheduled search, blocked a manual duplicate, wrote a report and stopped")
 
 
 if __name__ == "__main__":
-    smoke(Path(sys.argv[1]))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("executable", type=Path)
+    parser.add_argument("--desktop", action="store_true")
+    args = parser.parse_args()
+    smoke(args.executable, desktop=args.desktop)

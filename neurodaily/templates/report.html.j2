@@ -386,26 +386,27 @@ if (runBtn) {
     if (IS_FILE) { window.gotoServer('/run'); return; }
     location.href = '/run';
   });
-}
-
-function pollUntilDone(startedAt) {
-  var tries = 0;
-  var timer = setInterval(function () {
-    tries += 1;
-    fetch('/api/status').then(function (r) { return r.json(); }).then(function (s) {
-      if (s.last_run && s.last_run >= startedAt) {
-        clearInterval(timer);
-        runMsg.textContent = 'Done — ' + s.item_count + ' items. Reloading…';
-        runMsg.className = 'runmsg ok';
-        window.location.reload();
-      } else if (tries > 120) {
-        clearInterval(timer);
-        runBtn.disabled = false;
-        runMsg.textContent = 'Timed out waiting for the search; check /history.';
-        runMsg.className = 'runmsg bad';
-      }
-    }).catch(function () { /* keep polling */ });
-  }, 2000);
+  if (!IS_FILE) {
+    runBtn.disabled = true;
+    var runStatusPending = false;
+    async function refreshRunButton() {
+      if (document.hidden || runStatusPending) return;
+      runStatusPending = true;
+      try {
+        var response = await fetch('/api/search/status', {cache: 'no-store'});
+        if (!response.ok) return;
+        var run = (await response.json()).search;
+        var busy = !!run && run.status === 'running';
+        runBtn.disabled = busy;
+        runBtn.textContent = busy ? 'Running…' : '▶ Run now';
+        if (runMsg) runMsg.textContent = busy && run.scheduled_for ? '定时检索正在运行' : '';
+      } catch (e) { /* Retain the last known state during a short interruption. */ }
+      finally { runStatusPending = false; }
+    }
+    refreshRunButton();
+    setInterval(refreshRunButton, 2000);
+    document.addEventListener('visibilitychange', refreshRunButton);
+  }
 }
 </script>
 

@@ -266,6 +266,10 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
     <div class="grid2" style="margin-top:8px">
       <div><label>SMTP host</label><input id="push_host"></div>
       <div><label>Port</label><input type="number" id="push_port"></div>
+      <div><label for="push_security">SMTP 加密方式</label><select id="push_security">
+        <option value="starttls">STARTTLS（常用 587）</option>
+        <option value="ssl">SSL/TLS（常用 465）</option>
+      </select></div>
       <div><label>Username</label><input id="push_user"></div>
       <div><label>From</label><input id="push_from"></div>
     </div>
@@ -273,10 +277,33 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
     <div class="inline" style="margin-top:8px"><label>SMTP app password</label>
       <input type="password" id="push_password" placeholder="Leave blank to keep" style="flex:1">
       <span class="mini" id="push_pw_state"></span></div>
+    <div class="inline" style="margin-top:8px">
+      <button id="push_test" type="button" onclick="testMail()">测试邮件连通性</button>
+      <span id="push_test_status" role="status"></span>
+    </div>
     <div class="grid2" style="margin-top:8px">
       <div><label>Feishu webhook</label><input id="push_feishu"></div>
       <div><label>WeCom webhook</label><input id="push_wecom"></div>
     </div>
+  </section>
+
+  <section>
+    <h2>AI 摘要</h2>
+    <label><input type="checkbox" id="ai_enabled"> 启用 AI 摘要</label>
+    <div class="grid2" style="margin-top:8px">
+      <div><label for="ai_base">API 基础地址</label><input type="url" id="ai_base" placeholder="https://api.example.com/v1"></div>
+      <div><label for="ai_model">模型 ID</label><input id="ai_model" placeholder="服务商提供的模型 ID"></div>
+    </div>
+    <div class="inline" style="margin-top:8px">
+      <label for="ai_key">API 密钥</label>
+      <input type="password" id="ai_key" autocomplete="new-password" placeholder="留空保留已有密钥" style="flex:1">
+      <span id="ai_key_state" class="mini"></span>
+    </div>
+    <div class="inline" style="margin-top:8px">
+      <button id="ai_test" type="button" onclick="testAi()">测试模型 API</button>
+      <span id="ai_test_status" role="status"></span>
+    </div>
+    <p class="desc">使用兼容 Chat Completions 的接口。测试使用当前输入，仅发送一条简短请求，可在保存前验证。</p>
   </section>
 
   <section>
@@ -287,13 +314,14 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
 </main>
 <footer>
   <button class="primary" id="saveRun" onclick="saveAndContinue()" disabled>Save & continue to search</button>
-  <button onclick="save()">Save only</button>
+  <button id="saveOnly" onclick="saveSettings(false)">Save only</button>
   <button onclick="load()">Reload</button>
   <span id="msg" role="status"></span>
 </footer>
 <script>
 var BASE=null;
 var PUSH_BASELINE=null;
+var AI_BASELINE=null;
 var SEARCH_PREVIEW=null;
 var NEXT_SEARCH_SET=1;
 var SEARCH_FIELDS=[
@@ -735,7 +763,7 @@ async function load(){
     el('cfgpath').textContent='config: ~/neurodaily/config/config.json';
     el('msg').textContent=''; el('msg').className='';
     loadPresets();
-    await loadPush();
+    await Promise.all([loadPush(),loadAi()]);
     el('saveRun').disabled=false;
   }catch(e){el('msg').textContent='Load failed: '+e; el('msg').className='bad';}
   loadLaunchdStatus();
@@ -930,6 +958,7 @@ function pushPayload(){
       to:el('push_to').value,
       smtp_host:el('push_host').value.trim(),
       smtp_port:parseInt(el('push_port').value||'587',10),
+      use_ssl:el('push_security').value==='ssl',
       username:el('push_user').value.trim(),
       from:el('push_from').value.trim(),
       subject_template:el('push_subject').value.trim(),
@@ -948,6 +977,7 @@ async function loadPush(){
     el('push_to').value=(e.to||[]).join('\n');
     el('push_host').value=e.smtp_host||'';
     el('push_port').value=e.smtp_port||587;
+    el('push_security').value=e.use_ssl?'ssl':'starttls';
     el('push_user').value=e.username||'';
     el('push_from').value=e.from||'';
     el('push_subject').value=e.subject_template||'';
@@ -978,15 +1008,79 @@ async function savePush(){
     el('push_password').value=''; el('push_pw_state').textContent='(set)';
   }
 }
-async function saveAndContinue(){
-  el('saveRun').disabled=true;
+
+async function testService(path,draft,buttonId,statusId){
+  var button=el(buttonId),status=el(statusId);
+  button.disabled=true;
+  status.textContent='正在测试…';
   try{
-    if(!await save()) return;
-    if(PUSH_BASELINE) await savePush();
-    location.href='/run';
-  }catch(e){ el('msg').className='bad'; el('msg').textContent='❌ '+e; }
-  finally{el('saveRun').disabled=false;}
+    var response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(draft)});
+    var result=await response.json();
+    status.textContent=result.message||'测试失败，请稍后重试。';
+  }catch(e){status.textContent='测试失败，请检查 NeuroDaily 服务是否仍在运行。';}
+  finally{button.disabled=false;}
 }
+
+function testMail(){
+  var email=pushPayload().email;
+  return testService('/api/push/test',{
+    smtp_host:email.smtp_host, smtp_port:email.smtp_port, use_ssl:email.use_ssl,
+    username:email.username, password:el('push_password').value
+  },'push_test','push_test_status');
+}
+
+function aiPayload(){
+  return {enabled:el('ai_enabled').checked,base_url:el('ai_base').value.trim(),model:el('ai_model').value.trim()};
+}
+
+function showAiSettings(data){
+  el('ai_enabled').checked=data.enabled===true;
+  el('ai_base').value=data.base_url||'';
+  el('ai_model').value=data.model||'';
+  el('ai_key').value='';
+  var sources={settings:'已保存',environment:'来自环境变量',file:'来自本机密钥文件'};
+  el('ai_key_state').textContent=sources[data.key_source]||'待填写';
+  AI_BASELINE=aiPayload();
+}
+
+async function loadAi(){
+  AI_BASELINE=null;
+  try{
+    var response=await fetch('/api/ai/settings');
+    if(!response.ok) throw new Error();
+    showAiSettings(await response.json());
+  }catch(e){el('ai_key_state').textContent='暂时无法读取 AI 设置';}
+}
+
+async function saveAi(){
+  var draft=aiPayload(),key=el('ai_key').value;
+  if(!key&&JSON.stringify(draft)===JSON.stringify(AI_BASELINE)) return;
+  var response=await fetch('/api/ai/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(Object.assign(draft,{api_key:key}))});
+  var result=await response.json();
+  if(!result.ok) throw new Error(result.message||'无法保存 AI 设置');
+  showAiSettings(result);
+}
+
+function testAi(){
+  return testService('/api/ai/test',Object.assign(aiPayload(),{api_key:el('ai_key').value}),
+    'ai_test','ai_test_status');
+}
+
+async function saveSettings(continueToSearch){
+  el('saveRun').disabled=true;
+  el('saveOnly').disabled=true;
+  el('msg').textContent='Saving…'; el('msg').className='';
+  try{
+    if(PUSH_BASELINE) await savePush();
+    if(AI_BASELINE) await saveAi();
+    if(!await save()) return;
+    if(continueToSearch) location.href='/run';
+  }catch(e){ el('msg').className='bad'; el('msg').textContent='❌ '+e; }
+  finally{el('saveRun').disabled=false;el('saveOnly').disabled=false;}
+}
+
+function saveAndContinue(){return saveSettings(true);}
 
 el('search_add_group').onclick=function(){addSearchGroup(true);};
 el('search_apply_conditions').onclick=function(){applySearchConditions(false);};
