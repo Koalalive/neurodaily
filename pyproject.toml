@@ -1,6 +1,6 @@
 [project]
 name = "neurodaily"
-version = "1.0.4"
+version = "1.0.5"
 description = "Daily neuroscience/psychiatry literature & industry digest (arXiv, PubMed, bioRxiv, FDA, ClinicalTrials, policy news) → HTML report."
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
@@ -25,4 +25,4 @@ build-backend = "setuptools.build_meta"
 include = ["neurodaily*"]
 
 [tool.setuptools.package-data]
-neurodaily = ["templates/*.j2", "data/presets/*.json"]
+neurodaily = ["templates/*.j2", "data/presets/*.json", "data/search_quality_sample.json"]

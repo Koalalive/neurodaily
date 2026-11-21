@@ -84,11 +84,26 @@ make test                    # 等价
 - 矩阵：Python **3.12 / 3.13**
 - 步骤：`pip install -e .` → `bash scripts/test_all.sh`
 
+`.github/workflows/release-tauri.yml` 在发布前检查桌面安装包：
+
+- Windows 在两台独立的临时运行器执行 NSIS `setup.exe`，分别验证全新安装和从已发布的 v1.0.4 覆盖升级。升级前先生成一份真实报告和定时检索记录，再检查候选版能读取原配置、报告、历史记录和启用的定时设置。
+- macOS 两种架构均挂载最终 DMG，将应用复制到临时目录，从复制后的应用启动并验证定时检索。
+- Linux 使用 `apt` 安装最终 DEB，再从 `/usr/bin` 启动安装后的应用，在虚拟显示器下验证定时检索。
+- 三个平台均使用隔离数据目录和本地 RSS，检查定时触发、手动检索冲突、报告生成及主程序退出后服务停止。
+
+可在 macOS 本机或 Windows 一次性测试环境复跑：
+
+```bash
+python desktop/sidecar/installer_smoke.py NeuroDaily_1.0.5_aarch64.dmg 1.0.5
+python desktop/sidecar/installer_smoke.py NeuroDaily_1.0.5_x64-setup.exe 1.0.5 --baseline NeuroDaily_1.0.4_x64-setup.exe --baseline-version 1.0.4
+```
+
 ## 6. 已知未覆盖 / 未验证
 
 | 项 | 说明 |
 |---|---|
-| Windows 原生 | 只在 macOS 测过；Windows 建议 WSL |
+| 其他安装及升级方式 | Windows MSI 和 Linux AppImage 的安装交互，以及 macOS、Linux 的覆盖升级需要在对应系统验证 |
+| 原生打开浏览器和保存对话框 | Rust 单元测试覆盖链接路由和导出路径逻辑。安装烟测通过本地接口检查配置导出，打开系统浏览器、调用系统保存对话框、选择路径和取消需以原生 GUI 验证 |
 | 真实飞书/企微推送 | 没有可用 webhook URL，只测了失败降级路径 |
 | 直连 DeepSeek | 使用 SJTU 网关的 `deepseek-chat` 测试；协议同为 OpenAI 兼容 |
 | 936 篇 LLM 长文事实核查 | 抽样人工看过；提示词禁止编造，但未逐条核对 |

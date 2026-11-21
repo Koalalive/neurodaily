@@ -493,6 +493,29 @@ def cmd_history(args) -> int:
     return 0
 
 
+def cmd_search_quality(args) -> int:
+    import json
+    from pathlib import Path
+
+    from .search_quality import evaluate_corpus, load_corpus
+
+    def config(path):
+        if path is None:
+            return None
+        if not Path(path).is_file():
+            raise ValueError(f"config not found: {path}")
+        return Config.load(path)
+
+    try:
+        result = evaluate_corpus(load_corpus(args.corpus), config(args.config),
+                                 baseline=config(args.baseline), top=args.top)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        print(f"[neurodaily] {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="neurodaily",
                                 description="Daily neuroscience/psychiatry digest → HTML.")
@@ -610,6 +633,12 @@ def build_parser() -> argparse.ArgumentParser:
     hist_p = sub.add_parser("history", help="list past search runs")
     hist_p.add_argument("--limit", type=int, default=100)
     hist_p.set_defaults(func=cmd_history)
+
+    quality_p = sub.add_parser("search-quality", help="evaluate retrieval rules on a frozen paper corpus")
+    quality_p.add_argument("--corpus", help="path to a labelled corpus JSON (default: bundled synthetic sample)")
+    quality_p.add_argument("--baseline", help="path to a baseline config JSON for comparison")
+    quality_p.add_argument("--top", type=int, default=20, help="size of the ranking cutoff (default: 20)")
+    quality_p.set_defaults(func=cmd_search_quality)
 
     return p
 

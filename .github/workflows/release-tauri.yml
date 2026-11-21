@@ -53,7 +53,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf build-essential curl wget file libssl-dev
+            librsvg2-dev patchelf build-essential curl wget file libssl-dev xvfb xauth
 
       - name: Python venv (Unix)
         if: runner.os != 'Windows'
@@ -110,9 +110,20 @@ jobs:
           ./desktop/verify_windows_icons.ps1 -Target '${{ matrix.target }}' -ReleaseDir 'desktop/tauri/src-tauri/target/${{ matrix.target }}/release'
           cargo test --manifest-path desktop/tauri/src-tauri/Cargo.toml --locked --release --target '${{ matrix.target }}' --features custom-protocol
 
-      - name: Verify scheduled search from the Windows desktop application
-        if: runner.os == 'Windows'
-        run: python desktop/sidecar/smoke.py --desktop desktop/tauri/src-tauri/target/${{ matrix.target }}/release/neurodaily-desktop.exe
+      - name: Verify scheduled search from the installed Debian package
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          BUNDLE_DIR: desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        run: |
+          version=$(node -p "require('./desktop/tauri/src-tauri/tauri.conf.json').version")
+          deb="$PWD/$BUNDLE_DIR/deb/NeuroDaily_${version}_amd64.deb"
+          sudo apt-get install -y "$deb"
+          package=$(dpkg-deb -f "$deb" Package)
+          test "$(dpkg-query -W -f='${Version}' "$package")" = "$version"
+          test -x /usr/bin/neurodaily-server
+          xvfb-run -a python desktop/sidecar/smoke.py --desktop --expect-version "$version" /usr/bin/neurodaily-desktop
 
       - name: Create and verify macOS disk image
         if: runner.os == 'macOS'
@@ -125,6 +136,7 @@ jobs:
           python desktop/sidecar/smoke.py "$BUNDLE_DIR/macos/NeuroDaily.app/Contents/MacOS/neurodaily-server"
           image="$BUNDLE_DIR/dmg/NeuroDaily_${version}_${DMG_ARCH}.dmg"
           bash desktop/build_dmg.sh "$BUNDLE_DIR/macos/NeuroDaily.app" "$image"
+          python desktop/sidecar/installer_smoke.py "$image" "$version"
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             updater="$BUNDLE_DIR/macos/NeuroDaily_${version}_${DMG_ARCH}.app.tar.gz"
             mv "$BUNDLE_DIR/macos/NeuroDaily.app.tar.gz" "$updater"
@@ -145,8 +157,62 @@ jobs:
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
 
-  publish:
+  windows-installer:
+    name: Verify Windows installer (${{ matrix.scenario }})
     needs: build
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [clean, upgrade]
+    env:
+      BASELINE_TAG: v1.0.4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: neurodaily-x86_64-pc-windows-msvc
+          path: installers
+      - name: Download and verify previously published installer
+        if: matrix.scenario == 'upgrade'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:BASELINE_TAG.TrimStart('v')
+          $assetName = "NeuroDaily_${version}_x64-setup.exe"
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:BASELINE_TAG" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.draft -or $release.prerelease) {
+            throw "Could not read stable release $env:BASELINE_TAG"
+          }
+          $assets = @($release.assets | Where-Object { $_.name -eq $assetName })
+          if ($assets.Count -ne 1 -or $assets[0].digest -notmatch '^sha256:[0-9a-f]{64}$') {
+            throw "Missing installer or digest for $env:BASELINE_TAG"
+          }
+          gh release download $env:BASELINE_TAG --repo $env:GITHUB_REPOSITORY --dir baseline --pattern $assetName
+          if ($LASTEXITCODE -ne 0) { throw "Could not download $assetName" }
+          $actual = (Get-FileHash (Join-Path baseline $assetName) -Algorithm SHA256).Hash
+          if ("sha256:$actual" -ne $assets[0].digest) { throw "Baseline installer digest mismatch" }
+      - name: Run installed desktop application's scheduled-search regression
+        shell: pwsh
+        env:
+          INSTALL_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          $version = (Get-Content -Raw desktop/tauri/src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $candidate = @(Get-ChildItem installers -File -Recurse -Filter "NeuroDaily_${version}_x64-setup.exe")
+          if ($candidate.Count -ne 1) { throw "Expected exactly one candidate setup EXE" }
+          $smokeArgs = @('desktop/sidecar/installer_smoke.py', $candidate[0].FullName, $version)
+          if ($env:INSTALL_SCENARIO -eq 'upgrade') {
+            $baselineVersion = $env:BASELINE_TAG.TrimStart('v')
+            $smokeArgs += @('--baseline', "baseline/NeuroDaily_${baselineVersion}_x64-setup.exe", '--baseline-version', $baselineVersion)
+          }
+          & python @smokeArgs
+
+  publish:
+    needs: [build, windows-installer]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     permissions:
@@ -166,7 +232,7 @@ jobs:
           draft: true
           generate_release_notes: true
           body: |
-            Windows、macOS 和 Linux 桌面版已通过打包后的定时检索验证。启用定时并保存后，最小化窗口可继续运行。
+            Windows 验证了全新安装及从 v1.0.4 覆盖升级，macOS 和 Linux 分别验证了从 DMG 和 DEB 安装后运行定时检索。启用定时并保存后，最小化窗口可继续运行。
 
             配置导出支持选择路径。设置页新增 SMTP 登录和模型 API 测试。定时检索运行时，Run now 暂时禁用。
 
