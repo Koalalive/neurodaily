@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import re
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 
-from .http import parse_date_any, get, strip_html
+from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
 from ..models import Item
 
 try:
@@ -57,9 +58,12 @@ def _parse_feed(url: str) -> list[Item]:
     try:
         parsed = feedparser.parse(resp.content)
     except Exception:
+        record_failure("A policy RSS feed could not be parsed")
         return []
-    if parsed.get("bozo") and not parsed.get("entries"):
+    if not parsed.entries and (parsed.get("bozo") or not parsed.get("version")):
+        record_failure("A policy RSS endpoint did not return a valid feed")
         return []
+    record_candidates(len(parsed.entries))
     out: list[Item] = []
     seen_local: set[str] = set()
     for e in parsed.entries:
@@ -86,6 +90,7 @@ def _parse_feed(url: str) -> list[Item]:
 
 def fetch(config, logger=None) -> list[Item]:
     if not HAS_FEEDPARSER:
+        record_failure("RSS parsing is unavailable")
         return []
     opts = config.source_opts("policy")
     max_results = int(opts.get("max_results", 10))
@@ -94,11 +99,14 @@ def fetch(config, logger=None) -> list[Item]:
     feeds = config.policy_feeds
     if not feeds:
         return []
+    record_query(f"Policy RSS · {len(feeds)} feed(s)")
+    mark_sampled()
 
     all_items: list[Item] = []
     with ThreadPoolExecutor(max_workers=min(8, len(feeds))) as pool:
-        for items in pool.map(_parse_feed, feeds):
-            all_items.extend(items)
+        futures = [pool.submit(copy_context().run, _parse_feed, url) for url in feeds]
+        for future in futures:
+            all_items.extend(future.result())
 
     seen: set[str] = set()
     deduped: list[Item] = []
@@ -119,13 +127,16 @@ def fetch(config, logger=None) -> list[Item]:
         deduped = [it for it in deduped if it.date >= cutoff]
 
     deduped.sort(key=lambda i: i.date or "0000-00-00", reverse=True)
+    if len(deduped) > max_results:
+        mark_sampled(truncated=True)
     deduped = deduped[:max_results]
 
     # Fill in empty summaries by fetching the source page (concurrently, bounded).
     missing = [it for it in deduped if not it.summary or len(it.summary.strip()) < 20]
     if missing:
         with ThreadPoolExecutor(max_workers=min(12, len(missing))) as pool:
-            contents = list(pool.map(lambda i: _fetch_meta_description(i.url), missing))
+            futures = [pool.submit(copy_context().run, _fetch_meta_description, it.url) for it in missing]
+            contents = [future.result() for future in futures]
         for it, content in zip(missing, contents):
             if content:
                 it.summary = content

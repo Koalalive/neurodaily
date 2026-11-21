@@ -1,6 +1,10 @@
 """Shared HTTP client helpers (retries, timeouts, headers)."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+from threading import Lock
 import time
 import httpx
 
@@ -13,16 +17,100 @@ _client = httpx.Client(timeout=DEFAULT_TIMEOUT, headers=DEFAULT_HEADERS,
                         follow_redirects=True)
 
 
+@dataclass
+class FetchDiagnostics:
+    """Track transport and candidate coverage for one source execution."""
+
+    request_count: int = 0
+    candidate_count: int | None = None
+    queries: list[str] = field(default_factory=list)
+    errors: list[tuple[str, str]] = field(default_factory=list)
+    batches: int = 0
+    sampled: bool = False
+    truncated: bool = False
+    _lock: Lock = field(default_factory=Lock, repr=False)
+
+    def as_dict(self, count: int) -> dict:
+        kinds = {kind for kind, _ in self.errors}
+        if self.errors:
+            if count or self.batches:
+                status = "partial"
+            else:
+                status = next((kind for kind in ("limited", "timeout") if kind in kinds), "failed")
+        else:
+            status = "ok" if count else "empty"
+        return {
+            "status": status,
+            "ok": status in ("ok", "empty") or (status == "partial" and count > 0),
+            "request_count": self.request_count,
+            "request_errors": list(dict.fromkeys(message for _, message in self.errors)),
+            "query": self.queries[0] if self.queries else "",
+            "queries": self.queries.copy(),
+            "candidate_count": self.candidate_count,
+            "coverage": "partial" if self.errors else "sampled" if self.sampled else "full",
+            "truncated": self.truncated,
+        }
+
+
+_capture: ContextVar[FetchDiagnostics | None] = ContextVar("source_fetch_diagnostics", default=None)
+
+
+@contextmanager
+def capture_requests():
+    stats = FetchDiagnostics()
+    token = _capture.set(stats)
+    try:
+        yield stats
+    finally:
+        _capture.reset(token)
+
+
+def record_query(query: str) -> None:
+    stats = _capture.get()
+    if stats is not None and query:
+        with stats._lock:
+            if query not in stats.queries:
+                stats.queries.append(query)
+
+
+def record_candidates(count: int) -> None:
+    stats = _capture.get()
+    if stats is not None:
+        with stats._lock:
+            stats.batches += 1
+            stats.candidate_count = (stats.candidate_count or 0) + count
+
+
+def record_failure(message: str, kind: str = "failed") -> None:
+    stats = _capture.get()
+    if stats is not None:
+        with stats._lock:
+            stats.errors.append((kind, message))
+
+
+def mark_sampled(*, truncated: bool = False) -> None:
+    stats = _capture.get()
+    if stats is not None:
+        with stats._lock:
+            stats.sampled = True
+            stats.truncated |= truncated
+
+
 def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
         retries: int = 2, backoff: float = 1.2, connect_close: bool = False,
-        user_agent: str | None = None) -> httpx.Response | None:
+        user_agent: str | None = None,
+        accepted_statuses: tuple[int, ...] = ()) -> httpx.Response | None:
     """Perform a GET with retry/backoff. Return None on final failure (never raises).
 
     ``connect_close=True`` forces a fresh one-shot connection (no connection pool)
     per request. Some APIs (ClinicalTrials.gov v2) return 403 on reused keep-alive
     connections, so sources hitting those should pass this.
     """
-    last_err: Exception | None = None
+    stats = _capture.get()
+    if stats is not None:
+        with stats._lock:
+            stats.request_count += 1
+    kind, message = "failed", "HTTP request failed"
     for attempt in range(retries + 1):
         try:
             if connect_close:
@@ -34,19 +122,32 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
                 with httpx.Client(timeout=timeout, headers=headers,
                                   follow_redirects=True) as fresh:
                     resp = fresh.get(url, params=params, timeout=timeout)
+            elif user_agent:
+                resp = _client.get(url, params=params, timeout=timeout,
+                                   headers={"User-Agent": user_agent})
             else:
                 resp = _client.get(url, params=params, timeout=timeout)
-            if resp.status_code < 400:
+            if resp.status_code < 400 or resp.status_code in accepted_statuses:
                 return resp
-            last_err = RuntimeError(f"HTTP {resp.status_code}")
-            # 429 / 5xx -> backoff and retry
-            if resp.status_code in (429,) or resp.status_code >= 500:
-                time.sleep(backoff * (attempt + 1))
-                continue
-            return None  # 4xx (not transient) — don't retry
-        except (httpx.TimeoutException, httpx.TransportError) as e:
-            last_err = e
-            time.sleep(backoff * (attempt + 1))
+            kind = "limited" if resp.status_code == 429 else "failed"
+            message = f"HTTP {resp.status_code}"
+            if resp.status_code < 500 and kind != "limited":
+                break
+            delay = backoff * (attempt + 1)
+            retry_after = resp.headers.get("Retry-After", "")
+            if retry_after.isdigit():
+                delay = max(delay, int(retry_after))
+                if delay > 5:
+                    break
+        except httpx.TimeoutException:
+            kind, message = "timeout", "HTTP request timed out"
+            delay = backoff * (attempt + 1)
+        except httpx.TransportError:
+            kind, message = "failed", "HTTP transport failure"
+            delay = backoff * (attempt + 1)
+        if attempt < retries:
+            time.sleep(delay)
+    record_failure(message, kind)
     return None
 
 

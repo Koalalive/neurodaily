@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from .config import Config, DEFAULT_CONFIG
 from .digest import DigestResult
@@ -21,6 +22,16 @@ def _stdlib_loader():
 _LINK_RE = r"\[([^\]]+)\]\(([^)\s]+)\)"
 
 
+def _external_url(value: str | None) -> str:
+    if not isinstance(value, str):
+        return ""
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return ""
+    return value if parts.scheme in {"http", "https"} and parts.netloc else ""
+
+
 def render_ai_inline(text: str, allowed_urls=None, refs=None) -> str:
     """Escape text but turn Markdown links into anchors (validated against allowed URLs)."""
     import html as _html
@@ -35,8 +46,8 @@ def render_ai_inline(text: str, allowed_urls=None, refs=None) -> str:
             pos = m.end()
             continue
         url = (refs.get(target) or {}).get("url") if target in refs else target
-        ok = bool(url) and (url.startswith(("http://", "https://"))
-              and (allowed is None or url.rstrip("/") in allowed))
+        url = _external_url(url)
+        ok = bool(url) and (allowed is None or url.rstrip("/") in allowed)
         if ok:
             parts.append(
                 f'<a href="{_html.escape(url, quote=True)}" target="_blank" '
@@ -76,12 +87,16 @@ def render_html(result: DigestResult, config: Config | None = None) -> str:
         _cfg = config or getattr(result, "config", None)
         profile = getattr(_cfg, "profile", result.config_profile)
         env.globals["jm"] = lambda name: journal_metrics.lookup(name, _cfg)
+        env.globals["external_url"] = _external_url
+        search = getattr(_cfg, "search", None) or {}
+        sort = search.get("sort") if isinstance(search, dict) else None
         template = env.get_template("report.html.j2")
         ctx = {
             "result": result,
             "digest_title": {"neuro": "neuroscience & psychiatry digest",
                              "oncology": "oncology digest"}.get(profile, "research digest"),
             "today": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "sort_label": {"relevance": "相关性", "latest": "最新发布", "journal": "重点期刊"}.get(sort),
         }
         html = template.render(**ctx)
         html = _inject_on_this_day(html, result)
@@ -105,7 +120,6 @@ def _inject_ai_summary(html: str, result: DigestResult) -> str:
     model = _html.escape(str(meta.get("model", "AI")))
     allowed = {it.url for it in (getattr(result, "items", None) or []) if getattr(it, "url", None)}
     refs = getattr(result, "ai_summary_refs", {}) or {}
-    allowed |= {(v or {}).get("url") for v in refs.values() if (v or {}).get("url")}
     paras = render_ai_text(text, allowed, refs)
     section = (
         '<section id="ai-summary"><div class="sec-head"><div>'
@@ -210,15 +224,17 @@ def _inject_graph_links(html: str) -> str:
 
 def _fallback_plain(result: DigestResult) -> str:
     """Minimal but readable HTML if Jinja2 is unavailable."""
+    from html import escape
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
     rows = []
     for it in result.items:
         rows.append(
-            f"<li>[{it.kind_label}][{it.source}] <b>{it.title}</b> "
-            f"({it.date_display})<br>{it.summary[:300]}</li>"
+            f"<li>[{escape(it.kind_label)}][{escape(it.source)}] <b>{escape(it.title)}</b> "
+            f"({escape(it.date_display)})<br>{escape(it.summary[:300])}</li>"
         )
     health = "<br>".join(
-        f"{h['source']}: {'ok' if h['ok'] else 'failed'} ({h['count']})"
+        f"{escape(h['source'])}: {escape(h.get('status') or ('ok' if h['ok'] else 'failed'))} "
+        f"({h['count']})"
         for h in result.health
     )
     return (

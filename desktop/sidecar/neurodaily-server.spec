@@ -1,6 +1,7 @@
 # Build: .venv/bin/pyinstaller --clean --noconfirm desktop/sidecar/neurodaily-server.spec
 # Run from the repository root.
 import os
+import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = os.getcwd()
@@ -44,5 +45,8 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=True,
+    console=sys.platform != "win32",
+    disable_windowed_traceback=True,
+    icon=os.path.join(ROOT, "desktop", "tauri", "src-tauri", "icons", "icon.ico")
+    if sys.platform == "win32" else None,
 )

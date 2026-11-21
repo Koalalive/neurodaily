@@ -1,6 +1,6 @@
 [package]
 name = "neurodaily-desktop"
-version = "1.0.2"
+version = "1.0.3"
 description = "NeuroDaily desktop shell"
 license = "Apache-2.0"
 edition = "2021"

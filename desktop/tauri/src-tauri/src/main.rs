@@ -1,6 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
@@ -18,6 +21,18 @@ mod macos_quit;
 mod updates;
 
 struct Sidecar(Mutex<Option<Child>>);
+
+fn background_command(program: impl AsRef<OsStr>) -> Command {
+    let command = Command::new(program);
+    #[cfg(windows)]
+    let command = {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut command = command;
+        command.creation_flags(CREATE_NO_WINDOW);
+        command
+    };
+    command
+}
 
 #[derive(Debug, PartialEq, Eq)]
 enum LinkDestination {
@@ -62,7 +77,11 @@ fn create_main_window(app: &tauri::App, sidecar_port: Arc<AtomicU16>) -> tauri::
     let navigation_port = Arc::clone(&sidecar_port);
     let navigation_app = app.handle().clone();
     let popup_app = app.handle().clone();
-    WebviewWindowBuilder::from_config(app, config)?
+    let mut builder = WebviewWindowBuilder::from_config(app, config)?;
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone())?;
+    }
+    builder
         .initialization_script(
             r#"
             document.addEventListener('click', (event) => {
@@ -151,6 +170,18 @@ fn stop_sidecar(app: &AppHandle) {
             _ => break,
         }
     }
+    #[cfg(windows)]
+    if background_command("taskkill")
+        .args(["/PID", &child.id().to_string(), "/T", "/F"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+    {
+        let _ = child.wait();
+        return;
+    }
     if child.kill().is_ok() {
         let _ = child.wait();
     }
@@ -185,7 +216,7 @@ fn main() {
             let sidecar_port = Arc::new(AtomicU16::new(0));
             create_main_window(app, Arc::clone(&sidecar_port))?;
             let path = sidecar_path();
-            let mut cmd = Command::new(&path);
+            let mut cmd = background_command(&path);
             cmd.env("NEURODAILY_NO_OPEN", "1")
                 .env("NEURODAILY_MANAGED", "1")
                 .stdin(Stdio::piped())
@@ -281,5 +312,30 @@ mod tests {
                 "{url}"
             );
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_background_command_keeps_pipes_without_a_console() {
+        let output = super::background_command("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                r#"
+                Add-Type -Namespace NeuroDaily -Name ConsoleProbe -MemberDefinition '
+                    [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+                '
+                if ([NeuroDaily.ConsoleProbe]::GetConsoleWindow() -ne [IntPtr]::Zero) { exit 1 }
+                Write-Output 'hidden console with stdout'
+                "#,
+            ])
+            .output()
+            .expect("launch hidden Windows helper");
+        assert!(output.status.success(), "{:?}", output);
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "hidden console with stdout"
+        );
     }
 }

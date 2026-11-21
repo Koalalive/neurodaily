@@ -54,6 +54,7 @@ def prepare_home(home: Path) -> bool:
         data = json.loads(example.read_text(encoding="utf-8"))
         data.setdefault("output", {})["dir"] = str(out_dir)
         sched = data.setdefault("scheduled", {})
+        sched["enabled"] = False
         launchd = sched.setdefault("launchd", {})
         launchd["stdout"] = str(out_dir / "launchd_stdout.log")
         launchd["stderr"] = str(out_dir / "launchd_stderr.log")
@@ -68,6 +69,12 @@ def prepare_home(home: Path) -> bool:
 
 
 def main() -> None:
+    managed = os.environ.get("NEURODAILY_MANAGED") == "1"
+    if os.name == "nt" and any(stream is None for stream in (sys.stdin, sys.stdout, sys.stderr)):
+        # The windowed bootloader has standard streams only when the desktop
+        # shell supplies them. A direct double-click must not start a server.
+        raise SystemExit(1 if managed else 0)
+
     home = app_home()
     os.environ["NEURODAILY_HOME"] = str(home)
     os.environ["NEURODAILY_NO_OPEN"] = "1"
@@ -76,6 +83,9 @@ def main() -> None:
     port = int(os.environ.get("NEURODAILY_PORT") or 0)
     print(f"NEURODAILY_HOME={home}", flush=True)
     print(f"NEURODAILY_FIRST_RUN={1 if first_run else 0}", flush=True)
+    if os.name == "nt" and managed:
+        from ctypes import windll
+        print(f"NEURODAILY_CONSOLE={int(bool(windll.kernel32.GetConsoleWindow()))}", flush=True)
 
     from neurodaily.webapp import create_app
     import uvicorn
@@ -88,7 +98,7 @@ def main() -> None:
                 self.config.app.state.base_url = f"http://127.0.0.1:{bound_port}"
                 print(f"NEURODAILY_PORT={bound_port}", flush=True)
 
-    if os.environ.get("NEURODAILY_MANAGED") == "1":
+    if managed:
         # The desktop shell owns the write end of this pipe for its entire life.
         # Closing it stops delivery even if the PyInstaller bootloader has a child.
         def stop_on_eof():

@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import re
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
-from .http import get, parse_date_any, strip_html
+from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
 from ..models import Item
 
 try:
@@ -35,17 +37,37 @@ def _feed_content(e) -> str:
     raw = e.get("summary") or e.get("description") or ""
     if not raw and e.get("content"):
         raw = " ".join(c.get("value", "") for c in e.get("content", []))
-    return strip_html(raw[:1500])
+    return strip_html(raw)
 
 
-def _parse_feed(config, journal_name: str, rss_url: str) -> list[Item]:
-    resp = get(rss_url, timeout=15.0, retries=1, user_agent="python-httpx")
+def _doi(entry) -> str:
+    for value in (entry.get("prism_doi"), entry.get("dc_identifier"), entry.get("id"), entry.get("link")):
+        text = str(value or "").strip()
+        if text.casefold().startswith("doi:"):
+            text = text[4:].strip()
+        if text.startswith(("https://", "http://")):
+            parsed = urlsplit(text)
+            text = parsed.path.lstrip("/") if parsed.hostname in ("doi.org", "dx.doi.org") else ""
+        if re.fullmatch(r"10\.\d+/\S+", text, re.I):
+            return text
+    return ""
+
+
+def _parse_feed(config, journal_name: str, rss_url: str, *, advanced: bool = False,
+                preview: bool = False, aliases=(), issns=()) -> list[Item]:
+    resp = get(rss_url, timeout=8.0 if preview else 15.0,
+               retries=0 if preview else 1, user_agent="python-httpx")
     if resp is None:
         return []
     try:
         parsed = feedparser.parse(resp.content)
     except Exception:
+        record_failure("A journal RSS feed could not be parsed")
         return []
+    if not parsed.entries and (parsed.get("bozo") or not parsed.get("version")):
+        record_failure("A journal RSS endpoint did not return a valid feed")
+        return []
+    record_candidates(len(parsed.entries))
     out: list[Item] = []
     seen: set[str] = set()
     for e in parsed.entries:
@@ -54,23 +76,32 @@ def _parse_feed(config, journal_name: str, rss_url: str) -> list[Item]:
         if not title or not link or link in seen:
             continue
         seen.add(link)
-        summary = _feed_content(e)
-        if not _relevant(config, title, summary):
+        content = _feed_content(e)
+        if not advanced and not _relevant(config, title, content):
             continue
         raw_authors = [a.get("name", "") for a in e.get("authors", []) if a.get("name")]
         authors, corresponding = _split_authors_with_corresponding(raw_authors)
+        extra = {"journal": journal_name, "feed": rss_url}
+        if aliases:
+            extra["journal_aliases"] = list(aliases)
+        identifiers = list(dict.fromkeys(key for key in
+                           [*issns, e.get("prism_issn"), e.get("prism_eissn")] if key))
+        if identifiers:
+            extra["issns"] = identifiers
+        if content and content.casefold().strip() != title.casefold().strip():
+            extra["abstract"] = content
         out.append(Item(
             title=title,
             url=link,
-            summary=summary,
+            summary=content[:1500] if "abstract" in extra else "",
             authors=authors,
             corresponding=corresponding,
             source=journal_name,
             kind="paper",
             date=parse_date_any(e.get("published", e.get("updated", ""))),
-            doi="",
+            doi=_doi(e),
             tags=["top-journal"],
-            extra={"journal": journal_name, "feed": rss_url},
+            extra=extra,
         ))
     return out
 
@@ -107,23 +138,43 @@ def _split_authors_with_corresponding(author_strings: list[str]) -> tuple[list[s
 
 def fetch(config, logger=None) -> list[Item]:
     if not HAS_FEEDPARSER:
+        record_failure("RSS parsing is unavailable")
         return []
     opts = config.source_opts("journal")
     max_results = int(opts.get("max_results", 25))
     lookback = int(opts.get("lookback_days", 7))
+    preview = opts.get("preview", False)
+    plan = None
+    if getattr(config, "search", None):
+        from ..search import compile_search
+        plan = compile_search(config.search, config.journals)
+    advanced = bool(plan and plan.active)
+    bounds = plan.date_range if advanced else None
 
-    feeds = [(j.name, j.rss) for j in config.journals if j.rss]
+    feeds = [journal for journal in config.journals if journal.rss]
     if not feeds:
         return []
+    if preview and plan and plan.journals:
+        feeds.sort(key=lambda journal: not plan.preferred_journal(Item(
+            title=journal.name, extra={"journal": journal.name, "issns": journal.issns,
+                                       "journal_aliases": journal.aliases})))
+    mark_sampled(truncated=preview and len(feeds) > 8)
+    if preview:
+        feeds = feeds[:8]
+    record_query(f"Journal RSS · {len(feeds)} feed(s)")
 
     all_items: list[Item] = []
     with ThreadPoolExecutor(max_workers=min(8, len(feeds))) as pool:
-        futures = [pool.submit(_parse_feed, config, name, url) for name, url in feeds]
+        futures = [
+            pool.submit(copy_context().run, _parse_feed, config, journal.name, journal.rss,
+                        advanced=advanced, preview=preview, aliases=journal.aliases, issns=journal.issns)
+            for journal in feeds
+        ]
         for f in futures:
             try:
                 all_items.extend(f.result())
             except Exception:
-                continue
+                record_failure("A journal RSS feed returned incomplete paper metadata")
 
     seen: set[str] = set()
     deduped: list[Item] = []
@@ -135,12 +186,15 @@ def fetch(config, logger=None) -> list[Item]:
         deduped.append(it)
     # Strict same-day filter: journal feeds return dozens of historical articles,
     # so keep only entries published today (lookback_days=1 == today).
-    if lookback <= 1:
-        today = datetime.now().strftime("%Y-%m-%d")
-        deduped = [it for it in deduped if it.date.startswith(today)]
-    else:
-        cutoff = datetime.now() - timedelta(days=lookback)
-        cutoff_s = cutoff.strftime("%Y-%m-%d")
-        deduped = [it for it in deduped if it.date >= cutoff_s]
+    if not bounds:  # Explicit bounds and incomplete dates are checked by the advanced matcher.
+        if lookback <= 1:
+            today = datetime.now().strftime("%Y-%m-%d")
+            deduped = [it for it in deduped if it.date.startswith(today)]
+        else:
+            cutoff = datetime.now() - timedelta(days=lookback)
+            cutoff_s = cutoff.strftime("%Y-%m-%d")
+            deduped = [it for it in deduped if it.date >= cutoff_s]
     deduped.sort(key=lambda i: i.date or "0000-00-00", reverse=True)
+    if len(deduped) > max_results:
+        mark_sampled(truncated=True)
     return deduped[:max_results]

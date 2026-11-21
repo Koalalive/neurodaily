@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from .http import get, parse_date_any
+from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
 from ..models import Item
 
 BASE = "https://clinicaltrials.gov/api/v2/studies"
@@ -20,10 +20,10 @@ def fetch(config, logger=None) -> list[Item]:
 
     # Query each discipline separately with short term lists (long comma-joined
     # query.term lists cause HTTP 400 on the v2 API).
-    for d in config.active_disciplines():
-        conds = list(dict.fromkeys([x for x in (d.mesh_terms + d.keywords) if x]))
-        if not conds:
-            continue
+    terms = [list(dict.fromkeys(term for term in d.mesh_terms + d.keywords if term))
+             for d in config.active_disciplines()]
+    terms = [term for term in terms if term]
+    for index, conds in enumerate(terms):
         params = {
             "query.term": ",".join(conds[:8]),
             "pageSize": max_results,
@@ -31,14 +31,21 @@ def fetch(config, logger=None) -> list[Item]:
             "sort": "LastUpdatePostDate:desc",
             "filter.advanced": f"AREA[LastUpdatePostDate]RANGE[{monday_cutoff},MAX]",
         }
+        record_query(f"{params['query.term']} · {params['filter.advanced']}")
         resp = get(BASE, params=params, connect_close=True, user_agent="python-httpx")
         if resp is None:
             continue
         try:
             data = resp.json()
-        except ValueError:
+            studies = data["studies"]
+            if not isinstance(studies, list):
+                raise ValueError("invalid trial list")
+        except (ValueError, TypeError, KeyError):
+            record_failure("Invalid ClinicalTrials.gov API response")
             continue
-        studies = data.get("studies", [])
+        record_candidates(len(studies))
+        if data.get("nextPageToken"):
+            mark_sampled(truncated=True)
         for s in studies:
             p = s.get("protocolSection", {})
             idm = p.get("identificationModule", {})
@@ -103,5 +110,7 @@ def fetch(config, logger=None) -> list[Item]:
             if len(items) >= max_results:
                 break
         if len(items) >= max_results:
+            if index < len(terms) - 1:
+                mark_sampled(truncated=True)
             break
     return items

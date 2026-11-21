@@ -113,4 +113,6 @@ def _dish_matches(name: str, hay: str) -> bool:
 def _whole_word(word: str, hay: str) -> bool:
     if len(word) <= 2:
         return word in hay
-    return bool(re.search(rf"\b{word}\b", hay))
+    prefix = r"(?<!\w)" if word[0].isalnum() or word[0] == "_" else ""
+    suffix = r"(?!\w)" if word[-1].isalnum() or word[-1] == "_" else ""
+    return bool(re.search(prefix + re.escape(word) + suffix, hay))

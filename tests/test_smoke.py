@@ -864,13 +864,18 @@ class WebSearchOutcomeTests(unittest.TestCase):
         self.result = demo.build_result(cfg)
         self.app = create_app(self.config_path)
         self.client = TestClient(self.app)
+        stack.enter_context(mock.patch("neurodaily.history.db_path",
+                                     return_value=os.path.join(directory, "search_history.db")))
         stack.enter_context(mock.patch("neurodaily.webapp.run_digest", return_value=self.result))
         stack.enter_context(mock.patch("neurodaily.journal_metrics.ensure_fresh"))
         self.ai = stack.enter_context(mock.patch("neurodaily.ai_summary.generate", return_value=""))
         stack.enter_context(mock.patch("neurodaily.mailer.load_cfg", return_value={"enabled": False}))
         stack.enter_context(mock.patch("neurodaily.mailer.render_email", return_value=("", "", "")))
         self.mail = stack.enter_context(mock.patch("neurodaily.mailer.save_last"))
-        self.hooks = stack.enter_context(mock.patch("neurodaily.webhooks.send_all"))
+        stack.enter_context(mock.patch("neurodaily.webhooks.load_cfg",
+                                     return_value={"feishu": "https://example.test/bot"}))
+        self.hooks = stack.enter_context(mock.patch("neurodaily.webhooks.send_all",
+                                                   return_value={"feishu": "ok"}))
 
     def test_success_is_reported_after_the_report_is_written(self):
         def save(result, path):
@@ -914,7 +919,7 @@ class WebSearchOutcomeTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/run?force=1").status_code, 409)
 
     def test_desktop_schedule_shares_report_and_delivery_pipeline(self):
-        from datetime import date
+        from datetime import datetime
         from pathlib import Path
         from threading import Event
         from fastapi.testclient import TestClient
@@ -925,25 +930,68 @@ class WebSearchOutcomeTests(unittest.TestCase):
 
         def schedule(stop, load, start):
             stops.append(stop)
-            start(load(), date(2026, 11, 20))
+            self.assertTrue(start(load(), datetime(2026, 11, 20, 8, 0)))
+            self.assertTrue(start(load(), datetime(2026, 11, 20, 8, 0)))
             finished.set()
 
         def save(_result, path):
             Path(path).write_text("<html>scheduled report</html>", encoding="utf-8")
 
         with mock.patch("neurodaily.webapp.run_schedule", side_effect=schedule), \
-             mock.patch("neurodaily.history.claim_desktop_schedule", return_value=True), \
              mock.patch("neurodaily.digest.save_report", side_effect=save):
             with TestClient(create_app(self.config_path, desktop=True)) as client:
                 self.assertTrue(finished.wait(2))
                 result = client.get("/api/status").json()
                 self.assertEqual(result["search"]["status"], "completed")
                 self.assertEqual(run_digest.call_args.kwargs["mode"], "daily")
+                self.assertTrue(run_digest.call_args.kwargs["force"])
+                run_digest.assert_called_once()
                 self.assertIn("scheduled report", client.get("/report/latest").text)
                 self.assertEqual(client.get("/api/launchd/status").json()["backend"], "desktop")
                 self.assertEqual(client.post("/api/launchd/install").status_code, 400)
                 self.hooks.assert_called_once()
         self.assertTrue(stops[0].is_set())
+
+    def test_desktop_schedule_reports_source_failure_and_retries(self):
+        from datetime import datetime, timedelta
+        from threading import Event
+        from fastapi.testclient import TestClient
+        from neurodaily.config import Config
+        from neurodaily.webapp import create_app
+
+        cfg = Config.load(self.config_path)
+        now = datetime.now()
+        cfg.scheduled.update(enabled=True, hour=now.hour, minute=now.minute)
+        cfg.save(self.config_path)
+        due = now.replace(second=0, microsecond=0)
+        failed, retry, finished = Event(), Event(), Event()
+        outcomes = []
+
+        def schedule(stop, load, start):
+            self.result.health = [{"source": "fixture", "ok": False}]
+            outcomes.append(start(load(), due))
+            failed.set()
+            if retry.wait(3):
+                self.result.health = [{"source": "demo", "ok": True, "count": len(self.result.items)}]
+                with mock.patch("neurodaily.webapp.RETRY_DELAY", timedelta()):
+                    outcomes.append(start(load(), due))
+                finished.set()
+
+        with mock.patch("neurodaily.webapp.run_schedule", side_effect=schedule):
+            with TestClient(create_app(self.config_path, desktop=True)) as client:
+                self.assertTrue(failed.wait(3))
+                status = client.get("/api/launchd/status").json()
+                self.assertEqual(status["state"], "retrying")
+                self.assertEqual(status["last_run"]["status"], "failed")
+                self.assertEqual(client.get("/report/latest").status_code, 404)
+                self.hooks.assert_not_called()
+                retry.set()
+                self.assertTrue(finished.wait(3))
+                status = client.get("/api/launchd/status").json()
+                self.assertEqual(status["last_run"]["status"], "completed")
+                self.assertEqual(datetime.fromisoformat(status["next_run"]), due + timedelta(days=1))
+                self.assertEqual(outcomes, [False, True])
+                self.hooks.assert_called_once()
 
     def test_latest_report_after_restart_recognizes_custom_names(self):
         from pathlib import Path
@@ -980,8 +1028,35 @@ class WebSearchOutcomeTests(unittest.TestCase):
 
 
 class DesktopScheduleTests(unittest.TestCase):
+    def test_overdue_today_runs_on_enable_and_after_a_time_or_profile_change(self):
+        from datetime import datetime
+        from neurodaily.desktop_schedule import run_schedule
+
+        cfg = DEFAULT_CONFIG()
+        current = datetime(2026, 11, 20, 8, 5, 24)
+        start, stop = mock.Mock(return_value=True), mock.Mock()
+        observed = []
+        states = iter([("neuro", False, 5), ("neuro", True, 5), ("neuro", True, 2),
+                       ("neuro", True, 5), ("oncology", True, 5)])
+        stop.is_set.side_effect = lambda: len(observed) == 5
+        stop.wait.side_effect = lambda _: observed.append(True)
+
+        def load():
+            cfg.profile, enabled, minute = next(states)
+            cfg.scheduled.update(enabled=enabled, hour=8, minute=minute)
+            return cfg
+
+        def record(config, due):
+            start(config.profile, due)
+            return True
+
+        run_schedule(stop, load, record, now=lambda: current)
+        first = current.replace(second=0)
+        self.assertEqual(start.call_args_list, [mock.call("neuro", first),
+                         mock.call("neuro", first.replace(minute=2)), mock.call("oncology", first)])
+
     def test_active_schedule_waits_for_manual_search_then_runs_once(self):
-        from datetime import date, datetime
+        from datetime import datetime
         from itertools import count
         from threading import Event
         from neurodaily.desktop_schedule import run_schedule
@@ -998,23 +1073,29 @@ class DesktopScheduleTests(unittest.TestCase):
         pauses = count(1)
 
         def wait(_seconds):
-            if next(pauses) == len(times) - 1:
+            if next(pauses) == len(times):
                 stop.set()
 
         with mock.patch.object(stop, "wait", side_effect=wait):
             run_schedule(stop, lambda: cfg, start, now=lambda: next(checks))
         self.assertEqual([call.args[1] for call in start.call_args_list],
-                         [date(2026, 11, 20), date(2026, 11, 20), date(2026, 11, 21)])
+                         [datetime(2026, 11, 20, 8), datetime(2026, 11, 20, 8),
+                          datetime(2026, 11, 21, 8)])
 
-    def test_desktop_schedule_claim_survives_new_connections(self):
-        from neurodaily.history import claim_desktop_schedule
+    def test_desktop_schedule_result_survives_restart_and_distinguishes_slots(self):
+        from datetime import datetime
+        from neurodaily.history import desktop_schedule_result, save_desktop_schedule_result
 
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "history.db")
             with mock.patch("neurodaily.history.db_path", return_value=path):
-                self.assertTrue(claim_desktop_schedule("2026-11-20"))
-                self.assertFalse(claim_desktop_schedule("2026-11-20"))
-                self.assertTrue(claim_desktop_schedule("2026-11-21"))
+                due = datetime(2026, 11, 20, 8)
+                save_desktop_schedule_result("neuro", due, "failed", "All sources failed")
+                self.assertEqual(desktop_schedule_result("neuro")["status"], "failed")
+                save_desktop_schedule_result("neuro", due, "completed")
+                self.assertEqual(desktop_schedule_result("neuro", due)["status"], "completed")
+                self.assertIsNone(desktop_schedule_result("oncology", due))
+                self.assertIsNone(desktop_schedule_result("neuro", due.replace(minute=30)))
 
 
 class SettingsJournalMetricsTests(unittest.TestCase):

@@ -6,6 +6,8 @@ config files keep working.
 """
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 KNOWN_KINDS = {"paper", "drug", "device", "trial", "news", "policy", "conference", "funding"}
@@ -41,6 +43,8 @@ class JournalModel(BaseModel):
     cas: str = ""
     metric_year: int | None = None
     year: int | None = None
+    aliases: list[str] = Field(default_factory=list)
+    issns: list[str] = Field(default_factory=list)
 
 
 class SourceModel(BaseModel):
@@ -67,6 +71,28 @@ class SourceModel(BaseModel):
         return self
 
 
+class SearchModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field("", max_length=1800)
+    sets: dict[str, str] = Field(default_factory=dict)
+    journal_mode: Literal["any", "only", "prefer"] = "any"
+    journals: list[str] = Field(default_factory=list, max_length=100)
+    sort: Literal["default", "latest", "relevance", "journal"] = "default"
+
+    @model_validator(mode="after")
+    def _validate_rules(self):
+        from .search import compile_search
+        compile_search(self.model_dump())
+        return self
+
+
+class ScheduleModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    enabled: bool = Field(False, strict=True)
+    hour: int = Field(8, ge=0, le=23)
+    minute: int = Field(0, ge=0, le=59)
+
+
 class ConfigModel(BaseModel):
     model_config = ConfigDict(extra="allow")
     version: int = 2
@@ -75,10 +101,11 @@ class ConfigModel(BaseModel):
     global_keywords: list[str] = Field(default_factory=list)
     sources: dict[str, SourceModel] = Field(default_factory=dict)
     output: dict = Field(default_factory=dict)
-    scheduled: dict = Field(default_factory=dict)
+    scheduled: ScheduleModel = Field(default_factory=ScheduleModel)
     windows: dict = Field(default_factory=dict)
     policy_feeds: list[str] = Field(default_factory=list)
     journals: list[JournalModel] = Field(default_factory=list)
+    search: SearchModel = Field(default_factory=SearchModel)
 
 
 def validate(data: dict) -> list[str]:

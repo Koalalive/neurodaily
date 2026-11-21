@@ -70,6 +70,14 @@ jobs:
           .\.venv\Scripts\python -m pip install --upgrade pip
           .\.venv\Scripts\python -m pip install -e . pyinstaller
 
+      - name: Install Tauri CLI
+        working-directory: desktop/tauri
+        run: npm ci
+
+      - name: Generate icons
+        working-directory: desktop/tauri
+        run: npm run icon
+
       - name: Build sidecar (Unix)
         if: runner.os != 'Windows'
         run: bash desktop/build_sidecar.sh
@@ -81,14 +89,6 @@ jobs:
 
       - name: Smoke test frozen sidecar
         run: python desktop/sidecar/smoke.py desktop/tauri/src-tauri/binaries/neurodaily-server-${{ matrix.target }}${{ runner.os == 'Windows' && '.exe' || '' }}
-
-      - name: Install Tauri CLI
-        working-directory: desktop/tauri
-        run: npm ci
-
-      - name: Generate icons
-        working-directory: desktop/tauri
-        run: npm run icon
 
       - name: Build preview app
         if: github.ref_type != 'tag'
@@ -102,6 +102,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.updates.conf.json --ci
+
+      - name: Verify Windows icons and hidden helper launch
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./desktop/verify_windows_icons.ps1 -Target '${{ matrix.target }}' -ReleaseDir 'desktop/tauri/src-tauri/target/${{ matrix.target }}/release'
+          cargo test --manifest-path desktop/tauri/src-tauri/Cargo.toml --locked --release --target '${{ matrix.target }}' --features custom-protocol windows_background_command
 
       - name: Create and verify macOS disk image
         if: runner.os == 'macOS'

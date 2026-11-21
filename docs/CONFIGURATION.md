@@ -37,6 +37,15 @@
 | `policy_feeds` | list[str] | 机构/新闻 RSS | 政策与新闻源 |
 | `output` | dict | — | 输出目录、格式、保留策略 |
 | `scheduled` | dict | — | 定时任务与「历史上的今天」开关 |
+| `windows` | dict | — | 手动、定时及各类内容的回看时长 |
+| `search` | dict | — | 可选的高级检索表达式、检索集合、期刊过滤及排序 |
+
+### 分享检索配置
+
+在桌面端设置里用 **导出已保存的配置** 下载检索配置。文件以
+`{"format":"neurodaily.profile","version":1,"config":{…}}` 包装学科、关键词、检索表达式、来源、期刊和回看窗口。输出目录、定时设置、通知收件人、Webhook 和 AI 授权等留在本机。来源网址中的用户名、密码和常见授权参数会去掉。分享前可检查网址和检索词。
+
+在 **导入配置文件** 里选择共享文件或旧版 `config.json`，核对预览后应用。导入会替换当前检索设置并保留本机的定时和输出设置。
 
 ### 2.1 `disciplines[]`
 
@@ -157,7 +166,7 @@ JSON API 示例：
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
-| `enabled` | `true` | 是否启用定时 |
+| `enabled` | CLI `true`，桌面首次安装 `false` | 是否启用定时 |
 | `hour` / `minute` | `8` / `0` | 每日运行时间 |
 | `on_this_day` | `{"enabled":true,"notify":true}` | 「历史上的今天」与桌面通知 |
 | `launchd` | `{label,stdout,stderr}` | macOS LaunchAgent 参数 |
@@ -169,6 +178,8 @@ JSON API 示例：
   "launchd": {"label": "com.neurodaily.daily"}
 }
 ```
+
+Windows、macOS 和 Linux 桌面版在设置里启用定时并保存，按系统本地时间运行。最小化时仍会检索。重新启动或唤醒后可补跑当天未完成的时段。每个学科与设定时段当天成功一次后，重启不会重复执行同一时段。设置页显示下一次运行时间和最近结果。若所有启用的来源均失败，当天约五分钟后重试。完全退出应用会停止服务。
 
 ### 2.6 `policy_feeds` 与自定义 RSS
 
@@ -298,7 +309,7 @@ neurodaily config describe
 | 关闭 AI 摘要 | `config/ai_summary.json -> enabled: false` |
 | 关闭邮件 | `config/email.json -> enabled: false`（或 TUI 按 `t`） |
 | 增加收件人 | `neurodaily mail --add a@b.com` 或 `mail --tui` |
-| 改定时时间 | 改 `scheduled.hour/minute` 后 `launchd install` |
+| 改定时时间 | 桌面版修改时间并保存。CLI 的 macOS LaunchAgent 使用 `launchd install` 重新安装 |
 | 导出 BibTeX | `output.extra_formats: ["bibtex"]` 或 `neurodaily export --format bibtex` |
 
 
