@@ -216,7 +216,7 @@ jobs:
   extra-installer:
     name: Verify ${{ matrix.scenario }}
     needs: build
-    if: ${{ !cancelled() && (startsWith(github.ref, 'refs/heads/verify/') || (github.ref_type == 'tag' && needs.build.result == 'success')) }}
+    if: ${{ !cancelled() && (startsWith(github.ref, 'refs/heads/verify/') || needs.build.result == 'success') }}
     permissions:
       contents: read
       actions: read
@@ -325,7 +325,9 @@ jobs:
           body: |
             Windows 验证了 NSIS 和 MSI 全新安装，以及从 v1.0.4 覆盖升级。macOS 验证了 Apple Silicon 和 Intel DMG 安装。Ubuntu 验证了 DEB 安装和覆盖升级，以及 AppImage 解包运行。启用定时并保存后，最小化窗口可继续运行。
 
-            运行历史显示各来源的进度和投递回执，失败渠道可单独重试。日报先于 AI 摘要和投递完成，重启后可继续查看。CLI 提供 search-quality 命令，使用固定标注样本比较检索规则。
+            桌面工作区默认中文，可在设置切换英文或俄文。每次检索生成独立日报标签页，返回首页可恢复最近的日报。
+
+            新增重症医学检索预设和离线文献计量。运行历史显示各来源进度和投递回执，失败渠道可单独重试。CLI 的 search-quality 命令使用固定标注样本比较检索规则。
 
             macOS 安装包使用临时签名。首次打开时，macOS 可能要求在「系统设置 → 隐私与安全性」中单独批准。
 

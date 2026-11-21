@@ -39,11 +39,14 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
   var msg=document.getElementById('msg');
   var go=document.getElementById('go');
   var task=document.getElementById('task');
-  var submitting=false, sharedBusy=false, checking=false;
+  var t=window.ndT||function(message,values){
+    return message.replace(/\{(\w+)\}/g,function(match,key){return values&&key in values?values[key]:match;});
+  };
+  var submitting=false, sharedBusy=false, checking=false, announcedReport=null;
   function set(t,ok){msg.textContent=t;msg.className=ok===true?'ok':(ok===false?'bad':'');}
   function updateButton(){
     go.disabled=submitting||sharedBusy;
-    go.textContent=go.disabled?'Running…':'开始检索';
+    go.textContent=t(go.disabled?'正在检索…':'开始检索');
   }
   function failed(message){submitting=false;updateButton();set(message,false);}
   async function currentSearch(){
@@ -56,8 +59,8 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
     if(run.id) task.href='/history/'+run.id;
     var sources=Object.values(run.sources||{});
     var done=sources.filter(function(source){return source.status!=='pending';}).length;
-    var status=run.scheduled_for?'定时检索正在运行':'检索正在运行';
-    set(status+(sources.length?' · 已处理 '+done+'/'+sources.length+' 个来源':''));
+    var status=t(run.scheduled_for?'定时检索正在运行':'检索正在运行');
+    set(status+(sources.length?' · '+t('已处理 {done}/{total} 个来源',{done:done,total:sources.length}):''));
   }
   async function refresh(){
     if(submitting||checking||document.hidden) return;
@@ -81,29 +84,40 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
         if(response.ok) run=(await response.json()).task;
       }
       if(run && run.id===id){
-        if(run.report_ready){
-          set('已生成日报（'+run.item_count+' 条），正在打开…',true);
-          location.href='/history/'+id+'/report';
-          return;
+        if(run.report_ready && announcedReport!==id){
+          announcedReport=id;
+          if(window.parent===window){
+            set(t('已生成日报（{count} 条），正在打开…',{count:run.item_count}),true);
+            location.href='/history/'+id+'/report';
+            return;
+          }
+          window.parent.postMessage({type:'nd-report',taskId:id},location.origin);
         }
-        if(run.status==='failed'||run.status==='skipped'||run.status==='interrupted'){
-          failed(run.error||'本次检索未生成报告');
+        if(run.status!=='running'){
+          submitting=false;
+          sharedBusy=false;
+          updateButton();
+          if(run.report_ready){
+            set(t('已生成日报（{count} 条）。',{count:run.item_count}),true);
+          }else{
+            failed(t(run.error||'本次检索未生成报告'));
+          }
           return;
         }
         progress(run);
       }
     }catch(e){}
-    if(tries>=240){failed('等待超时，请在运行历史中查看结果');return;}
+    if(tries>=240){failed(t('等待超时，请在运行历史中查看结果'));return;}
     setTimeout(function(){poll(id,tries+1);},2000);
   }
   document.getElementById('cancel').onclick=function(){location.href='/settings';};
   go.onclick=async function(){
     var value=document.getElementById('hours').value;
     var h=Number(value);
-    if(value&&(!Number.isInteger(h)||h<1||h>8760)){failed('请输入 1–8760 的整数小时');return;}
+    if(value&&(!Number.isInteger(h)||h<1||h>8760)){failed(t('请输入 1–8760 的整数小时'));return;}
     submitting=true;
     updateButton();
-    set('已启动，正在检索…');
+    set(t('已启动，正在检索…'));
     try{
       var r=await fetch('/api/run?force=1'+(value?'&hours='+h:''),{method:'POST'});
       var d=await r.json();
@@ -111,11 +125,11 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
         submitting=false;
         sharedBusy=true;
         updateButton();
-        set('已有检索正在运行。');
+        set(t('已有检索正在运行。'));
         await refresh();
         return;
       }
-      if(!r.ok){throw new Error(d.detail||d.error||'启动失败');}
+      if(!r.ok){throw new Error(t(d.detail||d.error||'启动失败'));}
       poll(d.task_id,0);
     }catch(e){failed('❌ '+e.message);}
   };

@@ -138,6 +138,22 @@ class SearchTaskTests(unittest.TestCase):
         self.assertEqual(self.client.get(f"/history/{first}/report").status_code, 200)
         self.assertEqual(self.client.get("/report/latest").text, latest.read_text(encoding="utf-8"))
 
+    def test_workspace_persists_language_and_opens_only_new_ready_reports(self):
+        self.assertEqual(self.client.get("/api/ui/preferences").json(), {"language": "zh"})
+        self.assertIn("尚无已保存的日报", self.client.get("/?ui=1").text)
+        self.assertEqual(self.client.post("/api/ui/preferences", json={"language": "fr"}).status_code, 400)
+        self.assertEqual(self.client.post("/api/ui/preferences", json={"language": "ru"}).status_code, 200)
+        with TestClient(create_app(self.config_path)) as restarted:
+            self.assertEqual(restarted.get("/api/ui/preferences").json(), {"language": "ru"})
+            self.assertIn('<html lang="ru">', restarted.get("/desktop").text)
+            self.assertIn('let scanAfter = 0', restarted.get("/desktop").text)
+            new = restarted.post("/api/run?force=1").json()["task_id"]
+            self.assertEqual(restarted.get("/api/ui/reports?after=0").json()["reports"],
+                             [{"id": new, "status": "completed", "report_ready": True}])
+            self.assertIn(f'let scanAfter = {new}', restarted.get("/desktop").text)
+            self.assertEqual(restarted.get(f"/api/ui/reports?after={new}").json(), {"reports": []})
+            self.assertIn('lang="ru"', restarted.get(f"/history/{new}/report?ui=1").text)
+
     def test_source_progress_has_initial_and_finished_states(self):
         from neurodaily.digest import _fetch_sources
         from neurodaily.models import Item

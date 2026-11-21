@@ -1,0 +1,74 @@
+{
+  "profile": "critical-care",
+  "disciplines": [
+    {
+      "name": "Critical Care Medicine",
+      "mesh_terms": ["Critical Care", "Critical Illness", "Intensive Care Units"],
+      "keywords": ["critical care", "critical illness", "critically ill", "intensive care", "ICU"]
+    },
+    {
+      "name": "Sepsis and Shock",
+      "mesh_terms": ["Sepsis", "Shock, Septic"],
+      "keywords": ["sepsis", "septic shock", "vasopressor", "hemodynamic monitoring"]
+    },
+    {
+      "name": "Acute Respiratory Failure",
+      "mesh_terms": ["Respiratory Distress Syndrome", "Respiration, Artificial", "Extracorporeal Membrane Oxygenation"],
+      "keywords": ["ARDS", "hypoxemia", "mechanical ventilation", "ventilator weaning", "ECMO"]
+    },
+    {
+      "name": "Organ Support and ICU Recovery",
+      "mesh_terms": ["Multiple Organ Failure", "Acute Kidney Injury", "Delirium"],
+      "keywords": ["multiple organ dysfunction", "acute kidney injury", "CRRT", "ICU delirium", "post-intensive care syndrome"]
+    }
+  ],
+  "global_keywords": ["intensive care", "sepsis", "septic shock", "ARDS", "mechanical ventilation", "ECMO"],
+  "journals": [
+    {
+      "name": "Intensive Care Medicine",
+      "url": "https://link.springer.com/journal/134",
+      "aliases": ["Intensive Care Med"],
+      "issns": ["0342-4642", "1432-1238"],
+      "category": "clinical"
+    },
+    {
+      "name": "Critical Care",
+      "url": "https://link.springer.com/journal/13054",
+      "aliases": ["Crit Care", "Critical care (London, England)"],
+      "issns": ["1364-8535", "1466-609X"],
+      "category": "clinical"
+    },
+    {
+      "name": "Critical Care Medicine",
+      "url": "https://journals.lww.com/ccmjournal/pages/default.aspx",
+      "aliases": ["Crit Care Med"],
+      "issns": ["0090-3493", "1530-0293"],
+      "category": "clinical"
+    },
+    {
+      "name": "American Journal of Respiratory and Critical Care Medicine",
+      "url": "https://academic.oup.com/ajrccm",
+      "aliases": ["Am J Respir Crit Care Med", "AJRCCM"],
+      "issns": ["1073-449X", "1535-4970"],
+      "category": "clinical"
+    },
+    {
+      "name": "Critical Care Explorations",
+      "url": "https://journals.lww.com/ccejournal/pages/default.aspx",
+      "aliases": ["Crit Care Explor"],
+      "issns": ["2639-8028"],
+      "category": "clinical"
+    }
+  ],
+  "sources": {
+    "journal": {"enabled": false, "max_results": 500, "lookback_days": 2},
+    "pubmed": {"enabled": true, "max_results": 500, "lookback_days": 2},
+    "arxiv": {"enabled": false, "max_results": 200, "lookback_days": 2},
+    "biorxiv": {"enabled": false, "max_results": 300, "lookback_days": 2},
+    "fda_drugs": {"enabled": false, "max_results": 200, "lookback_days": 7},
+    "fda_devices": {"enabled": false, "max_results": 100, "lookback_days": 7},
+    "trials": {"enabled": true, "max_results": 300, "lookback_days": 7},
+    "policy": {"enabled": false, "max_results": 200, "lookback_days": 2}
+  },
+  "policy_feeds": []
+}

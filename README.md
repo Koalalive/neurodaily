@@ -4,28 +4,30 @@
 
 # 神通寰宇 · NeuroDaily
 
-**以一份日报，连接全球研究前沿。**
+**用一份可追溯的日报，跟进领域内每天的进展。**
 
-> **中文** — 神经科学与精神病学方向的**每日情报 + AI 精读**系统。一台笔记本/小主机即可部署：抓取论文、预印本、临床试验、监管与创投动态，生成中文日报，每天早晨自动邮件送达全组。检索不消耗 token，AI 按需生成并缓存。
->
-> **English** — A self-hosted daily digest for neuroscience & psychiatry. It aggregates journal RSS, PubMed, arXiv, bioRxiv, ClinicalTrials.gov, openFDA, policy feeds and VC/funding news, renders an interactive HTML report with an AI overview and a long-form "on this day" essay, and emails it to your team every morning. Retrieval is token-free; AI runs on demand and is cached.
->
-> **Русский** — Автономная система ежедневной научной сводки по нейронаукам и психиатрии. Собирает RSS журналов, PubMed, arXiv, bioRxiv, ClinicalTrials.gov, openFDA, новости политики и венчурного финансирования, формирует интерактивный HTML-отчёт с ИИ-обзором и длинным эссе «в этот день», и каждое утро отправляет его по электронной почте. Поиск не расходует токены; ИИ работает по запросу и кэшируется.
+NeuroDaily 适合需要持续跟踪论文、预印本、临床试验和监管产业动态的研究者。把检索规则保存为研究配置，手动或定时生成 HTML 日报，按需通过邮件、飞书或企业微信分享。桌面端内置神经科学、肿瘤学与重症医学预设，界面默认中文，可在设置中切换英语和俄语。
+
+[下载桌面版](https://github.com/Koalalive/neurodaily/releases/latest) · [运行离线演示](#快速开始) · [GitHub Actions 手册](docs/GITHUB_ACTIONS.md) · [竞品对照与接口路线](docs/ROADMAP.md)
+
+[中文](#中文) · [English](#english) · [Русский](#русский)
 
 [![ci](https://github.com/Koalalive/neurodaily/actions/workflows/ci.yml/badge.svg)](https://github.com/Koalalive/neurodaily/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 [![Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
+README 是私有仓库的项目首页。安装包、Actions 产物和源码通过 GitHub 仓库访问权限分享。
+
 ## 界面预览 · Screenshots
 
-下图截自本地运行界面，日报使用离线演示数据。
+下图为本地运行的日报演示。安装桌面版后，从设置选择学科并发起检索，可在独立标签页浏览新日报和最近一次结果。
 
 ![NeuroDaily 日报页，包含来源分类计数和最新论文列表](docs/assets/digest-demo.png)
 
 <details>
 <summary>查看设置页 · Desktop settings</summary>
 
-![NeuroDaily 设置页，包含神经科学与肿瘤学预设](docs/assets/desktop-settings.png)
+![NeuroDaily 桌面设置页实拍](docs/assets/desktop-settings.png)
 
 </details>
 
@@ -33,12 +35,12 @@
 
 ## 中文
 
-**Languages:** [中文](#中文) · [English](#english) · [Русский](#русский)
-
 ## 目录
 
 - [核心特性](#核心特性)
 - [快速开始](#快速开始)
+- [GitHub Actions](docs/GITHUB_ACTIONS.md)
+- [竞品对照与接口路线](docs/ROADMAP.md)
 - [Docker](#docker)
 - [配置](#配置)
 - [AI 每日摘要（可选）](#ai-每日摘要可选)
@@ -61,10 +63,12 @@
 |---|---|
 | **七源聚合** | 期刊 RSS · PubMed · arXiv · bioRxiv · ClinicalTrials.gov · openFDA · 政策/新闻 |
 | **创投/产业情报** | BCI 融资、neurotech 融资、MedTech Dive、Crunchbase（`kind=funding`） |
-| **AI 每日摘要** | 800+ 条 → 约 900 字：研究进展 / 临床监管 / 产业创投 / 大事件（可选、带缓存） |
+| **AI 每日摘要** | 按需概述研究、临床监管和产业动态，摘要引用回到原始条目。可关闭，结果带缓存 |
 | **历史上的今天** | 936 篇约千字学科史长文，按日轮换，精确日/近邻/经典标注 |
-| **交互式日报** | 折叠卡片、板块导航、来源健康面板、一键引用图谱 |
-| **邮件日报** | 摘要正文 + 完整 HTML 附件；每天 08:00 自动；单机多收件人 |
+| **交互式日报** | 折叠卡片、各来源状态、文献计量概览、外部引用图谱入口 |
+| **桌面标签页** | 设置、运行历史和新检索日报各自保留，返回仪表盘可打开最近一份真实日报 |
+| **邮件日报** | 可设定发送时间、正文条目数和完整 HTML 附件，支持多个收件人 |
+| **任务与投递记录** | 查看各来源进度和已完成任务，选中失败渠道单独重试 |
 | **桌面通知** | macOS / Linux 原生通知 |
 | **Web 设置页 + TUI** | 收件人、SMTP 凭据、关注点、定时任务；无需手改 JSON |
 | **Agent 可配置** | JSON 补丁 + schema 校验 + dry-run + profile；换学科零代码 |
@@ -72,12 +76,15 @@
 | **导出** | JSON / BibTeX |
 | **Webhook** | 飞书 / 企业微信 |
 | **离线演示** | `neurodaily demo`，断网可完整演示 |
+| **检索质量对比** | 在同一批标注论文上比较规则、查看召回率和前 K 条准确率 |
 | **稳健性** | 并行抓取、0 条自动回退、单源失败降级、报告保留策略 |
 | **可部署** | `scripts/start.sh` 一键启动；Docker / docker compose（镜像约 199MB） |
 
 ---
 
 ## 快速开始
+
+桌面用户可从 [GitHub Releases](https://github.com/Koalalive/neurodaily/releases/latest) 下载对应系统安装包。首次打开进入设置页，可选预设、语言和推送方式。点击开始检索会生成新的日报标签页。服务器或 CI 可使用 CLI，云端部署步骤见 [GitHub Actions 手册](docs/GITHUB_ACTIONS.md)。
 
 ### 本地（Python 3.12+）
 
@@ -99,14 +106,11 @@ scripts/start.sh
 # http://127.0.0.1:8031
 ```
 
-### 一键（macOS，无需命令行）
+### 从源码一键启动（macOS）
 
 双击 `scripts/启动 NeuroDaily.command` → 自动启动服务并打开设置页。
 
-日报页右上角：
-
-- **⚙ 设置 / Settings** — 改推送（收件人、SMTP 授权码、飞书/企微）、检索时间窗口、史论语言
-- **▶ Run now** — 跳到设置页；改完点 **保存并立即检索推送**，直接完成「检索 + 邮件/Webhook 推送」
+日报页上的 **设置** 可修改推送、检索窗口和界面语言。**立即检索** 打开运行页，可直接使用已保存配置，也可以为本次检索临时指定时间范围。
 
 离线演示（不联网）：
 
@@ -132,7 +136,7 @@ docker compose up --build
 
 ### 桌面安装包（Tauri 2 + Python sidecar）
 
-Release 1.0.0 提供三平台安装包，终端用户不需要 Python/Node/Rust：
+桌面版提供三平台安装包，安装应用即可运行。
 
 | 平台 | 安装包 | 架构 |
 |---|---|---|
@@ -372,6 +376,7 @@ neurodaily run --no-open        # 或网页里点 Run now
 | `neurodaily deepen --status\|--backend llm\|template` | 长文批量扩写 |
 | `neurodaily launchd install\|uninstall\|show` | 定时任务 |
 | `neurodaily history [--limit N]` | 运行历史 |
+| `neurodaily search-quality [--corpus PATH] [--baseline PATH] [--top K]` | 固定候选集上的离线检索评估 |
 
 ---
 
@@ -420,7 +425,7 @@ neurodaily/
 ├── config/examples/      # 学科补丁示例（oncology）
 ├── docs/                 # 架构 / 配置 / Docker / 测试 / Agent 指南
 ├── scripts/              # start.sh / test_all.sh / deepen / hooks
-├── tests/                # 32 项 unittest
+├── tests/                # 单元和集成测试
 ├── Dockerfile
 └── docker-compose.yml
 ```
@@ -430,7 +435,7 @@ neurodaily/
 ## 测试
 
 ```bash
-bash scripts/test_all.sh      # 编译 + 32 项单元测试 + 配置 + demo + 导出 + profile
+bash scripts/test_all.sh      # 编译、测试、配置、离线日报、导出与 profile
 make test                     # 同上
 ```
 
@@ -449,6 +454,9 @@ make test                     # 同上
 | [`docs/DOCKER.md`](docs/DOCKER.md) | 构建/运行/compose/推送 Docker Hub |
 | [`docs/TESTING.md`](docs/TESTING.md) | 测试矩阵、CI、已知未覆盖项 |
 | [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) | Agent 引导换学科的协议 |
+| [GitHub Actions 手册](docs/GITHUB_ACTIONS.md) | 云端定时日报、Secrets、预览构建、实装回归与签名发布 |
+| [检索质量评估](docs/SEARCH_QUALITY.md) | 固定语料、召回率、Precision@K 与未命中诊断 |
+| [竞品对照与接口路线](docs/ROADMAP.md) | 竞品边界、HTML 文献计量与接口优先级 |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | 运维手册（启停/调度/排障/维护记录） |
 | [`docs/INSTALL_REQUIREMENTS.md`](docs/INSTALL_REQUIREMENTS.md) | 三平台安装包、软硬件要求 |
 | [`docs/DESKTOP_TAURI.md`](docs/DESKTOP_TAURI.md) | Tauri 2 + Python sidecar 构建与发布 |
@@ -459,7 +467,7 @@ make test                     # 同上
 
 - 仅聚合**公开**文献与新闻元数据；不存储全文、不绕过付费墙。
 - AI 摘要与长文可能出错，**仅供科研参考，不构成医疗建议**。
-- 请遵守各数据源的使用条款；邮件/Webhook 凭据仅保存在本机（600 权限）。
+- 请遵守各数据源的使用条款。桌面运行使用本机配置，GitHub Actions 运行使用仓库 Secrets。
 
 
 ---
@@ -468,12 +476,12 @@ make test                     # 同上
 
 ### What it is
 
-NeuroDaily is a **self-hosted daily digest for neuroscience and psychiatry**. It aggregates journal RSS, PubMed, arXiv, bioRxiv, ClinicalTrials.gov, openFDA, policy feeds and VC/funding news, filters by your focus, renders an interactive HTML report with an **AI overview** and a long-form **"on this day"** essay, and emails it to your team every morning.
+NeuroDaily is a self-hosted daily research digest with presets for neuroscience, oncology, and critical care medicine. It combines literature, preprints, clinical trial records, regulatory updates, and industry news in an HTML report. The desktop app supports separate tabs for settings, history, and new reports. Choose Chinese, English, or Russian in Settings.
 
 - **Retrieval is token-free**; AI runs on demand and is cached.
-- **Journal metrics**: OpenAlex auto-fetch (2yr mean citedness, h-index); official JCR IF / quartile and CAS partition can be imported.
-- **Local-first**: one laptop/mini-PC, data never leaves the machine.
-- **Agent-configurable**: switch disciplines with JSON patches (`profile` + `config apply`).
+- Journal metrics use OpenAlex, with optional JCR and CAS values supplied by the user.
+- The desktop app keeps saved reports and task history on the device. GitHub Actions is also available for scheduled runs.
+- Switch disciplines with JSON patches using `profile` and `config apply`.
 
 ### Quick start
 
@@ -487,8 +495,7 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 scripts/start.sh          # http://127.0.0.1:8031
 ```
 
-No-CLI flow: double-click `scripts/启动 NeuroDaily.command` (macOS), or open the report →
-**⚙ Settings** → edit push/windows/language → **Save & run now** (fetch + email/webhook).
+Download the installer from the private repository's [Releases](https://github.com/Koalalive/neurodaily/releases/latest). For a source checkout on macOS, double-click `scripts/启动 NeuroDaily.command` to start the app. Open Settings to choose a research preset, language, and delivery options.
 
 Offline demo:
 
@@ -557,12 +564,12 @@ printf '%s' 'SMTP-CODE' > ~/.neurodaily_smtp && chmod 600 ~/.neurodaily_smtp
 
 ### Docs
 
-ARCHITECTURE · CONFIGURATION · DOCKER · DOCKER_AGENT · TESTING · AGENT_GUIDE · GITHUB_ACTIONS_AGENT — see [`docs/`](docs/).
+[Desktop setup](docs/DESKTOP_TAURI.md) · [GitHub Actions](docs/GITHUB_ACTIONS.md) · [Tests](docs/TESTING.md) · [All documents](docs/)
 
 ### Tests
 
 ```bash
-bash scripts/test_all.sh      # 35 unit tests + compile + config + demo + export + profile
+bash scripts/test_all.sh
 ```
 
 ---
@@ -571,11 +578,11 @@ bash scripts/test_all.sh      # 35 unit tests + compile + config + demo + export
 
 ### Что это
 
-NeuroDaily — это **автономная система ежедневной научной сводки по нейронаукам и психиатрии**. Она собирает RSS журналов, PubMed, arXiv, bioRxiv, ClinicalTrials.gov, openFDA, новости политики и венчурного финансирования, фильтрует по вашим интересам, формирует интерактивный HTML-отчёт с **ИИ-обзором** и длинным эссе **«в этот день»**, и каждое утро отправляет его по электронной почте.
+NeuroDaily — автономная ежедневная научная сводка с готовыми профилями для нейронаук, онкологии и интенсивной терапии. HTML-отчёт объединяет научные статьи, препринты, клинические исследования и отраслевые новости. Настройки, история и новые отчёты открываются в отдельных вкладках. В настройках доступны китайский, английский и русский языки.
 
 - **Поиск не расходует токены**; ИИ работает по запросу и кэшируется.
 - **Метрики журналов**: автоматически из OpenAlex (2yr mean citedness, h-index); официальные JCR IF / квартиль и раздел CAS можно импортировать.
-- **Локальный запуск**: один ноутбук/мини-ПК, данные не покидают машину.
+- При локальном запуске отчёты и история задач хранятся на компьютере. Запуск по расписанию также доступен в GitHub Actions.
 - **Настраивается агентом**: смена дисциплины через JSON-патчи (`profile` + `config apply`).
 
 ### Быстрый старт
@@ -651,10 +658,10 @@ printf '%s' 'SMTP-CODE' > ~/.neurodaily_smtp && chmod 600 ~/.neurodaily_smtp
 
 ### Документация
 
-ARCHITECTURE · CONFIGURATION · DOCKER · DOCKER_AGENT · TESTING · AGENT_GUIDE · GITHUB_ACTIONS_AGENT — см. [`docs/`](docs/).
+[Настольное приложение](docs/DESKTOP_TAURI.md) · [GitHub Actions](docs/GITHUB_ACTIONS.md) · [Тестирование](docs/TESTING.md) · [Все документы](docs/)
 
 ### Тесты
 
 ```bash
-bash scripts/test_all.sh      # 35 модульных тестов + компиляция + конфиг + демо + экспорт
+bash scripts/test_all.sh
 ```

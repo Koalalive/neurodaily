@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime
 from urllib.parse import urlsplit
 
 from .config import Config, DEFAULT_CONFIG
 from .digest import DigestResult
+from .bibliometrics import render_bibliometrics
+from .ui_translations import localize_document
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
@@ -78,13 +81,14 @@ def ai_links_to_text(text: str) -> str:
     return re.sub(_LINK_RE, r"\1 (\2)", text or "")
 
 
-def render_html(result: DigestResult, config: Config | None = None) -> str:
+def render_html(result: DigestResult, config: Config | None = None, *, locale: str | None = None) -> str:
+    _cfg = config or getattr(result, "config", None)
+    language = locale or getattr(result, "report_locale", None) or "zh"
     env = _stdlib_loader()
     if env is None:
-        return _fallback_plain(result)
+        return localize_document(_inject_bibliometrics(_fallback_plain(result), result, _cfg, language), language)
     try:
         from . import journal_metrics
-        _cfg = config or getattr(result, "config", None)
         profile = getattr(_cfg, "profile", result.config_profile)
         env.globals["jm"] = lambda name: journal_metrics.lookup(name, _cfg)
         env.globals["external_url"] = _external_url
@@ -94,16 +98,25 @@ def render_html(result: DigestResult, config: Config | None = None) -> str:
         ctx = {
             "result": result,
             "digest_title": {"neuro": "neuroscience & psychiatry digest",
-                             "oncology": "oncology digest"}.get(profile, "research digest"),
+                             "oncology": "oncology digest",
+                             "critical-care": "critical care digest"}.get(profile, "research digest"),
             "today": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "sort_label": {"relevance": "相关性", "latest": "最新发布", "journal": "重点期刊"}.get(sort),
         }
         html = template.render(**ctx)
+        html = _inject_bibliometrics(html, result, _cfg, language)
         html = _inject_on_this_day(html, result)
         html = _inject_ai_summary(html, result)
-        return _inject_graph_links(html)
+        return localize_document(_inject_graph_links(html), language)
     except Exception:
-        return _fallback_plain(result)
+        return localize_document(_inject_bibliometrics(_fallback_plain(result), result, _cfg, language), language)
+
+
+def _inject_bibliometrics(html: str, result: DigestResult, config: Config | None, locale: str) -> str:
+    section = render_bibliometrics(result.items, getattr(config, "journals", ()), locale=locale)
+    main = re.search(r"<main\b[^>]*>", html)
+    offset = main.end() if main else html.rfind("</body>")
+    return html[:offset] + section + html[offset:]
 
 
 def _inject_ai_summary(html: str, result: DigestResult) -> str:

@@ -47,8 +47,8 @@ def render_task(task: dict, receipts: list[dict], css: str) -> str:
 <meta name='viewport' content='width=device-width, initial-scale=1'>
 <title>NeuroDaily 任务 #{run_id}</title>{css}</head><body><main class='wrap'>
 <p><a href='/history'>运行历史</a> · <a href='/'>日报首页</a></p>
-<h1>任务 #{run_id} · {kind}</h1>
-<p>{escape(task['profile'])} · {state(task)} · {task.get('item_count', 0)} 条</p>
+<h1><span>任务</span> #{run_id} · <span>{kind}</span></h1>
+<p><span data-no-i18n>{escape(task['profile'])}</span> · <span>{state(task)}</span> · {task.get('item_count', 0)} <span>条结果</span></p>
 <dl><dt>计划执行</dt><dd>{timestamp(task['scheduled_for'])}</dd>
 <dt>实际开始</dt><dd>{timestamp(task['started_at'])}</dd>
 <dt>记录结束</dt><dd>{timestamp(task['finished_at'])}</dd></dl>
@@ -58,19 +58,21 @@ def render_task(task: dict, receipts: list[dict], css: str) -> str:
 {table('投递记录', ('渠道', '状态', '尝试次数', '更新时间', '详情', ''), destinations, '暂无投递记录。')}
 <p id='retry-message' role='status'></p>
 </main><script>
+const t=window.ndT||String;
+if(window.ndT) document.title=t('神通寰宇 · 任务 #{{id}}', {{id:{run_id}}});
 {refresh}
 document.querySelectorAll('[data-retry]').forEach(button => {{
   button.addEventListener('click', async () => {{
     const message = document.getElementById('retry-message');
     button.disabled = true;
-    message.textContent = '正在重试投递…';
+    message.textContent = t('正在重试投递…');
     try {{
       const response = await fetch('/api/history/{run_id}/delivery/' +
         encodeURIComponent(button.dataset.retry) + '/retry', {{method: 'POST'}});
       if (response.ok) {{ location.reload(); return; }}
       const body = await response.json();
-      message.textContent = body.error || '重试失败。';
-    }} catch (_) {{ message.textContent = '无法连接服务。'; }}
+      message.textContent = body.error || t('重试失败。');
+    }} catch (_) {{ message.textContent = t('无法连接服务。'); }}
     button.disabled = false;
   }});
 }});

@@ -2462,6 +2462,7 @@ dependencies = [
  "keyring",
  "objc2",
  "reqwest",
+ "rustls",
  "semver",
  "serde",
  "serde_json",

@@ -72,6 +72,28 @@ class WebKitSession:
         element = self.command("/element", {"using": "css selector", "value": selector})
         return self.command(f"/element/{element[WEB_ELEMENT]}/click", {})
 
+    def top(self):
+        self.command("/frame", {"id": None})
+
+    def panel(self, url, selector):
+        self.top()
+        tabs = self.command("/elements", {"using": "css selector", "value": "#panes iframe:not([hidden])"})
+        if tabs:
+            self.command("/frame", {"id": tabs[0]})
+        return self.ready(url + ("?ui=1" if tabs else ""), selector)
+
+    def tab_count(self):
+        self.top()
+        return len(self.command("/elements", {"using": "css selector", "value": "#tabs [role=tab]"}))
+
+    def open_dashboard(self, settings):
+        self.top()
+        if self.tab_count():
+            self.click('.toolbar [data-open="/"]')
+        else:
+            assert self.ready(settings, EXPORT_LINK)
+            self.click("header a[href='/']")
+
 
 @contextmanager
 def desktop_session(executable, root, home, url_log, service_port):
@@ -169,7 +191,7 @@ def smoke(executable, version):
         base = f"http://127.0.0.1:{service_port}"
         settings = base + "/settings"
         with desktop_session(executable, root, home, url_log, service_port) as (opener, driver):
-            until(lambda: driver.ready(settings, EXPORT_LINK), "The packaged settings page did not load", 45)
+            until(lambda: driver.panel(settings, EXPORT_LINK), "The packaged settings page did not load", 45)
             check_version(opener, base, version)
             with opener.open(base + "/api/config/export", timeout=5) as response:
                 expected = response.read()
@@ -185,14 +207,22 @@ def smoke(executable, version):
             assert not cancelled.exists(), "The cancelled profile was written later"
 
             check_scheduled_search(opener, base, home)
-            driver.click("header a[href='/']")
             paper_link = f'main details summary a[href="{PAPER_URL}"]'
+            if driver.tab_count():
+                # A scheduled run opens its own report without closing settings.
+                until(lambda: driver.tab_count() == 2, "The scheduled report did not open as a tab")
+                driver.click('#tabs [role=tab]:first-child')
+                until(lambda: driver.panel(settings, EXPORT_LINK), "The original settings tab was lost")
+                driver.click("header a[href='/']")
+                assert driver.tab_count() == 3, "Dashboard navigation replaced an original tab"
+            else:
+                driver.open_dashboard(settings)
             dashboard = base + "/"
-            until(lambda: driver.ready(dashboard, paper_link), "The saved report did not load in the desktop app")
+            until(lambda: driver.panel(dashboard, paper_link), "The saved report did not load in the desktop app")
             driver.click(paper_link)
             until(url_log.is_file, "The report link did not invoke the system's xdg-open dispatcher")
             assert url_log.read_text(encoding="utf-8").splitlines() == [PAPER_URL]
-            assert driver.ready(dashboard, paper_link), "The external link navigated away from the app"
+            assert driver.panel(dashboard, paper_link), "The external link navigated away from the app"
         print("Native Linux UI: picker cancelled and saved to the selected path; report link dispatched through xdg-open")
 
 

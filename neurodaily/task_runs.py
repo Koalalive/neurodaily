@@ -77,6 +77,7 @@ def _checkpoint(result: DigestResult) -> str:
         "on_this_day": result.on_this_day, "on_this_day_lang": result.on_this_day_lang,
         "ai_summary": result.ai_summary, "ai_summary_meta": result.ai_summary_meta,
         "ai_summary_refs": result.ai_summary_refs,
+        "report_locale": result.report_locale,
     })
 
 
@@ -158,3 +159,12 @@ def latest(*, profile: str | None = None, ready: bool = False) -> dict | None:
             return None
         row = conn.execute("SELECT task FROM search_history WHERE task IS NOT NULL ORDER BY id DESC LIMIT 1").fetchone()
     return json.loads(row[0]) if row else None
+
+
+def reports_since(after: int) -> list[dict]:
+    history.init_db()
+    with history._LOCK, closing(history._connect()) as conn:
+        rows = conn.execute("SELECT task FROM search_history WHERE id>? AND checkpoint IS NOT NULL "
+                            "AND task IS NOT NULL ORDER BY id LIMIT 100", (after,)).fetchall()
+    return [{key: task[key] for key in ("id", "status", "report_ready")}
+            for row in rows if (task := json.loads(row[0]))["report_ready"]]

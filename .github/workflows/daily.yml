@@ -28,30 +28,48 @@ jobs:
           .venv/bin/pip install -q -e .
       - name: Materialize config from secrets
         env:
+          RUN_DEMO: ${{ inputs.demo }}
           CONFIG_JSON: ${{ secrets.NEURODAILY_CONFIG_JSON }}
           EMAIL_JSON: ${{ secrets.NEURODAILY_EMAIL_JSON }}
           AI_JSON: ${{ secrets.NEURODAILY_AI_JSON }}
         run: |
-          mkdir -p config
-          if [ -n "$CONFIG_JSON" ]; then
-            printf '%s' "$CONFIG_JSON" > config/config.json
+          umask 077
+          export NEURODAILY_HOME="$RUNNER_TEMP/neurodaily"
+          printf 'NEURODAILY_HOME=%s\n' "$NEURODAILY_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$NEURODAILY_HOME/config" "$NEURODAILY_HOME/output"
+          if [ "$RUN_DEMO" != "true" ] && [ -n "$CONFIG_JSON" ]; then
+            printf '%s' "$CONFIG_JSON" > "$NEURODAILY_HOME/config/config.json"
           else
-            .venv/bin/python -m neurodaily config init
+            .venv/bin/python -m neurodaily config init >/dev/null
           fi
-          [ -n "$EMAIL_JSON" ] && printf '%s' "$EMAIL_JSON" > config/email.json || true
-          [ -n "$AI_JSON" ] && printf '%s' "$AI_JSON" > config/ai_summary.json || true
+          if ! .venv/bin/python -m neurodaily config validate >/dev/null; then
+            echo 'NeuroDaily config is invalid. Validate the source JSON locally before updating the secret.'
+            exit 1
+          fi
+          if [ "$RUN_DEMO" != "true" ]; then
+            if [ -n "$EMAIL_JSON" ]; then
+              printf '%s' "$EMAIL_JSON" > "$NEURODAILY_HOME/config/email.json"
+            fi
+            if [ -n "$AI_JSON" ]; then
+              printf '%s' "$AI_JSON" > "$NEURODAILY_HOME/config/ai_summary.json"
+            fi
+          fi
       - name: Run digest
         env:
+          RUN_DEMO: ${{ inputs.demo }}
           NEURODAILY_SMTP_PASSWORD: ${{ secrets.NEURODAILY_SMTP_PASSWORD }}
           NEURODAILY_LLM_API_KEY: ${{ secrets.NEURODAILY_LLM_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.NEURODAILY_LLM_API_KEY }}
         run: |
-          if [ "${{ inputs.demo }}" = "true" ]; then
-            .venv/bin/python -m neurodaily demo --no-open
+          report="$NEURODAILY_HOME/output/report.html"
+          if [ "$RUN_DEMO" = "true" ]; then
+            .venv/bin/python -m neurodaily run --demo --no-open --output "$report"
           else
-            .venv/bin/python -m neurodaily run --mode daily --no-open
+            .venv/bin/python -m neurodaily run --mode daily --no-open --output "$report"
           fi
       - uses: actions/upload-artifact@v4
         with:
           name: neurodaily-report
-          path: output/*.html
+          path: ${{ env.NEURODAILY_HOME }}/output/report.html
+          if-no-files-found: error
           retention-days: 14

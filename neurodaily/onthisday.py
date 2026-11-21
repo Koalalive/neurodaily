@@ -2735,7 +2735,7 @@ def render_section_html(events: list[dict], when: _date | None = None, lang: str
 
 
 def is_enabled(cfg) -> bool:
-    if getattr(cfg, "profile", None) == "oncology":
+    if getattr(cfg, "profile", None) in {"oncology", "critical-care"}:
         return False  # The bundled archive covers neuroscience history.
     try:
         sched = getattr(cfg, "scheduled", None) or {}
