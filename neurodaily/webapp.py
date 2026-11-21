@@ -172,7 +172,6 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
         task_runs.stage(attempt, "report", "completed")
         task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
         app.state.last_run = result
-        app.state.last_report_path = str(path)
 
         refreshed = False
         stage("metrics", "running")

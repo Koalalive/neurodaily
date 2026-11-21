@@ -10,7 +10,7 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from neurodaily import demo, history, task_runs
+from neurodaily import delivery_receipts, demo, history, task_runs
 from neurodaily.config import DEFAULT_CONFIG
 from neurodaily.webapp import create_app
 
@@ -76,13 +76,20 @@ class SearchTaskTests(unittest.TestCase):
         ready.update(report_ready=True, report_file=str(report_path), item_count=len(self.result.items))
         task_runs.stage(ready, "delivery", "running")
         task_runs.save(ready, result=self.result)
+        task_id = str(ready["id"])
+        delivery_receipts.prepare(task_id, self.cfg.profile,
+                                  [("first", "wecom", "wecom"), ("second", "feishu", "feishu")])
+        self.assertTrue(delivery_receipts.transition(task_id, self.cfg.profile, "first", "pending", "sending"))
         interrupted = task_runs.begin(self.cfg, "manual", None)
-        with TestClient(create_app(self.config_path)) as restarted:
+        with history.delivery_lease(self.cfg.profile, "first"), TestClient(create_app(self.config_path)) as restarted:
             self.assertIn("Previous real report", restarted.get("/").text)
             self.assertEqual(restarted.get("/api/search/status").json()["search"]["status"], "interrupted")
-            task = restarted.get(f"/api/history/{ready['id']}").json()["task"]
+            detail = restarted.get(f"/api/history/{ready['id']}").json()
+            task = detail["task"]
             self.assertEqual(task["stages"]["delivery"]["status"], "interrupted")
             self.assertEqual(task["status"], "completed")
+            self.assertEqual({row["channel"]: row["status"] for row in detail["receipts"]},
+                             {"wecom": "unknown", "feishu": "failed"})
             self.assertEqual(history.desktop_schedule_result(self.cfg.profile, due)["status"], "completed")
             self.assertEqual(history.get_run(interrupted["id"])["status"], "interrupted")
 

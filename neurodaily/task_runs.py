@@ -8,7 +8,7 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
-from . import history
+from . import delivery_receipts, history
 from .config import Config
 from .digest import DigestResult
 from .models import Item
@@ -123,7 +123,10 @@ def finish(task: dict, status: str, error: str = "") -> None:
     if error:
         task["error"] = error
     task.update(status=status, finished_at=datetime.now().isoformat())
-    save(task)
+    with history._LOCK, closing(history._connect()) as conn, conn:
+        if task["stages"].get("delivery", {}).get("status") == "failed":
+            delivery_receipts.close_interrupted(conn, str(task["id"]))
+        _write(conn, task)
 
 
 def recover() -> None:
@@ -138,6 +141,7 @@ def recover() -> None:
             stage(task, task["phase"], "interrupted", message)
             task.update(status="completed" if ready else "interrupted", report_ready=ready,
                         finished_at=datetime.now().isoformat(), error=message)
+            delivery_receipts.close_interrupted(conn, str(task["id"]))
             _write(conn, task)
 
 

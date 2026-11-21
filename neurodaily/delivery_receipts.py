@@ -68,6 +68,19 @@ def list_receipts(task_id: str) -> list[dict]:
     return receipts
 
 
+def close_interrupted(conn, task_id: str) -> None:
+    """Resolve abandoned targets after acquiring the search task lock."""
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='delivery_receipts'").fetchone():
+        return
+    now = datetime.now().isoformat()
+    conn.execute("UPDATE delivery_receipts SET status='failed', updated_at=?, error=? "
+                 "WHERE task_id=? AND status IN ('pending','checking')",
+                 (now, "上次任务在开始投递前中断，可以重试。", task_id))
+    conn.execute("UPDATE delivery_receipts SET status='unknown', updated_at=?, error=? "
+                 "WHERE task_id=? AND status='sending'",
+                 (now, "投递中断，未能确认服务器是否接受。", task_id))
+
+
 def transition(task_id: str, profile: str, destination: str, previous: str, status: str,
                *, error: str | None = None, sent: set[str] | None = None,
                expected_attempts: int | None = None) -> bool:

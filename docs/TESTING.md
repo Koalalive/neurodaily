@@ -14,7 +14,7 @@ make test                    # 等价
 `test_all.sh` 顺序执行：
 
 1. `compileall`（`neurodaily/`、`scripts/`）
-2. **32 项 unittest**（`tests/`）
+2. 运行 `tests/` 下的全部单元和集成测试
 3. `config validate`
 4. 离线 `demo` 生成报告
 5. `export --demo --format both`（JSON + BibTeX）
@@ -47,6 +47,9 @@ make test                    # 等价
 | `GenericSourceTests` | 通用 RSS 解析；JSON API 映射与日期过滤 |
 | `AISummaryTests` | 输入含四大板块；缺 key 报错；缓存只调用一次；渲染置顶 |
 | `RouteTests` | 6 个路由 200；非法 POST 400；路径穿越 404 |
+| `SearchTaskTests` | 来源进度、日报先于 AI 可读、进程互斥、重启恢复、投递定向重试 |
+| `DeliveryReceiptTests` | 按目标去重、回执持久化及删除、失败重试与并发保护 |
+| `SearchQualityTests` | 固定候选上的排序一致性、按 DOI/PMID 诊断、候选和基线指标对比 |
 
 ## 3. CLI 黑盒检查
 
