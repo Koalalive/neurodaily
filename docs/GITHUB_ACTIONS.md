@@ -1,6 +1,6 @@
 # 在 GitHub Actions 上运行 NeuroDaily
 
-GitHub Actions 可以每天生成一份日报，也可以给桌面端打包。日报从私有仓库的运行记录下载，桌面用户从同一仓库的 Releases 下载安装包。
+GitHub Actions 可以每天生成一份日报，也可以检查 macOS Homebrew 安装、构建 Windows 和 Linux 安装包。日报从私有仓库的运行记录下载，Windows 和 Linux 安装包在同一仓库的 Releases 下载。macOS 通过私有 Homebrew tap 安装。 [macOS 指南](MACOS_HOMEBREW.md)
 
 ## 选择工作流
 
@@ -8,7 +8,7 @@ GitHub Actions 可以每天生成一份日报，也可以给桌面端打包。�
 |---|---|---|---|
 | [daily.yml](../.github/workflows/daily.yml) | 在 Linux runner 检索，按配置发送邮件 | 默认分支日程，或 **Run workflow** | `neurodaily-report` 中的 `report.html`，保留 14 天 |
 | [ci.yml](../.github/workflows/ci.yml) | 在 Python 3.12 和 3.13 上做离线测试 | Pull Request，或推送 `main` | 测试日志 |
-| [release-tauri.yml](../.github/workflows/release-tauri.yml) | 构建安装包、验证安装升级、发布签名更新 | 手动运行、`release/**`、`verify/**` 或 `v*` 标签 | 预览安装包或正式 Release 资产 |
+| [release-tauri.yml](../.github/workflows/release-tauri.yml) | 验证 macOS Homebrew 安装，构建和回归 Windows、Linux 安装包，发布签名更新 | 手动运行、`release/**`、`verify/**` 或 `v*` 标签 | 预览安装包或正式 Windows、Linux Release 资产 |
 
 ## 1. 首次运行离线日报
 
@@ -74,27 +74,27 @@ GitHub 托管 runner 每次运行使用独立环境。本机日报、已推送�
 
 ### 预览安装包
 
-在 **Actions → Release Tauri desktop → Run workflow** 选择要验证的分支，或将已提交的候选代码推送到 `release/<版本>-preview`。这是普通分支构建。成功的预览产物可以用于 `verify/<版本>` 分支的补充安装回归。例如 `verify/v1.0.5` 查找 `release/v1.0.5-preview` 最近一次成功推送的产物。检查运行对应的 commit，确保验证的是准备发布的版本。
+在 **Actions → Release NeuroDaily → Run workflow** 选择要验证的分支，或将已提交的候选代码推送到 `release/<版本>-preview`。成功的预览产物可以用于 `verify/<版本>` 分支的补充安装回归。例如 `verify/v1.0.6` 查找 `release/v1.0.6-preview` 最近一次成功推送的 Windows 和 Linux 产物。只需检查 Homebrew 时，可使用 `verify/homebrew-<说明>` 分支。检查运行对应的 commit，确保验证的是准备发布的版本。
 
 ```bash
-gh workflow run release-tauri.yml --repo "$repo" --ref release/v1.0.5-preview
-gh run list --repo "$repo" --workflow release-tauri.yml --branch release/v1.0.5-preview --limit 5
+gh workflow run release-tauri.yml --repo "$repo" --ref release/v1.0.6-preview
+gh run list --repo "$repo" --workflow release-tauri.yml --branch release/v1.0.6-preview --limit 5
 gh run view RUN_ID --repo "$repo"
 gh run download RUN_ID --repo "$repo" -n neurodaily-x86_64-pc-windows-msvc --dir ./preview-win
 ```
 
-| Runner | 安装包 | 发布前检查 |
+| Runner | 安装方式 | 发布前检查 |
 |---|---|---|
-| `macos-15` 和 `macos-15-intel` | Apple Silicon 和 Intel `.dmg` | 从 DMG 内的应用启动，并运行定时检索 |
+| `macos-15` 和 `macos-15-intel` | Apple Silicon 和 Intel 通过 Homebrew 公式安装 | **Verify macOS Homebrew** 执行 `bash scripts/test_homebrew.sh`，检查公式安装及 `neurodaily web` 的本地服务 |
 | `windows-latest` | x64 NSIS `.exe` 和 `.msi` | NSIS 全新安装和覆盖升级，MSI 安装和卸载 |
 | `ubuntu-24.04` | x64 `.deb` 和 `.AppImage` | DEB 安装和升级，AppImage 解包运行，GTK 保存和外链调用 |
 
-各平台先冻结 Python sidecar，再用 Tauri 构建应用。升级测试用隔离目录保留上一正式版的配置、历史和定时记录。当前回归基线为 v1.0.4。后续发布切换基线时，同步检查工作流中的 `BASELINE_TAG` 和对应安装包文件名。 [桌面架构](DESKTOP_TAURI.md) · [测试矩阵](TESTING.md)
+Windows 和 Linux 先冻结 Python sidecar，再用 Tauri 构建应用。升级测试用隔离目录保留上一正式版的配置、历史和定时记录。当前回归基线为 v1.0.4。后续发布切换基线时，同步检查工作流中的 `BASELINE_TAG` 和对应安装包文件名。macOS 利用同一私有仓库的 `Formula/neurodaily.rb`，从 Git 版本标签和固定版本的 Python 依赖安装。 [桌面架构](DESKTOP_TAURI.md) · [测试矩阵](TESTING.md)
 
 ### 发布带更新签名的版本
 
-1. 更新 `pyproject.toml`、`neurodaily/__init__.py`、`desktop/tauri/package.json`、`desktop/tauri/src-tauri/Cargo.toml`、`tauri.conf.json` 以及对应锁文件中的应用版本。先跑上面的预览和实装验证，再把发布提交合入默认分支。
-2. 在 **Settings → Secrets and variables → Actions** 检查 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。用与已安装应用内置公钥配对的私钥签名，使现有安装可以接受更新。用于自动更新的签名与 macOS 公证、Windows Authenticode 是不同的检查。 [桌面签名说明](DESKTOP_TAURI.md)
+1. 更新 `pyproject.toml`、`neurodaily/__init__.py`、`desktop/tauri/package.json`、`desktop/tauri/src-tauri/Cargo.toml`、`tauri.conf.json` 以及对应锁文件中的应用版本。更新 `Formula/neurodaily.rb` 中的稳定版本和 Git 标签。先跑上面的预览和实装验证，再把发布提交合入默认分支。
+2. 在 **Settings → Secrets and variables → Actions** 检查 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。Windows 和 Linux 使用与已安装应用公钥配对的私钥签名，使现有安装可以接受更新。Windows Authenticode 使用单独的凭据。 [桌面签名说明](DESKTOP_TAURI.md)
 3. 给已审核的提交创建与应用版本一致的 `v<版本>` 标签并推送。示例从 `tauri.conf.json` 读当前版本，请确认这个版本号尚未发布。
 
 ```bash
@@ -107,7 +107,7 @@ git push origin "refs/tags/v$version"
 gh run list --repo "$repo" --workflow release-tauri.yml --commit "$(git rev-parse HEAD)" --limit 5
 ```
 
-4. 等待全部安装测试和 `publish` 作业。工作流先核验安装包、更新包签名和签名中的版本号，再把完整资产上传至草稿，最后将 Release 设为最新正式版。
+4. 等待全部安装测试和 `publish` 作业。工作流核验 Windows 和 Linux 安装包、更新签名和签名中的版本号，再把完整资产上传至草稿，最后将 Release 设为最新正式版。macOS 可以通过私有 tap 更新到对应发布标签。
 
 ```bash
 gh run watch RUN_ID --repo "$repo" --exit-status
@@ -115,7 +115,7 @@ gh release view "v$version" --repo "$repo" --json isDraft,isPrerelease,assets,ur
   --jq '{isDraft,isPrerelease,url,assets:[.assets[].name]}'
 ```
 
-对照 Releases 里的 6 个安装文件、2 个 macOS 更新归档和 6 个 `.sig`。协作者用自己的 GitHub 登录下载。应用内更新可在「更新 → 更新授权」配置仅能读取此仓库内容的 fine-grained token。 [桌面更新授权](DESKTOP_TAURI.md#private-desktop-updates)
+Releases 包含 Windows NSIS 和 MSI、Linux DEB 和 AppImage，共 4 个安装包与对应的 4 个 `.sig`。协作者用自己的 GitHub 登录下载。Windows 和 Linux 可在应用内配置仅能读取此仓库内容的更新令牌。macOS 使用 `brew update && brew upgrade koalalive/neurodaily/neurodaily`。 [桌面更新授权](DESKTOP_TAURI.md#private-desktop-updates) · [macOS 升级](MACOS_HOMEBREW.md)
 
 ## 6. 查日志和排障
 

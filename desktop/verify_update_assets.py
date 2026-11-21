@@ -22,14 +22,11 @@ def verify(directory: Path, tag: str) -> None:
             raise SystemExit(f"Expected one nonempty release asset named {name}")
         return matches[0]
 
-    for suffix in ("aarch64.dmg", "x64.dmg"):
-        asset(suffix)
     pubkey = base64.b64decode(settings["plugins"]["updater"]["pubkey"], validate=True)
     with TemporaryDirectory(prefix="neurodaily-signatures-") as workdir:
         public_key = Path(workdir, "updater.pub")
         public_key.write_bytes(pubkey)
-        for suffix in ("aarch64.app.tar.gz", "x64.app.tar.gz", "x64-setup.exe",
-                       "x64_en-US.msi", "amd64.AppImage", "amd64.deb"):
+        for suffix in ("x64-setup.exe", "x64_en-US.msi", "amd64.AppImage", "amd64.deb"):
             package = asset(suffix)
             signature = asset(f"{suffix}.sig")
             decoded = base64.b64decode(signature.read_text().strip(), validate=True)

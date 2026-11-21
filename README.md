@@ -6,9 +6,9 @@
 
 **用一份可追溯的日报，跟进领域内每天的进展。**
 
-NeuroDaily 适合需要持续跟踪论文、预印本、临床试验和监管产业动态的研究者。把检索规则保存为研究配置，手动或定时生成 HTML 日报，按需通过邮件、飞书或企业微信分享。桌面端内置神经科学、肿瘤学与重症医学预设，界面默认中文，可在设置中切换英语和俄语。
+NeuroDaily 适合需要持续跟踪论文、预印本、临床试验和监管产业动态的研究者。把检索规则保存为研究配置，手动或定时生成 HTML 日报，按需通过邮件、飞书或企业微信分享。内置神经科学、肿瘤学与重症医学预设，界面默认中文，可在设置中切换英语和俄语。
 
-[下载桌面版](https://github.com/Koalalive/neurodaily/releases/latest) · [运行离线演示](#快速开始) · [GitHub Actions 手册](docs/GITHUB_ACTIONS.md) · [竞品对照与接口路线](docs/ROADMAP.md)
+[macOS 安装](docs/MACOS_HOMEBREW.md) · [下载 Windows / Linux 版](https://github.com/Koalalive/neurodaily/releases/latest) · [运行离线演示](#快速开始) · [GitHub Actions 手册](docs/GITHUB_ACTIONS.md) · [竞品对照与接口路线](docs/ROADMAP.md)
 
 [中文](#中文) · [English](#english) · [Русский](#русский)
 
@@ -20,7 +20,7 @@ README 是私有仓库的项目首页。安装包、Actions 产物和源码通�
 
 ## 界面预览 · Screenshots
 
-下图为本地运行的日报演示。安装桌面版后，从设置选择学科并发起检索，可在独立标签页浏览新日报和最近一次结果。
+下图为本地运行的日报演示。打开本机工作区后，从设置选择学科并发起检索，可在独立标签页浏览新日报和最近一次结果。
 
 ![NeuroDaily 日报页，包含来源分类计数和最新论文列表](docs/assets/digest-demo.png)
 
@@ -66,7 +66,7 @@ README 是私有仓库的项目首页。安装包、Actions 产物和源码通�
 | **AI 每日摘要** | 按需概述研究、临床监管和产业动态，摘要引用回到原始条目。可关闭，结果带缓存 |
 | **历史上的今天** | 936 篇约千字学科史长文，按日轮换，精确日/近邻/经典标注 |
 | **交互式日报** | 折叠卡片、各来源状态、文献计量概览、外部引用图谱入口 |
-| **桌面标签页** | 设置、运行历史和新检索日报各自保留，返回仪表盘可打开最近一份真实日报 |
+| **工作区标签页** | 设置、运行历史和新检索日报各自保留，返回仪表盘可打开最近一份真实日报 |
 | **邮件日报** | 可设定发送时间、正文条目数和完整 HTML 附件，支持多个收件人 |
 | **任务与投递记录** | 查看各来源进度和已完成任务，选中失败渠道单独重试 |
 | **桌面通知** | macOS / Linux 原生通知 |
@@ -84,7 +84,19 @@ README 是私有仓库的项目首页。安装包、Actions 产物和源码通�
 
 ## 快速开始
 
-桌面用户可从 [GitHub Releases](https://github.com/Koalalive/neurodaily/releases/latest) 下载对应系统安装包。首次打开进入设置页，可选预设、语言和推送方式。点击开始检索会生成新的日报标签页。服务器或 CI 可使用 CLI，云端部署步骤见 [GitHub Actions 手册](docs/GITHUB_ACTIONS.md)。
+macOS 可用私有 Homebrew tap 安装，通过浏览器打开本机工作区。Windows 和 Linux 从私有仓库的 [GitHub Releases](https://github.com/Koalalive/neurodaily/releases/latest) 下载安装包。打开工作区后可选择学科、语言和推送方式，开始检索后在新标签页查看日报。服务器或 CI 可使用 CLI。 [GitHub Actions 手册](docs/GITHUB_ACTIONS.md)
+
+### macOS（Homebrew）
+
+准备可访问私有仓库的 GitHub SSH 密钥，在终端执行以下命令。
+
+```bash
+brew tap koalalive/neurodaily git@github.com:Koalalive/neurodaily.git
+brew install koalalive/neurodaily/neurodaily
+neurodaily web
+```
+
+服务默认在 `http://127.0.0.1:8031/desktop` 打开浏览器。可用 `neurodaily web --no-open` 只启动服务。终端中的 **Ctrl+C** 会停止定时检索和推送。升级使用 `brew update && brew upgrade koalalive/neurodaily/neurodaily`。 [完整安装与升级说明](docs/MACOS_HOMEBREW.md)
 
 ### 本地（Python 3.12+）
 
@@ -134,20 +146,19 @@ docker compose up --build
 
 详见 [`docs/DOCKER.md`](docs/DOCKER.md)。
 
-### 桌面安装包（Tauri 2 + Python sidecar）
+### Windows 和 Linux 安装包（Tauri 2 + Python sidecar）
 
-桌面版提供三平台安装包，安装应用即可运行。
+安装对应系统的桌面应用即可运行。
 
 | 平台 | 安装包 | 架构 |
 |---|---|---|
-| macOS | `.dmg` | Apple Silicon / Intel |
 | Windows | `.msi` / `.exe` | x86_64 |
 | Linux | `.AppImage` / `.deb` | x86_64 |
 
 安装包从 GitHub Releases 下载；具体系统要求见
 [`docs/INSTALL_REQUIREMENTS.md`](docs/INSTALL_REQUIREMENTS.md)。
 
-源码构建：
+在 Linux 上从源码构建：
 
 ```bash
 bash desktop/build_sidecar.sh
@@ -366,6 +377,7 @@ neurodaily run --no-open        # 或网页里点 Run now
 |---|---|
 | `neurodaily run [--demo] [--no-open] [--dedupe]` | 生成日报（`--demo` 离线） |
 | `neurodaily demo` | 离线演示报告 |
+| `neurodaily web [--no-open]` | 启动本机标签页工作区与定时服务（macOS Homebrew 启动入口） |
 | `neurodaily serve [--host] [--port] [--demo]` | Web 应用 / 设置页 |
 | `neurodaily export --format json\|bibtex\|both [--demo]` | 数据导出 |
 | `neurodaily ai-summary [--demo] [--force] [--save]` | 生成 AI 摘要 |
@@ -458,8 +470,9 @@ make test                     # 同上
 | [检索质量评估](docs/SEARCH_QUALITY.md) | 固定语料、召回率、Precision@K 与未命中诊断 |
 | [竞品对照与接口路线](docs/ROADMAP.md) | 竞品边界、HTML 文献计量与接口优先级 |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | 运维手册（启停/调度/排障/维护记录） |
-| [`docs/INSTALL_REQUIREMENTS.md`](docs/INSTALL_REQUIREMENTS.md) | 三平台安装包、软硬件要求 |
-| [`docs/DESKTOP_TAURI.md`](docs/DESKTOP_TAURI.md) | Tauri 2 + Python sidecar 构建与发布 |
+| [`docs/INSTALL_REQUIREMENTS.md`](docs/INSTALL_REQUIREMENTS.md) | 平台安装方式与软硬件要求 |
+| [macOS Homebrew 指南](docs/MACOS_HOMEBREW.md) | 私有 tap、启动、升级与旧数据目录 |
+| [`docs/DESKTOP_TAURI.md`](docs/DESKTOP_TAURI.md) | Windows 与 Linux 的 Tauri 构建和更新 |
 
 ---
 
@@ -495,7 +508,7 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 scripts/start.sh          # http://127.0.0.1:8031
 ```
 
-Download the installer from the private repository's [Releases](https://github.com/Koalalive/neurodaily/releases/latest). For a source checkout on macOS, double-click `scripts/启动 NeuroDaily.command` to start the app. Open Settings to choose a research preset, language, and delivery options.
+On macOS, use the private Homebrew tap and run `neurodaily web` to open the local app in your browser. On Windows and Linux, download the installer from the private repository's Releases. Open Settings to choose a research preset, language, and delivery options. [macOS Homebrew](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest)
 
 Offline demo:
 
@@ -586,6 +599,8 @@ NeuroDaily — автономная ежедневная научная свод
 - **Настраивается агентом**: смена дисциплины через JSON-патчи (`profile` + `config apply`).
 
 ### Быстрый старт
+
+На macOS установите приложение через приватный tap Homebrew и запустите `neurodaily web`. В Windows и Linux скачайте установщик из Releases приватного репозитория. [Установка на macOS](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest)
 
 ```bash
 git clone https://github.com/Koalalive/neurodaily.git
