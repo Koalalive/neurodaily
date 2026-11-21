@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "release/**"
+      - "verify/**"
     tags:
       - "v*"
 
@@ -13,6 +14,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ !startsWith(github.ref, 'refs/heads/verify/') }}
     strategy:
       fail-fast: false
       matrix:
@@ -211,8 +213,94 @@ jobs:
           }
           & python @smokeArgs
 
+  extra-installer:
+    name: Verify ${{ matrix.scenario }}
+    needs: build
+    if: ${{ !cancelled() && (startsWith(github.ref, 'refs/heads/verify/') || (github.ref_type == 'tag' && needs.build.result == 'success')) }}
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scenario: Windows MSI
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - scenario: Linux package upgrade and native dialogs
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      BASELINE_TAG: v1.0.4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Locate package artifacts
+        id: artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$GITHUB_RUN_ID"
+          if [[ "$GITHUB_REF_NAME" == verify/* ]]; then
+            branch="release/${GITHUB_REF_NAME#verify/}-preview"
+            run_id=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/release-tauri.yml/runs" \
+              -f branch="$branch" -f event=push -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
+            test -n "$run_id"
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.artifacts.outputs.run_id }}
+          name: neurodaily-${{ matrix.target }}
+          path: installers
+      - name: Install and run Windows MSI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw desktop/tauri/src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $candidate = @(Get-ChildItem installers -File -Recurse -Filter "NeuroDaily_${version}_x64_en-US.msi")
+          if ($candidate.Count -ne 1) { throw 'Expected exactly one MSI candidate' }
+          & python desktop/sidecar/msi_smoke.py $candidate[0].FullName $version
+      - name: Install Linux smoke dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb xauth webkit2gtk-driver xdotool
+      - name: Download and verify the published Debian installer
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          baseline="NeuroDaily_${BASELINE_TAG#v}_amd64.deb"
+          digest=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$BASELINE_TAG" --jq \
+            ". | select(.draft == false and .prerelease == false) | .assets[] | select(.name == \"$baseline\") | .digest")
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          gh release download "$BASELINE_TAG" --repo "$GITHUB_REPOSITORY" --dir baseline --pattern "$baseline"
+          printf '%s  %s\n' "${digest#sha256:}" "baseline/$baseline" | sha256sum -c -
+      - name: Verify Linux upgrade, AppImage and native dialog interaction
+        if: runner.os == 'Linux'
+        env:
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        shell: bash
+        run: |
+          version=$(python -c 'import json; print(json.load(open("desktop/tauri/src-tauri/tauri.conf.json"))["version"])')
+          previous="${BASELINE_TAG#v}"
+          deb=$(find "$PWD/installers" -type f -name "NeuroDaily_${version}_amd64.deb")
+          image=$(find "$PWD/installers" -type f -name "NeuroDaily_${version}_amd64.AppImage")
+          test -f "$deb" && test -f "$image"
+          xvfb-run -a python desktop/sidecar/linux_installer_smoke.py "$deb" "$version" --baseline "baseline/NeuroDaily_${previous}_amd64.deb" --baseline-version "$previous"
+          xvfb-run -a python desktop/sidecar/linux_installer_smoke.py "$image" "$version"
+          xvfb-run -a python desktop/sidecar/native_ui_smoke.py /usr/bin/neurodaily-desktop "$version"
+
   publish:
-    needs: [build, windows-installer]
+    needs: [build, windows-installer, extra-installer]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     permissions:
@@ -225,14 +313,17 @@ jobs:
           path: installers
           merge-multiple: true
       - name: Verify all installer and updater assets
-        run: python3 desktop/verify_update_assets.py installers "$GITHUB_REF_NAME"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          python3 desktop/verify_update_assets.py installers "$GITHUB_REF_NAME"
       - name: Upload assets to draft release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
           body: |
-            Windows 验证了全新安装及从 v1.0.4 覆盖升级，macOS 和 Linux 分别验证了从 DMG 和 DEB 安装后运行定时检索。启用定时并保存后，最小化窗口可继续运行。
+            Windows 验证了 NSIS 和 MSI 全新安装，以及从 v1.0.4 覆盖升级。macOS 验证了 Apple Silicon 和 Intel DMG 安装。Ubuntu 验证了 DEB 安装和覆盖升级，以及 AppImage 解包运行。启用定时并保存后，最小化窗口可继续运行。
 
             运行历史显示各来源的进度和投递回执，失败渠道可单独重试。日报先于 AI 摘要和投递完成，重启后可继续查看。CLI 提供 search-quality 命令，使用固定标注样本比较检索规则。
 
