@@ -234,6 +234,7 @@ class Neurodaily < Formula
     system(*pip, "install", "--no-index", "--no-deps", "--no-compile", *build_wheels)
     system(*pip, "wheel", "--no-index", "--no-deps", "--no-build-isolation", "--wheel-dir", wheelhouse, buildpath)
 
+    bin.mkpath
     (bin/"neurodaily").write <<~SH
       #!/bin/sh
       if [ -z "${NEURODAILY_HOME+x}" ]; then
