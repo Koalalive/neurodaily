@@ -45,6 +45,7 @@ neurodaily web
 |---|---|
 | `brew: command not found` | 安装 Homebrew，并按安装程序提示将 `brew shellenv` 加到当前 shell 的配置中 |
 | `Permission denied (publickey)` 或 `Repository not found` | 确认 SSH 密钥已录入 GitHub，当前 SSH 账号已加入私有仓库。可用 `ssh -T git@github.com` 查看认证到的账号 |
+| Intel Mac 的 `python@3.13` 与 Python.org 链接冲突 | 先运行 `brew install --skip-link python@3.13`，再安装 NeuroDaily。配方通过 Homebrew 的版本目录访问 Python |
 | 浏览器没有自动打开 | 如果服务已启动，可直接访问 `http://127.0.0.1:8031/desktop` |
 | 端口 8031 已被占用 | 用 `lsof -nP -iTCP:8031 -sTCP:LISTEN` 确认是否已有实例。如需使用其他端口，可运行 `neurodaily web --port 8032` |
 | 看不到新版本 | 先运行 `brew update`，再执行 `brew info koalalive/neurodaily/neurodaily` 查看 tap 提供的版本 |

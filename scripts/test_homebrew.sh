@@ -54,6 +54,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Intel hosted images also provide Python.org's versioned links in /usr/local/bin.
+# The formula uses Homebrew's opt/bin path, so the dependency needs no global links.
+brew install --skip-link python@3.13
+
 commit=$(git -C "$repo" rev-parse HEAD)
 git clone --quiet --no-hardlinks --no-tags "$repo" "$scratch/source"
 git -C "$scratch/source" checkout --quiet --detach "$commit"
@@ -69,8 +73,8 @@ git -C "$scratch/tap" -c user.name='NeuroDaily CI' -c user.email=ci@example.inva
 
 brew tap "$tap" "file://$scratch/tap"
 tapped=1
-brew install --formula "$formula"
 installed=1
+brew install --formula "$formula"
 brew test "$formula"
 
 python="$(brew --prefix python@3.13)/bin/python3.13"

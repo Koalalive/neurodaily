@@ -86,6 +86,11 @@ class Neurodaily < Formula
     sha256 "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
   end
 
+  resource "pip" do
+    url "https://files.pythonhosted.org/packages/07/25/ee8c38ae72d66b844ce8eb9711ba905dba21ca1a8a0c960057c41cd23337/pip-26.3-py3-none-any.whl"
+    sha256 "f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13"
+  end
+
   resource "pydantic" do
     url "https://files.pythonhosted.org/packages/fd/7b/122376b1fd3c62c1ed9dc80c931ace4844b3c55407b6fb2d199377c9736f/pydantic-2.13.4-py3-none-any.whl"
     sha256 "45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba"
@@ -216,30 +221,36 @@ class Neurodaily < Formula
   end
 
   def install
-    python = Formula["python@3.13"].opt_bin/"python3.13"
-    system python, "-m", "venv", "--without-pip", libexec
-    wheelhouse = buildpath/"wheelhouse"
+    wheelhouse = libexec/"wheelhouse"
     wheelhouse.mkpath
-    wheels = resources.map do |dependency|
+    build_wheels = resources.filter_map do |dependency|
       wheel = wheelhouse/File.basename(dependency.url)
       cp dependency.cached_download, wheel
-      wheel
+      wheel if %w[packaging setuptools wheel].include?(dependency.name)
     end
 
-    pip = [python, "-m", "pip", "--isolated", "--disable-pip-version-check",
-           "--python=#{libexec}/bin/python"]
-    system(*pip, "install", "--no-index", "--no-deps", "--no-compile", *wheels)
-    system(*pip, "install", "--no-index", "--no-deps", "--no-compile", "--no-build-isolation", buildpath)
-    system(*pip, "check")
+    build_venv = buildpath/"build-venv"
+    pip = prepare_pip(build_venv)
+    system(*pip, "install", "--no-index", "--no-deps", "--no-compile", *build_wheels)
+    system(*pip, "wheel", "--no-index", "--no-deps", "--no-build-isolation", "--wheel-dir", wheelhouse, buildpath)
 
     (bin/"neurodaily").write <<~SH
       #!/bin/sh
       if [ -z "${NEURODAILY_HOME+x}" ]; then
         export NEURODAILY_HOME="$HOME/Library/Application Support/NeuroDaily"
       fi
-      exec "#{libexec}/bin/neurodaily" "$@"
+      exec "#{libexec}/venv/bin/neurodaily" "$@"
     SH
     (bin/"neurodaily").chmod(0o755)
+  end
+
+  def post_install
+    # Keep wheel Mach-O files intact. Homebrew has already finished relocating
+    # built files in this keg, and the PyPI wheels use their own loader paths.
+    venv = libexec/"venv"
+    pip = prepare_pip(venv)
+    system(*pip, "install", "--no-index", "--no-deps", "--no-compile", *(libexec/"wheelhouse").glob("*.whl"))
+    system(*pip, "check")
   end
 
   def caveats
@@ -257,5 +268,27 @@ class Neurodaily < Formula
     assert_match "--no-open", shell_output("#{bin}/neurodaily web --help")
     system bin/"neurodaily", "demo", "--no-open"
     assert (testpath/"neurodaily-home"/"output").glob("*.html").any?
+  end
+
+  private
+
+  def python
+    Formula["python@3.13"].opt_bin/"python3.13"
+  end
+
+  def prepare_pip(venv)
+    system python, "-m", "venv", "--without-pip", venv
+    interpreter = venv/"bin/python"
+    bootstrap = <<~PY
+      import sys
+      import sysconfig
+      import zipfile
+
+      with zipfile.ZipFile(sys.argv[1]) as wheel:
+          wheel.extractall(sysconfig.get_path("purelib"))
+    PY
+    pip_wheel = libexec/"wheelhouse"/File.basename(resource("pip").url)
+    system interpreter, "-I", "-c", bootstrap, pip_wheel
+    [interpreter, "-I", "-m", "pip", "--isolated", "--disable-pip-version-check", "--no-cache-dir"]
   end
 end
