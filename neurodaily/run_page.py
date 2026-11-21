@@ -23,7 +23,7 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
 </style></head><body>
 <main>
   <h1>本次检索范围</h1>
-  <p>确认后开始检索，完成后自动打开本次日报。</p>
+  <p>日报生成后自动打开。AI 摘要和投递会继续处理。</p>
   <label for="hours">临时覆盖时间范围（小时，可选）</label>
   <input id="hours" type="number" min="1" max="8760" placeholder="留空使用已保存的设置">
   <small>例如填 36，把本次论文、试验、融资和新闻的窗口设为最近 36 小时。</small>
@@ -32,11 +32,13 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
     <button id="go" type="button">开始检索</button>
   </div>
   <div id="msg" role="status"></div>
+  <a id="task" hidden>查看任务进度</a>
 </main>
 <script>
 (function(){
   var msg=document.getElementById('msg');
   var go=document.getElementById('go');
+  var task=document.getElementById('task');
   var submitting=false, sharedBusy=false, checking=false;
   function set(t,ok){msg.textContent=t;msg.className=ok===true?'ok':(ok===false?'bad':'');}
   function updateButton(){
@@ -49,6 +51,14 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
     if(!response.ok) throw new Error();
     return (await response.json()).search;
   }
+  function progress(run){
+    task.hidden=!run.id;
+    if(run.id) task.href='/history/'+run.id;
+    var sources=Object.values(run.sources||{});
+    var done=sources.filter(function(source){return source.status!=='pending';}).length;
+    var status=run.scheduled_for?'定时检索正在运行':'检索正在运行';
+    set(status+(sources.length?' · 已处理 '+done+'/'+sources.length+' 个来源':''));
+  }
   async function refresh(){
     if(submitting||checking||document.hidden) return;
     checking=true;
@@ -56,30 +66,35 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
       var run=await currentSearch();
       if(submitting) return;
       var next=!!run&&run.status==='running';
-      if(next) set(run.scheduled_for?'定时检索正在运行，完成后可以手动检索。':'已有检索正在运行。');
+      if(next) progress(run);
       else if(sharedBusy) set('');
       sharedBusy=next;
       updateButton();
     }catch(e){}
     finally{checking=false;}
   }
-  async function poll(start,tries){
+  async function poll(id,tries){
     try{
       var run=await currentSearch();
-      if(run && run.started_at===start){
-        if(run.status==='completed'){
-          set('完成（'+run.item_count+' 条），正在打开报告…',true);
-          location.href='/report/latest';
+      if(!run||run.id!==id){
+        var response=await fetch('/api/history/'+id);
+        if(response.ok) run=(await response.json()).task;
+      }
+      if(run && run.id===id){
+        if(run.report_ready){
+          set('已生成日报（'+run.item_count+' 条），正在打开…',true);
+          location.href='/history/'+id+'/report';
           return;
         }
-        if(run.status==='failed'||run.status==='skipped'){
+        if(run.status==='failed'||run.status==='skipped'||run.status==='interrupted'){
           failed(run.error||'本次检索未生成报告');
           return;
         }
+        progress(run);
       }
     }catch(e){}
     if(tries>=240){failed('等待超时，请在运行历史中查看结果');return;}
-    setTimeout(function(){poll(start,tries+1);},3000);
+    setTimeout(function(){poll(id,tries+1);},2000);
   }
   document.getElementById('cancel').onclick=function(){location.href='/settings';};
   go.onclick=async function(){
@@ -101,7 +116,7 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
         return;
       }
       if(!r.ok){throw new Error(d.detail||d.error||'启动失败');}
-      poll(d.started_at,0);
+      poll(d.task_id,0);
     }catch(e){failed('❌ '+e.message);}
   };
   go.disabled=true;

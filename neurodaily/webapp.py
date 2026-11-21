@@ -36,7 +36,7 @@ from .digest import preview_search, run as run_digest, render_html_for
 from .presets import research_presets
 from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
 from .run_page import RUN_HTML
-from . import __version__, history as hist
+from . import __version__, history as hist, task_runs
 
 
 def _cfg_with_hours(cfg: Config, hours: int) -> Config:
@@ -56,6 +56,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         stop = Event()
+        guard = task_runs.acquire()
+        if guard is not None:
+            with guard:
+                task_runs.recover()
         if desktop:
             Thread(target=run_schedule, args=(stop, lambda: Config.load(config_path),
                                                 _start_scheduled_search),
@@ -80,8 +84,12 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
     def dashboard(request=None):
         cfg = _cfg()
         result = app.state.last_run
-        # render using last run if available, else show an empty-but-styled page
+        if result is not None and result.config_profile != cfg.profile:
+            result = None
         if result is None:
+            previous = _latest_report(cfg, include_demo=False)
+            if previous is not None:
+                return FileResponse(previous, media_type="text/html")
             if os.environ.get("NEURODAILY_DEMO"):
                 from .demo import build_result
                 result = build_result(cfg)
@@ -98,102 +106,145 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
     def run_now_page():
         return RUN_HTML
 
-    def _begin_search(scheduled_for: datetime | None = None):
-        started_at = datetime.now().isoformat()
-        attempt = {"started_at": started_at, "status": "running"}
-        if scheduled_for is not None:
-            attempt["scheduled_for"] = scheduled_for.isoformat()
+    def _begin_search(cfg: Config, mode: str, scheduled_for: datetime | None = None):
         with search_lock:
             current = app.state.search_attempt
             if current and current["status"] == "running":
                 return None
+            guard = task_runs.acquire()
+            if guard is None:
+                return None
+            try:
+                task_runs.recover()
+                if scheduled_for is not None:
+                    previous = hist.desktop_schedule_result(cfg.profile, scheduled_for)
+                    if previous and (previous["status"] == "completed" or datetime.now() <
+                                     datetime.fromisoformat(previous["finished_at"]) + RETRY_DELAY):
+                        guard.close()
+                        return None
+                attempt = task_runs.begin(cfg, mode, scheduled_for)
+            except BaseException:
+                guard.close()
+                raise
             app.state.search_attempt = attempt
-        return attempt
+            return attempt, guard
 
     def _search_and_deliver(cfg: Config, attempt: dict, force: bool, mode: str):
-        try:
-            from .journal_metrics import ensure_fresh
-            ensure_fresh([j.name for j in cfg.journals])
-        except Exception:
-            pass
-        result = run_digest(cfg, check_duplicate=True, record=True, force=force,
-                            mode=mode)
+        from .digest import save_report, snapshot
+
+        def sources(changes):
+            attempt["sources"].update(changes)
+            task_runs.save(attempt)
+
+        def stage(name, status, error=""):
+            task_runs.stage(attempt, name, status, error)
+            task_runs.save(attempt)
+
+        result = run_digest(cfg, check_duplicate=True, record=False, force=force,
+                            mode=mode, progress=sources)
         if result.skipped:
-            attempt.update(status="skipped", error=result.skipped_reason)
+            stage("search", "skipped")
+            task_runs.finish(attempt, "skipped", result.skipped_reason)
             return
-        if mode == "daily" and not any(row["ok"] for row in result.health):
+
+        sources({row["source"]: {"status": row.get("status", "ok" if row["ok"] else "failed"),
+                                 **{key: row[key] for key in ("count", "fetched", "ms") if key in row}}
+                 for row in result.health})
+        attempt["item_count"] = len(result.items)
+        if not any(row["ok"] for row in result.health):
             error = "All enabled sources failed." if result.health else "No sources are enabled."
-            attempt.update(status="failed", error=error, health=result.health)
+            stage("search", "failed", error)
+            task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
+            task_runs.finish(attempt, "failed", error)
             return
-        try:
-            from .ai_summary import generate as _ai_gen, load_cfg as _ai_cfg
-            _txt = _ai_gen(result)
-            if _txt:
-                result.ai_summary = _txt
-                result.ai_summary_meta = {"model": _ai_cfg().get("model", "")}
-        except Exception:
-            pass
-        from .digest import save_report
+        stage("search", "completed")
+        stage("report", "running")
+
         fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d_%H%M%S.html"
-        path = os.path.join(cfg.output_dir(), datetime.now().strftime(fmt))
-        save_report(result, path)
+        path = Path(cfg.output_dir(), datetime.now().strftime(fmt)).absolute()
+        if path.exists():
+            path = path.with_name(f"{path.stem}-{attempt['id']}{path.suffix}")
+        result.history_id = attempt["id"]
         base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
-        try:
-            with open(path, encoding="utf-8") as _f:
-                _html = _f.read()
-            _html = _html.replace('<meta name="nd-base" content="">',
-                                  f'<meta name="nd-base" content="{base}">')
-            with open(path, "w", encoding="utf-8") as _f:
-                _f.write(_html)
-        except Exception:
-            pass
-        app.state.last_report_path = path
+        result.report_base_url = base
+        save_report(result, str(path))
+        attempt.update(report_ready=True, report_file=str(path), report_revision=1)
+        task_runs.stage(attempt, "report", "completed")
+        task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
         app.state.last_run = result
+        app.state.last_report_path = str(path)
+
+        refreshed = False
+        stage("metrics", "running")
+        try:
+            from .journal_metrics import ensure_fresh, for_item
+            if ensure_fresh([j.name for j in cfg.journals]):
+                for item in result.items:
+                    metrics = for_item(item, cfg)
+                    if metrics and item.extra.get("metrics") != metrics:
+                        item.extra["metrics"] = metrics
+                        refreshed = True
+            stage("metrics", "completed")
+        except Exception:
+            stage("metrics", "failed", "期刊指标更新失败。")
+
+        stage("ai", "running")
+        try:
+            from .ai_summary import generate, load_cfg
+            result.ai_summary = generate(result)
+            if result.ai_summary:
+                result.ai_summary_meta = {"model": load_cfg().get("model", "")}
+            stage("ai", "completed" if result.ai_summary else "skipped")
+        except Exception:
+            stage("ai", "failed", "AI 摘要生成失败，请检查设置中的 AI 连通性。")
+
+        if refreshed or result.ai_summary:
+            try:
+                result.report_revision = 2
+                save_report(result, str(path))
+                attempt["report_revision"] = 2
+                task_runs.save(attempt, result=result)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not update the saved report")
+                stage("report", "partial", "补充内容保存失败，初版报告仍可查看。")
+                result = task_runs.load_result(attempt["id"]) or result
+
+        stage("delivery", "running")
         try:
             from .delivery import deliver_report
-            attempt["delivery"] = deliver_report(result, path)
+            attempt["delivery"] = deliver_report(result, str(path), task_id=str(attempt["id"]))
+            failures = any(value == "failed" for value in attempt["delivery"].values())
+            stage("delivery", "partial" if failures else "completed",
+                  "部分投递失败，可在任务详情中重试。" if failures else "")
         except Exception:
             logging.getLogger(__name__).exception("Could not deliver report")
-            attempt["delivery"] = {"status": "failed"}
-        try:
-            if cfg.output.get("open_on_finish", True) and os.environ.get("NEURODAILY_NO_OPEN") != "1":
-                import subprocess
-                import sys
-                url = base.rstrip("/") + "/report/latest"
-                print("[neurodaily] opening report:", url, flush=True)
-                if sys.platform == "darwin":
-                    subprocess.run(["open", url], check=False)
-                else:
-                    import webbrowser
-                    webbrowser.open(url)
-                print("[neurodaily] opened report:", url, flush=True)
-        except Exception:
-            pass
-        attempt.update(status="completed", item_count=len(result.items))
+            stage("delivery", "failed", "投递未完成，请查看任务详情。")
 
-    def _execute_search(cfg: Config, attempt: dict, force: bool = False, mode: str = "manual"):
-        try:
-            _search_and_deliver(cfg, attempt, force, mode)
-        except Exception:
-            logging.getLogger(__name__).exception("Search or report generation failed")
-            attempt.update(status="failed", error="Report generation failed. See the server log.")
+        task_runs.finish(attempt, "completed")
+        if cfg.output.get("open_on_finish", True) and os.environ.get("NEURODAILY_NO_OPEN") != "1":
+            try:
+                from webbrowser import open as open_browser
+                open_browser(base.rstrip("/") + f"/history/{attempt['id']}/report")
+            except Exception:
+                logging.getLogger(__name__).debug("Could not open completed report", exc_info=True)
+
+    def _execute_search(cfg: Config, attempt: dict, guard, force: bool = False, mode: str = "manual"):
+        with guard:
+            try:
+                _search_and_deliver(cfg, attempt, force, mode)
+            except Exception:
+                logging.getLogger(__name__).exception("Search or report generation failed")
+                error = "报告处理失败，请查看运行日志。"
+                task_runs.stage(attempt, attempt["phase"], "failed", error)
+                task_runs.finish(attempt, "completed" if attempt["report_ready"] else "failed", error)
 
     def _start_scheduled_search(cfg: Config, due: datetime) -> bool:
-        with hist.delivery_lease(cfg.profile, f"desktop-schedule:{due.isoformat()}") as acquired:
-            if not acquired:
-                return False
+        started = _begin_search(cfg, "daily", due)
+        if started is None:
             previous = hist.desktop_schedule_result(cfg.profile, due)
-            if previous:
-                if previous["status"] == "completed":
-                    return True
-                if datetime.now() < datetime.fromisoformat(previous["finished_at"]) + RETRY_DELAY:
-                    return False
-            attempt = _begin_search(scheduled_for=due)
-            if attempt is None:
-                return False
-            _execute_search(cfg, attempt, force=True, mode="daily")
-            hist.save_desktop_schedule_result(cfg.profile, due, attempt["status"], attempt.get("error"))
-            return attempt["status"] == "completed"
+            return bool(previous and previous["status"] == "completed")
+        _execute_search(cfg, *started, force=True, mode="daily")
+        return started[0]["status"] == "completed"
 
     @app.post("/api/run")
     def api_run(background_tasks: BackgroundTasks, force: bool = False,
@@ -202,18 +253,22 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
         if hours is not None and not (1 <= hours <= 8760):
             return JSONResponse({"error": "hours must be 1..8760"}, status_code=400)
         cfg = _cfg_with_hours(cfg, hours) if hours else cfg
-        attempt = _begin_search()
-        if attempt is None:
+        started = _begin_search(cfg, "manual")
+        if started is None:
             return JSONResponse({"error": "A search is already running"}, status_code=409)
 
-        background_tasks.add_task(_execute_search, cfg, attempt, force)
-        return JSONResponse({"status": "started", "profile": cfg.profile,
+        attempt, guard = started
+        background_tasks.add_task(_execute_search, cfg, attempt, guard, force)
+        return JSONResponse({"status": "started", "profile": cfg.profile, "task_id": attempt["id"],
                              "force": force, "started_at": attempt["started_at"]})
 
     @app.get("/api/status")
     def api_status():
         cfg = _cfg()
         lr = app.state.last_run
+        if lr is None or lr.config_profile != cfg.profile:
+            task = task_runs.latest(profile=cfg.profile, ready=True)
+            lr = task_runs.load_result(task["id"]) if task else None
         return {
             "profile": cfg.profile,
             "last_run": (lr.generated_at if lr else None),
@@ -221,12 +276,12 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
             "sections": (lr.section_counts() if lr else {}),
             "health": (lr.health if lr else ["not run yet"]),
             "prompt": cfg.to_prompt(),
-            "search": app.state.search_attempt,
+            "search": task_runs.latest(),
         }
 
     @app.get("/api/search/status")
     def api_search_status():
-        return JSONResponse({"search": app.state.search_attempt}, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"search": task_runs.latest()}, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/prompt")
     def api_prompt():
@@ -460,33 +515,36 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
             return JSONResponse({"ok": False, "message": "AI 设置格式无效。"}, status_code=400)
         return await run_in_threadpool(test_connection, draft)
 
-    @app.get("/report/latest")
-    def report_latest():
-        def _header(path) -> str:
+    def _latest_report(cfg: Config, *, include_demo: bool = True) -> Path | None:
+        def header(path) -> str:
             try:
-                with open(path, encoding="utf-8", errors="replace") as f:
-                    return f.read(4096)
+                with open(path, encoding="utf-8", errors="replace") as handle:
+                    return handle.read(4096)
             except OSError:
                 return ""
 
-        p = getattr(app.state, "last_report_path", None)
-        if p and os.path.isfile(p) and "(demo)" not in _header(p):
-            return FileResponse(p, media_type="text/html")
+        task = task_runs.latest(profile=cfg.profile, ready=True)
+        if task and "(demo)" not in header(task["report_file"]):
+            return Path(task["report_file"])
 
-        files = sorted((f for f in Path(_cfg().output_dir()).glob("*.html") if f.is_file()),
+        files = sorted((f for f in Path(cfg.output_dir()).glob("*.html") if f.is_file()),
                        key=os.path.getmtime, reverse=True)
         demo = None
         for file in files:
-            header = _header(file)
-            # Custom filenames can still be identified by either report renderer.
-            if not (file.name.startswith("neurodaily_") or 'name="nd-base"' in header
-                    or "<title>NeuroDaily</title>" in header):
+            text = header(file)
+            if not (file.name.startswith("neurodaily_") or 'name="nd-base"' in text
+                    or "<title>NeuroDaily</title>" in text):
                 continue
-            if "(demo)" not in header:
-                return FileResponse(file, media_type="text/html")
+            if "(demo)" not in text:
+                return file
             demo = demo or file
-        if demo is not None:
-            return FileResponse(demo, media_type="text/html")
+        return demo if include_demo else None
+
+    @app.get("/report/latest")
+    def report_latest():
+        path = _latest_report(_cfg())
+        if path is not None:
+            return FileResponse(path, media_type="text/html")
         return JSONResponse({"error": "no report yet"}, status_code=404)
 
     @app.get("/api/launchd/status")
@@ -583,7 +641,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
             detail = f"/history/{r['id']}"
             rows.append(
                 f"<tr data-id='{r['id']}'><td><a href='{detail}'>#{r['id']}</a></td>"
-                f"<td>{r.get('finished_at','')[:19].replace('T',' ')}</td>"
+                f"<td>{(r.get('finished_at') or r.get('started_at') or '')[:19].replace('T',' ')}</td>"
                 f"<td><span class='{status_cls}'>{r.get('status')}</span></td>"
                 f"<td>{r.get('item_count')}</td>"
                 f"<td class='hist-src'>{src_summary}</td>"
@@ -617,7 +675,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
               var id = a.getAttribute('data-id');
               if (!confirm('Delete history record #' + id + '?')) return;
               fetch('/api/history/' + id, { method: 'DELETE' })
-                .then(function (r) { return r.json(); })
+                .then(function (r) { if (!r.ok) throw new Error(); })
                 .then(function () { a.closest('tr').remove(); })
                 .catch(function () { alert('delete failed'); });
             });
@@ -626,8 +684,9 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
           if (ca) ca.addEventListener('click', function () {
             if (!confirm('Delete ALL history records?')) return;
             fetch('/api/history/clear', { method: 'POST' })
-              .then(function (r) { return r.json(); })
-              .then(function () { location.reload(); });
+              .then(function (r) { if (!r.ok) throw new Error(); })
+              .then(function () { location.reload(); })
+              .catch(function () { alert('clear history failed'); });
           });
         </script>"""
         return f"<!DOCTYPE html><html><head><meta charset='utf-8'>" \
@@ -673,13 +732,48 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
     @app.get("/api/history/{run_id}")
     def api_history_detail(run_id: int):
         row = hist.get_run(run_id)
+        if row and row["task"]:
+            from .delivery_receipts import list_receipts
+            row["receipts"] = list_receipts(str(run_id))
         return JSONResponse(row) if row else JSONResponse({"error": "记录不存在"}, status_code=404)
+
+    @app.get("/history/{run_id}/report")
+    def history_task_report(run_id: int):
+        row = hist.get_run(run_id)
+        task = row and row["task"]
+        if task and task["report_ready"] and Path(task["report_file"]).is_file():
+            return FileResponse(task["report_file"], media_type="text/html")
+        return HTMLResponse("<h3>日报未生成或已清理。</h3>", status_code=404)
+
+    @app.post("/api/history/{run_id}/delivery/{destination}/retry")
+    def api_delivery_retry(run_id: int, destination: str):
+        from .delivery import retry_delivery
+        guard = task_runs.acquire()
+        if guard is None:
+            return JSONResponse({"error": "任务正在运行，请结束后再重试。"}, status_code=409)
+        with guard:
+            task_runs.recover()
+            row = hist.get_run(run_id)
+            task = row and row["task"]
+            if not task or not task["report_ready"] or not Path(task["report_file"]).is_file():
+                return JSONResponse({"error": "找不到此任务的已保存日报。"}, status_code=404)
+            result = task_runs.load_result(run_id)
+            if result is None:
+                return JSONResponse({"error": "找不到此任务的检索结果。"}, status_code=404)
+            try:
+                return JSONResponse(retry_delivery(result, task["report_file"], str(run_id), destination))
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=409)
 
     @app.get("/history/{run_id}", response_class=HTMLResponse)
     def history_detail(run_id: int):
         r = hist.get_run(run_id)
         if not r:
             return HTMLResponse("<h3>run not found</h3>", status_code=404)
+        if r["task"]:
+            from .delivery_receipts import list_receipts
+            from .task_page import render_task
+            return render_task(r["task"], list_receipts(str(run_id)), _css())
         # if a report was saved, serve/read it
         report_rel = r.get("report_path", "")
         if report_rel:
@@ -694,7 +788,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
             f"<p><b>Status:</b> <span class='{r.get('status')}'>{r.get('status')}</span>"
             f"{(' — ' + str(r.get('skipped_reason',''))) if r.get('skipped_reason') else ''}</p>"
             f"<p><b>Started:</b> {r.get('started_at','')[:19].replace('T',' ')}</p>"
-            f"<p><b>Finished:</b> {r.get('finished_at','')[:19].replace('T',' ')}</p>"
+            f"<p><b>Finished:</b> {(r.get('finished_at') or r.get('started_at') or '')[:19].replace('T',' ')}</p>"
             f"<p><b>Items:</b> {r.get('item_count')}</p>"
             f"<p><b>Sources:</b> {src_summary or '—'}</p>"
             f"<p><a href='/history'>← back to history</a> · <a href='/'>dashboard</a></p>"
@@ -710,14 +804,22 @@ def create_app(config_path: str | None = None, *, desktop: bool = False) -> Fast
 
     @app.delete("/api/history/{run_id}")
     def api_history_delete(run_id: int):
-        removed = hist.delete_run(run_id)
-        _refresh_static_history()
+        guard = task_runs.acquire()
+        if guard is None:
+            return JSONResponse({"error": "任务正在运行。"}, status_code=409)
+        with guard:
+            removed = hist.delete_run(run_id)
+            _refresh_static_history()
         return JSONResponse({"deleted": removed, "run_id": run_id})
 
     @app.post("/api/history/clear")
     def api_history_clear():
-        removed = hist.clear_history()
-        _refresh_static_history()
+        guard = task_runs.acquire()
+        if guard is None:
+            return JSONResponse({"error": "任务正在运行。"}, status_code=409)
+        with guard:
+            removed = hist.clear_history()
+            _refresh_static_history()
         return JSONResponse({"deleted": removed})
 
     return app

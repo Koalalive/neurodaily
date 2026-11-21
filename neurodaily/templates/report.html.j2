@@ -254,7 +254,10 @@
       <a class="btn ghost" id="settingsLink" href="/settings">⚙ Settings</a>
       <a class="btn ghost" id="histLink" href="/history">History</a>
       <a class="btn ghost" id="promptLink" href="/api/prompt" target="_blank" rel="noopener">Focus prompt</a>
-      <span class="runmsg" id="runMsg"></span>
+      <a class="runmsg" id="runMsg" hidden></a>
+      {% if result.report_base_url and result.history_id %}
+      <a class="runmsg" href="/history/{{ result.history_id }}" data-task="{{ result.history_id }}" data-revision="{{ result.report_revision }}">任务 #{{ result.history_id }}</a>
+      {% endif %}
     </div>
   </div>
 </header>
@@ -381,6 +384,7 @@ if (IS_FILE) {
 
 var runBtn = document.getElementById('runNow');
 var runMsg = document.getElementById('runMsg');
+var reportTask = document.querySelector('[data-task][data-revision]');
 if (runBtn) {
   runBtn.addEventListener('click', function () {
     if (IS_FILE) { window.gotoServer('/run'); return; }
@@ -399,7 +403,15 @@ if (runBtn) {
         var busy = !!run && run.status === 'running';
         runBtn.disabled = busy;
         runBtn.textContent = busy ? 'Running…' : '▶ Run now';
-        if (runMsg) runMsg.textContent = busy && run.scheduled_for ? '定时检索正在运行' : '';
+        if (runMsg) {
+          runMsg.hidden = !busy;
+          if (busy) {
+            runMsg.href = '/history/' + run.id;
+            runMsg.textContent = (run.scheduled_for ? '定时检索' : '手动检索') + ' #' + run.id + ' 进行中';
+          }
+        }
+        if (run && reportTask && run.id === Number(reportTask.dataset.task) &&
+            run.report_revision > Number(reportTask.dataset.revision)) location.reload();
       } catch (e) { /* Retain the last known state during a short interruption. */ }
       finally { runStatusPending = false; }
     }
