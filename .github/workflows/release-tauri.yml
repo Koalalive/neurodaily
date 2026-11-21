@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "release/**"
+      - "verify/**"
     tags:
       - "v*"
 
@@ -13,6 +14,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ !startsWith(github.ref, 'refs/heads/verify/') }}
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +55,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf build-essential curl wget file libssl-dev
+            librsvg2-dev patchelf build-essential curl wget file libssl-dev xvfb xauth
 
       - name: Python venv (Unix)
         if: runner.os != 'Windows'
@@ -110,9 +112,20 @@ jobs:
           ./desktop/verify_windows_icons.ps1 -Target '${{ matrix.target }}' -ReleaseDir 'desktop/tauri/src-tauri/target/${{ matrix.target }}/release'
           cargo test --manifest-path desktop/tauri/src-tauri/Cargo.toml --locked --release --target '${{ matrix.target }}' --features custom-protocol
 
-      - name: Verify scheduled search from the Windows desktop application
-        if: runner.os == 'Windows'
-        run: python desktop/sidecar/smoke.py --desktop desktop/tauri/src-tauri/target/${{ matrix.target }}/release/neurodaily-desktop.exe
+      - name: Verify scheduled search from the installed Debian package
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          BUNDLE_DIR: desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        run: |
+          version=$(node -p "require('./desktop/tauri/src-tauri/tauri.conf.json').version")
+          deb="$PWD/$BUNDLE_DIR/deb/NeuroDaily_${version}_amd64.deb"
+          sudo apt-get install -y "$deb"
+          package=$(dpkg-deb -f "$deb" Package)
+          test "$(dpkg-query -W -f='${Version}' "$package")" = "$version"
+          test -x /usr/bin/neurodaily-server
+          xvfb-run -a python desktop/sidecar/smoke.py --desktop --expect-version "$version" /usr/bin/neurodaily-desktop
 
       - name: Create and verify macOS disk image
         if: runner.os == 'macOS'
@@ -125,6 +138,7 @@ jobs:
           python desktop/sidecar/smoke.py "$BUNDLE_DIR/macos/NeuroDaily.app/Contents/MacOS/neurodaily-server"
           image="$BUNDLE_DIR/dmg/NeuroDaily_${version}_${DMG_ARCH}.dmg"
           bash desktop/build_dmg.sh "$BUNDLE_DIR/macos/NeuroDaily.app" "$image"
+          python desktop/sidecar/installer_smoke.py "$image" "$version"
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             updater="$BUNDLE_DIR/macos/NeuroDaily_${version}_${DMG_ARCH}.app.tar.gz"
             mv "$BUNDLE_DIR/macos/NeuroDaily.app.tar.gz" "$updater"
@@ -145,8 +159,148 @@ jobs:
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
             desktop/tauri/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
 
-  publish:
+  windows-installer:
+    name: Verify Windows installer (${{ matrix.scenario }})
     needs: build
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [clean, upgrade]
+    env:
+      BASELINE_TAG: v1.0.4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: neurodaily-x86_64-pc-windows-msvc
+          path: installers
+      - name: Download and verify previously published installer
+        if: matrix.scenario == 'upgrade'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:BASELINE_TAG.TrimStart('v')
+          $assetName = "NeuroDaily_${version}_x64-setup.exe"
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:BASELINE_TAG" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.draft -or $release.prerelease) {
+            throw "Could not read stable release $env:BASELINE_TAG"
+          }
+          $assets = @($release.assets | Where-Object { $_.name -eq $assetName })
+          if ($assets.Count -ne 1 -or $assets[0].digest -notmatch '^sha256:[0-9a-f]{64}$') {
+            throw "Missing installer or digest for $env:BASELINE_TAG"
+          }
+          gh release download $env:BASELINE_TAG --repo $env:GITHUB_REPOSITORY --dir baseline --pattern $assetName
+          if ($LASTEXITCODE -ne 0) { throw "Could not download $assetName" }
+          $actual = (Get-FileHash (Join-Path baseline $assetName) -Algorithm SHA256).Hash
+          if ("sha256:$actual" -ne $assets[0].digest) { throw "Baseline installer digest mismatch" }
+      - name: Run installed desktop application's scheduled-search regression
+        shell: pwsh
+        env:
+          INSTALL_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          $version = (Get-Content -Raw desktop/tauri/src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $candidate = @(Get-ChildItem installers -File -Recurse -Filter "NeuroDaily_${version}_x64-setup.exe")
+          if ($candidate.Count -ne 1) { throw "Expected exactly one candidate setup EXE" }
+          $smokeArgs = @('desktop/sidecar/installer_smoke.py', $candidate[0].FullName, $version)
+          if ($env:INSTALL_SCENARIO -eq 'upgrade') {
+            $baselineVersion = $env:BASELINE_TAG.TrimStart('v')
+            $smokeArgs += @('--baseline', "baseline/NeuroDaily_${baselineVersion}_x64-setup.exe", '--baseline-version', $baselineVersion)
+          }
+          & python @smokeArgs
+
+  extra-installer:
+    name: Verify ${{ matrix.scenario }}
+    needs: build
+    if: ${{ !cancelled() && (startsWith(github.ref, 'refs/heads/verify/') || needs.build.result == 'success') }}
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scenario: Windows MSI
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - scenario: Linux package upgrade and native dialogs
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      BASELINE_TAG: v1.0.4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Locate package artifacts
+        id: artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$GITHUB_RUN_ID"
+          if [[ "$GITHUB_REF_NAME" == verify/* ]]; then
+            branch="release/${GITHUB_REF_NAME#verify/}-preview"
+            run_id=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/release-tauri.yml/runs" \
+              -f branch="$branch" -f event=push -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
+            test -n "$run_id"
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.artifacts.outputs.run_id }}
+          name: neurodaily-${{ matrix.target }}
+          path: installers
+      - name: Install and run Windows MSI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw desktop/tauri/src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $candidate = @(Get-ChildItem installers -File -Recurse -Filter "NeuroDaily_${version}_x64_en-US.msi")
+          if ($candidate.Count -ne 1) { throw 'Expected exactly one MSI candidate' }
+          & python desktop/sidecar/msi_smoke.py $candidate[0].FullName $version
+      - name: Install Linux smoke dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb xauth webkit2gtk-driver xdotool
+      - name: Download and verify the published Debian installer
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          baseline="NeuroDaily_${BASELINE_TAG#v}_amd64.deb"
+          digest=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$BASELINE_TAG" --jq \
+            ". | select(.draft == false and .prerelease == false) | .assets[] | select(.name == \"$baseline\") | .digest")
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          gh release download "$BASELINE_TAG" --repo "$GITHUB_REPOSITORY" --dir baseline --pattern "$baseline"
+          printf '%s  %s\n' "${digest#sha256:}" "baseline/$baseline" | sha256sum -c -
+      - name: Verify Linux upgrade, AppImage and native dialog interaction
+        if: runner.os == 'Linux'
+        env:
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        shell: bash
+        run: |
+          version=$(python -c 'import json; print(json.load(open("desktop/tauri/src-tauri/tauri.conf.json"))["version"])')
+          previous="${BASELINE_TAG#v}"
+          deb=$(find "$PWD/installers" -type f -name "NeuroDaily_${version}_amd64.deb")
+          image=$(find "$PWD/installers" -type f -name "NeuroDaily_${version}_amd64.AppImage")
+          test -f "$deb" && test -f "$image"
+          xvfb-run -a python desktop/sidecar/linux_installer_smoke.py "$deb" "$version" --baseline "baseline/NeuroDaily_${previous}_amd64.deb" --baseline-version "$previous"
+          xvfb-run -a python desktop/sidecar/linux_installer_smoke.py "$image" "$version"
+          xvfb-run -a python desktop/sidecar/native_ui_smoke.py /usr/bin/neurodaily-desktop "$version"
+
+  publish:
+    needs: [build, windows-installer, extra-installer]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     permissions:
@@ -159,16 +313,21 @@ jobs:
           path: installers
           merge-multiple: true
       - name: Verify all installer and updater assets
-        run: python3 desktop/verify_update_assets.py installers "$GITHUB_REF_NAME"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          python3 desktop/verify_update_assets.py installers "$GITHUB_REF_NAME"
       - name: Upload assets to draft release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
           body: |
-            Windows、macOS 和 Linux 桌面版已通过打包后的定时检索验证。启用定时并保存后，最小化窗口可继续运行。
+            Windows 验证了 NSIS 和 MSI 全新安装，以及从 v1.0.4 覆盖升级。macOS 验证了 Apple Silicon 和 Intel DMG 安装。Ubuntu 验证了 DEB 安装和覆盖升级，以及 AppImage 解包运行。启用定时并保存后，最小化窗口可继续运行。
 
-            配置导出支持选择路径。设置页新增 SMTP 登录和模型 API 测试。定时检索运行时，Run now 暂时禁用。
+            桌面工作区默认中文，可在设置切换英文或俄文。每次检索生成独立日报标签页，返回首页可恢复最近的日报。
+
+            新增重症医学检索预设和离线文献计量。运行历史显示各来源进度和投递回执，失败渠道可单独重试。CLI 的 search-quality 命令使用固定标注样本比较检索规则。
 
             macOS 安装包使用临时签名。首次打开时，macOS 可能要求在「系统设置 → 隐私与安全性」中单独批准。
 

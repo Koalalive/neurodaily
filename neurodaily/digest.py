@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import math
 import os
+import tempfile
 import time
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
+from html import escape
 
 from .config import Config, DEFAULT_CONFIG
 from .models import Item, tag_items
@@ -37,6 +39,10 @@ class DigestResult:
     skipped: bool = False          # True if this run was deduped (not executed)
     skipped_reason: str = ""
     fingerprint: str = ""
+    ai_summary_refs: dict = field(default_factory=dict)
+    report_base_url: str = ""
+    report_revision: int = 1
+    report_locale: str = "zh"
 
     def counts(self) -> dict[str, int]:
         c: dict[str, int] = {}
@@ -116,13 +122,15 @@ def _mark_match(item, plan) -> str:
     return matched.status
 
 
-def _fetch_sources(config, plan, windows, other, *, logger=None, preview=False):
+def _fetch_sources(config, plan, windows, other, *, logger=None, preview=False, progress=None):
     from .sources.http import capture_requests
 
     registry = registry_for(config)
     enabled = [(name, fetch) for name, fetch in registry.items()
                if config.source_opts(name).get("enabled", True) is not False
                and (not preview or _literature_source(config, name))]
+    if progress:
+        progress({name: {"status": "pending"} for name, _ in enabled})
     if not enabled:
         return [], []
     bounds = plan.date_range
@@ -172,6 +180,9 @@ def _fetch_sources(config, plan, windows, other, *, logger=None, preview=False):
             found, diagnostics = future.result()
             items.extend(found)
             health.append(diagnostics)
+            if progress:
+                progress({diagnostics["source"]: {key: diagnostics[key] for key in
+                          ("status", "count", "fetched", "ms")}})
     health.sort(key=lambda row: row["source"])
     return items, health
 
@@ -207,7 +218,7 @@ def _rank(item: Item, plan) -> tuple:
 
 def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         record: bool = True, max_age_hours: int | None = None, force: bool = False,
-        mode: str = "manual") -> DigestResult:
+        mode: str = "manual", *, progress=None) -> DigestResult:
     """Run a digest. Optionally skip if an identical query ran recently (dedup),
     and record the run into search_history."""
     config = config or DEFAULT_CONFIG()
@@ -237,12 +248,12 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     plan = compile_search(config.search, config.journals)
     windows, other = _windows(config, mode)
     candidates = _candidate_config(config, windows, other, date_range=plan.date_range)
-    items, health = _fetch_sources(candidates, plan, windows, other, logger=logger)
+    items, health = _fetch_sources(candidates, plan, windows, other, logger=logger, progress=progress)
     if (not items and health and not plan.active
             and all(row["status"] == "empty" for row in health)
             and any(row["lookback_days"] < 7 for row in health)):
         candidates = _candidate_config(config, windows, other, fallback=True)
-        items, health = _fetch_sources(candidates, plan, windows, other, logger=logger)
+        items, health = _fetch_sources(candidates, plan, windows, other, logger=logger, progress=progress)
     errors = [
         f'{row["source"]}: {row.get("error") or ", ".join(row.get("request_errors", [])) or row["status"]}'
         for row in health if row["status"] in ("timeout", "limited", "failed", "partial")
@@ -305,6 +316,11 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     return final
 
 
+def snapshot(result: DigestResult, mode: str) -> dict:
+    windows, _ = _windows(result.config, mode)
+    return hist.search_snapshot(result.config, mode, result.health, result.items, windows)
+
+
 def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int = 7 * 24,
                        *, keep_dated_papers: bool = False) -> list[Item]:
     """Keep each kind within its own window; undated items are kept."""
@@ -344,10 +360,20 @@ def save_report(result: DigestResult, output_path: str) -> str:
     if result.skipped:
         return output_path
     html = render_html(result)
+    if result.report_base_url:
+        html = html.replace('<meta name="nd-base" content="">',
+                            f'<meta name="nd-base" content="{escape(result.report_base_url, quote=True)}">', 1)
     outdir = os.path.dirname(output_path) or "."
     os.makedirs(outdir, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(html)
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=outdir, delete=False) as f:
+        temp_path = f.name
+        try:
+            f.write(html)
+            f.close()
+            os.replace(temp_path, output_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
     # attach the (relative) report path to the history record for re-opening
     if result.history_id:
         rel = os.path.basename(output_path)

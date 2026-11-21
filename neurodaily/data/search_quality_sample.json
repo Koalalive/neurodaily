@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "description": "Synthetic working-memory benchmark. Titles, IDs and source coverage are demonstration data.",
+  "cases": [
+    {
+      "name": "working-memory-eeg-meg",
+      "search": {
+        "query": "TI=(\"working memory\" OR \"verbal recall\") AND AB=(EEG OR MEG)",
+        "sort": "relevance"
+      },
+      "sources": {
+        "pubmed": {"status": "ok", "coverage": "sampled"},
+        "journal_rss": {"status": "partial", "coverage": "sampled"}
+      },
+      "candidates": [
+        {
+          "title": "Working memory signals during delayed recall",
+          "source": "pubmed",
+          "date": "2025-01-03",
+          "doi": "10.99999/neurodaily-fixture/wm-1",
+          "summary": "We measured EEG and MEG during a delayed response task.",
+          "extra": {"pmid": "990001001"}
+        },
+        {
+          "title": "Working memory signals during delayed recall",
+          "source": "journal_rss",
+          "date": "2025-01-03",
+          "doi": "https://doi.org/10.99999/NEURODAILY-FIXTURE/WM-1"
+        },
+        {
+          "title": "Verbal recall under changing contexts",
+          "source": "pubmed",
+          "date": "2025-01-02",
+          "summary": "The experiment measured EEG across two contexts.",
+          "extra": {"pmid": "990001002"}
+        },
+        {
+          "title": "Working memory after distraction",
+          "source": "journal_rss",
+          "date": "2025-01-07",
+          "doi": "10.99999/neurodaily-fixture/wm-3"
+        },
+        {
+          "title": "Short-term retention during distraction",
+          "source": "pubmed",
+          "date": "2025-01-01",
+          "doi": "10.99999/neurodaily-fixture/wm-4",
+          "summary": "EEG was recorded while participants held a set of letters in mind."
+        },
+        {
+          "title": "Working memory in a synthetic teaching example",
+          "source": "pubmed",
+          "date": "2025-01-06",
+          "doi": "10.99999/neurodaily-fixture/wm-5",
+          "summary": "A teaching exercise reproduces EEG plots using simulated data."
+        },
+        {
+          "title": "Working memory across task blocks",
+          "source": "journal_rss",
+          "date": "2025-01-01",
+          "doi": "10.99999/neurodaily-fixture/wm-6",
+          "summary": "The report discusses EEG patterns across task blocks."
+        }
+      ],
+      "labels": [
+        {"ids": ["doi:10.99999/neurodaily-fixture/wm-1", "pmid:990001001"], "relevant": true},
+        {"ids": ["pmid:990001002"], "relevant": true},
+        {"ids": ["doi:10.99999/neurodaily-fixture/wm-3"], "relevant": true},
+        {"ids": ["doi:10.99999/neurodaily-fixture/wm-4"], "relevant": true},
+        {"ids": ["doi:10.99999/neurodaily-fixture/wm-5"], "relevant": false},
+        {"ids": ["doi:10.99999/neurodaily-fixture/wm-7"], "relevant": true,
+         "expected_sources": ["pubmed", "journal_rss"]}
+      ]
+    }
+  ]
+}

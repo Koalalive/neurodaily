@@ -3,13 +3,15 @@
 import base64
 import json
 from pathlib import Path
-import re
+import subprocess
 import sys
+from tempfile import TemporaryDirectory
 
 
 def verify(directory: Path, tag: str) -> None:
     config = Path(__file__).parent / "tauri" / "src-tauri" / "tauri.conf.json"
-    version = json.loads(config.read_text(encoding="utf-8"))["version"]
+    settings = json.loads(config.read_text(encoding="utf-8"))
+    version = settings["version"]
     if tag != f"v{version}":
         raise SystemExit(f"Release tag {tag} does not match app version {version}")
 
@@ -22,20 +24,25 @@ def verify(directory: Path, tag: str) -> None:
 
     for suffix in ("aarch64.dmg", "x64.dmg"):
         asset(suffix)
-    for suffix in (
-        "aarch64.app.tar.gz",
-        "x64.app.tar.gz",
-        "x64-setup.exe",
-        "x64_en-US.msi",
-        "amd64.AppImage",
-        "amd64.deb",
-    ):
-        asset(suffix)
-        signature = asset(f"{suffix}.sig")
-        lines = base64.b64decode(signature.read_text().strip(), validate=True).decode().splitlines()
-        comment = next((line for line in lines if line.startswith("trusted comment:")), "")
-        if not re.search(rf"(?:\s|;)version:{re.escape(version)}(?:\s|;|$)", comment):
-            raise SystemExit(f"Updater signature {signature.name} must bind version {version}")
+    pubkey = base64.b64decode(settings["plugins"]["updater"]["pubkey"], validate=True)
+    with TemporaryDirectory(prefix="neurodaily-signatures-") as workdir:
+        public_key = Path(workdir, "updater.pub")
+        public_key.write_bytes(pubkey)
+        for suffix in ("aarch64.app.tar.gz", "x64.app.tar.gz", "x64-setup.exe",
+                       "x64_en-US.msi", "amd64.AppImage", "amd64.deb"):
+            package = asset(suffix)
+            signature = asset(f"{suffix}.sig")
+            decoded = base64.b64decode(signature.read_text().strip(), validate=True)
+            signature_file = Path(workdir, signature.name)
+            signature_file.write_bytes(decoded)
+            subprocess.run(["minisign", "-Vm", str(package), "-p", str(public_key),
+                            "-x", str(signature_file), "-q"], check=True)
+            comment = decoded.decode().splitlines()[2].removeprefix("trusted comment: ")
+            signed_version = next((field.removeprefix("version:") for field in comment.split("\t")
+                                   if field.startswith("version:")), None)
+            if signed_version != version:
+                raise SystemExit(f"Updater signature {signature.name} must bind version {version}")
+            print(f"Verified {package.name}")
 
 
 if __name__ == "__main__":

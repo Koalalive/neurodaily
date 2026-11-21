@@ -85,6 +85,15 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
 <header><h1>⚙ NeuroDaily Settings</h1><a href="/">← Back to dashboard</a><span class="mini" id="cfgpath"></span></header>
 <main>
   <section>
+    <label for="ui_language">界面语言</label>
+    <select id="ui_language" style="width:auto" disabled>
+      <option value="zh" lang="zh">简体中文</option>
+      <option value="en" lang="en">English</option>
+      <option value="ru" lang="ru">Русский</option>
+    </select>
+    <p id="ui_language_status" role="status"></p>
+  </section>
+  <section>
     <h2>配置文件</h2>
     <div class="inline">
       <a href="/api/config/export" download>导出已保存的配置</a>
@@ -144,14 +153,14 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
         <label for="search_query">Search expression</label>
         <textarea id="search_query" rows="3" spellcheck="false" aria-describedby="search_query_help"
           placeholder='TI="working memory" AND (TIAB=EEG OR TIAB=electroencephalography)'></textarea>
-        <p class="hint" id="search_query_help">Use <code>AND</code>, <code>OR</code>, <code>NOT</code>, parentheses, <code>TI="working memory"</code>, <code>TIAB=EEG NEAR/5 TIAB=memory</code>, or <code>PY=2024-2026</code>. For a keyword search, clear the expression and keep all journals.</p>
+        <p class="hint" id="search_query_help"><span>Use</span> <code>AND</code>, <code>OR</code>, <code>NOT</code>, <span>parentheses</span>, <code>TI="working memory"</code>, <code>TIAB=EEG NEAR/5 TIAB=memory</code>, <code>PY=2024-2026</code>. <span>For a keyword search, clear the expression and keep all journals.</span></p>
       </div>
 
       <details class="search-tools" id="search_sets_panel">
         <summary>Numbered search sets</summary>
         <div id="search_sets"></div>
         <button type="button" id="search_add_set">+ Add search set</button>
-        <p class="hint">Reuse sets in the expression, for example <code>(#1 AND #2) NOT #3</code>.</p>
+        <p class="hint"><span>Reuse sets in the expression, for example</span> <code>(#1 AND #2) NOT #3</code>.</p>
       </details>
 
       <div class="grid2">
@@ -331,6 +340,9 @@ var SEARCH_FIELDS=[
   ['PD','Publication date'],['CAT','Source category']
 ];
 function el(id){return document.getElementById(id);}
+var t=window.ndT||function(message,values){
+  return message.replace(/\{(\w+)\}/g,function(match,key){return values&&key in values?values[key]:match;});
+};
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function csv(a){
   return (a||[]).map(function(x){
@@ -351,7 +363,7 @@ function addSearchTerm(container, focus){
   var row=document.createElement('div');
   row.className='search-term';
   row.innerHTML='<select class="term-field" aria-label="Search field">'+SEARCH_FIELDS.map(function(field){
-    return '<option value="'+field[0]+'">'+field[1]+' ('+field[0]+')</option>';
+    return '<option value="'+field[0]+'">'+esc(t(field[1]))+' ('+field[0]+')</option>';
   }).join('')+'</select>'+
     '<select class="term-mode" aria-label="Match type"><option value="phrase">Match phrase</option>'+
     '<option value="AND">All words</option><option value="OR">Any word</option></select>'+
@@ -427,8 +439,8 @@ function addSearchSet(number,expression,focus){
   row.dataset.number=number;
   row.innerHTML='<label for="search_set_'+esc(number)+'">#'+esc(number)+'</label>'+
     '<input class="set-expression" id="search_set_'+esc(number)+'" placeholder=\'TI="working memory"\' spellcheck="false">'+
-    '<button type="button" class="insert-set">Use #'+esc(number)+'</button>'+
-    '<button type="button" class="del remove-set" aria-label="Remove search set #'+esc(number)+'">✕</button>';
+    '<button type="button" class="insert-set">'+esc(t('Use #{number}',{number:number}))+'</button>'+
+    '<button type="button" class="del remove-set" aria-label="'+esc(t('Remove search set #{number}',{number:number}))+'">✕</button>';
   var field=row.querySelector('input');
   field.value=expression||'';
   row.querySelector('.insert-set').onclick=function(){
@@ -465,7 +477,7 @@ function applySearchConditions(asSet){
   if(asSet){
     var number=NEXT_SEARCH_SET++;
     addSearchSet(number,expression,true);
-    el('search_builder_status').textContent='Search set #'+number+' created.';
+    el('search_builder_status').textContent=t('Search set #{number} created.',{number:number});
     markPreviewStale();
   }else{
     appendSearchExpression(expression);
@@ -529,23 +541,24 @@ function searchText(parent,tag,value){
 function previewExample(list,example){
   var item=document.createElement('li');
   list.appendChild(item);
-  var title=example.title||'Untitled record';
+  var title=example.title||t('Untitled record');
   var url;
   try{url=new URL(example.url);}catch(e){}
   if(url&&(url.protocol==='https:'||url.protocol==='http:')){
     var link=searchText(item,'a',title);
     link.href=url.href; link.target='_blank'; link.rel='noopener noreferrer';
+    link.dataset.noI18n='';
   }else{
-    searchText(item,'b',title);
+    searchText(item,'b',title).dataset.noI18n='';
   }
   if(example.search_match==='unknown'){
     searchText(item,'p','Needs more metadata to confirm a match.').className='mini';
   }
   if(example.matched_rules&&example.matched_rules.length){
-    searchText(item,'p','Matched · '+example.matched_rules.join(' · ')).className='mini';
+    searchText(item,'p',t('Matched · {rules}',{rules:example.matched_rules.join(' · ')})).className='mini';
   }
   if(example.missing_fields&&example.missing_fields.length){
-    searchText(item,'p','Fields unavailable · '+example.missing_fields.join(', ')).className='mini';
+    searchText(item,'p',t('Fields unavailable · {fields}',{fields:example.missing_fields.join(', ')})).className='mini';
   }
 }
 
@@ -561,26 +574,26 @@ function showSearchPreview(sources){
     details.open=Boolean(source.examples&&source.examples.length);
     var unavailable=['timeout','failed','limited'].includes(source.status);
     var matched=!unavailable&&source.status!=='empty'&&Number.isFinite(source.count)
-      ?' · '+source.count+(source.status==='partial'?' confirmed matches':' matches'):'';
+      ?' · '+t(source.status==='partial'?'{count} confirmed matches':'{count} matches',{count:source.count}):'';
     var candidates=(!unavailable||source.candidates>0)&&Number.isFinite(source.candidates)
-      ?' · '+source.candidates+' candidates':'';
-    var unknown=source.unknown?' · '+source.unknown+' unconfirmed':'';
-    var coverage=coverageLabels[source.coverage]||'';
-    var status=source.status==='empty'&&source.coverage==='sampled'?'No sample matches':
-      labels[source.status]||source.status||'Unknown';
+      ?' · '+t('{count} candidates',{count:source.candidates}):'';
+    var unknown=source.unknown?' · '+t('{count} unconfirmed',{count:source.unknown}):'';
+    var coverage=t(coverageLabels[source.coverage]||'');
+    var status=t(source.status==='empty'&&source.coverage==='sampled'?'No sample matches':
+      labels[source.status]||source.status||'Unknown');
     var summary=[source.source,status+matched+candidates+unknown];
     if(coverage&&coverage!==status) summary.push(coverage);
-    if(source.truncated) summary.push('Candidate cap reached');
+    if(source.truncated) summary.push(t('Candidate cap reached'));
     searchText(details,'summary',summary.join(' · '));
     if(!coverage&&typeof source.coverage==='string'&&source.coverage){
       searchText(details,'p',source.coverage).className='mini';
     }
     if(source.date_range&&source.date_range.length===2){
-      searchText(details,'p','Publication dates · '+source.date_range.join(' to ')).className='mini';
+      searchText(details,'p',t('Publication dates · {start} to {end}',{start:source.date_range[0],end:source.date_range[1]})).className='mini';
     }else if(source.lookback_days){
-      searchText(details,'p','Source lookback · '+source.lookback_days+' days').className='mini';
+      searchText(details,'p',t('Source lookback · {count} days',{count:source.lookback_days})).className='mini';
     }
-    if(Number.isFinite(source.fetched)) searchText(details,'p','Retrieved · '+source.fetched).className='mini';
+    if(Number.isFinite(source.fetched)) searchText(details,'p',t('Retrieved · {count}',{count:source.fetched})).className='mini';
     var errors=[source.error].concat(source.request_errors||[]).filter(Boolean);
     if(errors.length) searchText(details,'p',Array.from(new Set(errors)).join(' · '));
     var queries=source.queries&&source.queries.length?source.queries:[source.query].filter(Boolean);
@@ -598,7 +611,7 @@ function showSearchPreview(sources){
 }
 
 function searchError(output){
-  return Array.isArray(output.errors)&&output.errors.length?output.errors.join(' · '):output.error||'Invalid settings.';
+  return Array.isArray(output.errors)&&output.errors.length?output.errors.map(function(error){return t(error);}).join(' · '):t(output.error||'Invalid settings.');
 }
 
 function markPreviewStale(){
@@ -633,12 +646,12 @@ async function previewSearch(){
     showSearchPreview(sources);
     var counts=output.unique_candidates;
     status.textContent=!sources.length?'No sources available for this preview.':
-      counts?counts.match+' unique matches · '+counts.unknown+' with missing metadata':
-      'Preview for '+(output.profile||'this profile')+'.';
+      counts?t('{matches} unique matches · {unknown} with missing metadata',{matches:counts.match,unknown:counts.unknown}):
+      t('Preview for {profile}.',{profile:output.profile||t('this profile')});
   }catch(error){
     if(SEARCH_PREVIEW!==controller) return;
     status.dataset.state='error';
-    status.textContent='Preview failed. '+error.message;
+    status.textContent=t('Preview failed. {error}',{error:error.message});
   }finally{
     if(SEARCH_PREVIEW===controller){
       SEARCH_PREVIEW=null;
@@ -663,7 +676,7 @@ function addDiscipline(){el('disciplines').appendChild(disciplineRow({}));}
 
 function sourceRow(k,o){
   o=o||{}; var d=document.createElement('div'); d.className='row src'; d.dataset.key=k;
-  d.innerHTML='<b>'+esc(k)+'</b>'+
+  d.innerHTML='<b data-no-i18n>'+esc(k)+'</b>'+
     '<label><input type="checkbox" class="s-en" '+(o.enabled!==false?'checked':'')+'> On</label>'+
     '<input type="number" class="s-max" title="max_results" value="'+(o.max_results!=null?o.max_results:20)+'">'+
     '<input type="number" class="s-look" title="lookback_days" value="'+(o.lookback_days!=null?o.lookback_days:1)+'">';
@@ -745,8 +758,8 @@ async function loadPresets(){
         box.querySelectorAll('button').forEach(function(option){
           option.setAttribute('aria-pressed',String(option===button));
         });
-        el('preset_status').textContent=preset.label+' applied. '+
-          (reset?'Review the reset search conditions and save.':'Review and save to use it.');
+        el('preset_status').textContent=t('{preset} applied. {hint}',{
+          preset:t(preset.label),hint:t(reset?'Review the reset search conditions and save.':'Review and save to use it.')});
       };
       box.appendChild(button);
     });
@@ -758,14 +771,14 @@ async function load(){
   el('search_preview_button').disabled=true;
   try{
     var r=await fetch('/api/config');
-    if(!r.ok) throw new Error('Could not load settings');
+    if(!r.ok) throw new Error(t('Could not load settings'));
     BASE=await r.json(); render();
-    el('cfgpath').textContent='config: ~/neurodaily/config/config.json';
+    el('cfgpath').textContent=t('Config: {path}',{path:'~/neurodaily/config/config.json'});
     el('msg').textContent=''; el('msg').className='';
     loadPresets();
     await Promise.all([loadPush(),loadAi()]);
     el('saveRun').disabled=false;
-  }catch(e){el('msg').textContent='Load failed: '+e; el('msg').className='bad';}
+  }catch(e){el('msg').textContent=t('Load failed: {error}',{error:e.message}); el('msg').className='bad';}
   loadLaunchdStatus();
   try{
     if(new URLSearchParams(location.search).get('next')==='run'){
@@ -783,7 +796,7 @@ async function sendProfileFile(text, apply){
     method: 'POST', headers: {'Content-Type': 'application/json'}, body: text
   });
   var result = await response.json();
-  if (!response.ok) throw new Error(result.error || '无法读取配置文件');
+  if (!response.ok) throw new Error(t(result.error || '无法读取配置文件'));
   return result.summary;
 }
 
@@ -797,18 +810,16 @@ async function previewProfileFile(input){
   if (!file) return;
   status.textContent = '正在校验配置…';
   try {
-    if (file.size > 256 * 1024) throw new Error('配置文件不能超过 256 KB');
+    if (file.size > 256 * 1024) throw new Error(t('配置文件不能超过 256 KB'));
     var text = await file.text();
     var summary = await sendProfileFile(text, false);
     if (sequence !== profilePreviewSequence) return;
-    status.textContent = file.name + ' · ' + summary.profile + ' · ' +
-      summary.disciplines + ' 个学科 · ' + summary.sources + ' 个数据源 · ' +
-      summary.journals + ' 本期刊' + (summary.has_query ? ' · 含高级检索规则' : '') +
-      (summary.removed_private_fields ? ' · 本机专用字段将跳过' : '');
+    status.textContent = [file.name,summary.profile,t('{disciplines} 个学科 · {sources} 个数据源 · {journals} 本期刊',summary),
+      summary.has_query?t('含高级检索规则'):'',summary.removed_private_fields?t('本机专用字段将跳过'):''].filter(Boolean).join(' · ');
     importedProfile = text;
     apply.hidden = false;
   } catch (error) {
-    if (sequence === profilePreviewSequence) status.textContent = '校验失败 · ' + error.message;
+    if (sequence === profilePreviewSequence) status.textContent = t('校验失败 · {error}',{error:error.message});
   }
 }
 
@@ -821,9 +832,9 @@ async function applyProfileFile(){
     importedProfile = null;
     apply.hidden = true;
     await load();
-    status.textContent = '已导入 ' + summary.profile;
+    status.textContent = t('已导入 {profile}',{profile:summary.profile});
   } catch (error) {
-    status.textContent = '导入失败 · ' + error.message;
+    status.textContent = t('导入失败 · {error}',{error:error.message});
   } finally {
     apply.disabled = false;
   }
@@ -892,16 +903,16 @@ async function save(){
     var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     var out=await r.json();
     if(out.ok){
-      el('msg').textContent='✅ Saved → '+out.path; el('msg').className='ok';
+      el('msg').textContent=t('✅ Saved → {path}',{path:out.path}); el('msg').className='ok';
       loadLaunchdStatus();
       return true;
     }
-    el('msg').textContent='Save failed. '+searchError(out); el('msg').className='bad'; return false;
+    el('msg').textContent=t('Save failed. {error}',{error:searchError(out)}); el('msg').className='bad'; return false;
   }catch(e){el('msg').textContent='❌ '+e; el('msg').className='bad'; return false;}
 }
 
 async function resetDefaults(){
-  if(!confirm('Reset to defaults? This overwrites current settings.')) return;
+  if(!confirm(t('Reset to defaults? This overwrites current settings.'))) return;
   var r=await fetch('/api/config/reset',{method:'POST'});
   var out=await r.json();
   if(out.ok){await load(); el('msg').textContent='✅ Reset to defaults'; el('msg').className='ok';}
@@ -915,33 +926,37 @@ async function loadLaunchdStatus(){
     var desktop=s.backend==='desktop';
     desktopScheduler=desktop;
     el('launchd_controls').hidden=desktop;
-    el('schedule_hint').textContent=desktop
+    el('schedule_hint').textContent=t(desktop
       ? 'Save to apply. The app catches up on today’s missed time when it starts or wakes. Minimize the window to keep it running. Quitting stops the scheduled service.'
-      : 'After changing the time, click Install / update schedule to apply.';
-    var t=desktop
-      ? (s.loaded?'Desktop schedule: daily at '+s.schedule+' (local time)':'Desktop schedule: off')
-      : 'Scheduler: '+(s.loaded?'loaded':'not loaded')+(s.installed?' / installed':' / not installed')+'（'+s.schedule+'）';
+      : 'After changing the time, click Install / update schedule to apply.');
+    var scheduleText=desktop
+      ? t(s.loaded?'Desktop schedule: daily at {time} (local time)':'Desktop schedule: off',{time:s.schedule})
+      : t('Scheduler: {loaded} / {installed} ({time})',{
+          loaded:t(s.loaded?'loaded':'not loaded'),installed:t(s.installed?'installed':'not installed'),time:s.schedule});
+    var time=function(value){return new Date(value).toLocaleString(document.documentElement.lang);};
     if(desktop&&s.loaded){
-      if(s.state==='running') t+=' · Searching now';
-      else if(s.state==='waiting') t+=' · Waiting to start';
-      else if(s.state==='retrying') t+=' · Last attempt failed. Retry '+new Date(s.next_run).toLocaleString();
-      else if(s.next_run) t+=' · Next '+new Date(s.next_run).toLocaleString();
+      if(s.state==='running') scheduleText+=' · '+t('Searching now');
+      else if(s.state==='waiting') scheduleText+=' · '+t('Waiting to start');
+      else if(s.state==='retrying') scheduleText+=' · '+t('Last attempt failed. Retry {time}',{time:time(s.next_run)});
+      else if(s.next_run) scheduleText+=' · '+t('Next {time}',{time:time(s.next_run)});
     }
     if(desktop&&s.last_run){
-      t+=' · Last '+new Date(s.last_run.finished_at).toLocaleString()+' ('+s.last_run.status+')';
-      if(s.last_run.error) t+=' · '+s.last_run.error;
+      var states={completed:'Completed',failed:'Failed',skipped:'Skipped',interrupted:'Interrupted'};
+      scheduleText+=' · '+t('Last {time} ({state})',{
+        time:time(s.last_run.finished_at),state:t(states[s.last_run.status]||s.last_run.status)});
+      if(s.last_run.error) scheduleText+=' · '+t(s.last_run.error);
     }
-    el('ldstat').textContent=t;
+    el('ldstat').textContent=scheduleText;
     el('ldstat').className='pill'+(s.loaded?' on':'');
   }catch(e){el('ldstat').textContent='Scheduler: read failed';}
 }
 
 async function launchd(action){
-  if(action==='uninstall' && !confirm('Uninstall schedule？')) return;
+  if(action==='uninstall' && !confirm(t('Uninstall schedule？'))) return;
   el('msg').textContent='Working…'; el('msg').className='';
   var r=await fetch('/api/launchd/'+action,{method:'POST'});
   var out=await r.json();
-  el('msg').textContent = out.ok ? ('✅ '+(action==='install'?'installed/updated':'Uninstalled')) : '❌ Action failed';
+  el('msg').textContent = out.ok ? ('✅ '+t(action==='install'?'installed/updated':'Uninstalled')) : t('❌ Action failed');
   el('msg').className = out.ok?'ok':'bad';
   loadPush();
   loadLaunchdStatus();
@@ -997,14 +1012,14 @@ async function savePush(){
   if(Object.keys(changes).length){
     var r=await fetch('/api/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(changes)});
     var out=await r.json();
-    if(!out.ok) throw new Error(out.error||'Failed to save push settings');
+    if(!out.ok) throw new Error(t(out.error||'Failed to save push settings'));
     PUSH_BASELINE=current;
   }
   var pw=el('push_password').value;
   if(pw){
     var r2=await fetch('/api/push/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
     var o2=await r2.json();
-    if(!o2.ok) throw new Error(o2.error||'Failed to save password');
+    if(!o2.ok) throw new Error(t(o2.error||'Failed to save password'));
     el('push_password').value=''; el('push_pw_state').textContent='(set)';
   }
 }
@@ -1016,7 +1031,7 @@ async function testService(path,draft,buttonId,statusId){
   try{
     var response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(draft)});
     var result=await response.json();
-    status.textContent=result.message||'测试失败，请稍后重试。';
+    status.textContent=t(result.message||'测试失败，请稍后重试。');
   }catch(e){status.textContent='测试失败，请检查 NeuroDaily 服务是否仍在运行。';}
   finally{button.disabled=false;}
 }
@@ -1058,7 +1073,7 @@ async function saveAi(){
   var response=await fetch('/api/ai/settings',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(Object.assign(draft,{api_key:key}))});
   var result=await response.json();
-  if(!result.ok) throw new Error(result.message||'无法保存 AI 设置');
+  if(!result.ok) throw new Error(t(result.message||'无法保存 AI 设置'));
   showAiSettings(result);
 }
 
@@ -1075,12 +1090,50 @@ async function saveSettings(continueToSearch){
     if(PUSH_BASELINE) await savePush();
     if(AI_BASELINE) await saveAi();
     if(!await save()) return;
-    if(continueToSearch) location.href='/run';
+    if(continueToSearch){
+      if(window.parent!==window){
+        window.parent.postMessage({type:'nd-navigate',path:'/run'},location.origin);
+      }else{
+        location.href='/run';
+      }
+    }
   }catch(e){ el('msg').className='bad'; el('msg').textContent='❌ '+e; }
   finally{el('saveRun').disabled=false;el('saveOnly').disabled=false;}
 }
 
 function saveAndContinue(){return saveSettings(true);}
+
+async function loadUiLanguage(){
+  var field=el('ui_language'),status=el('ui_language_status');
+  try{
+    var response=await fetch('/api/ui/preferences',{cache:'no-store'});
+    if(!response.ok) throw new Error();
+    field.value=(await response.json()).language;
+    field.disabled=false;
+  }catch(e){status.textContent=t('无法读取界面语言。');}
+}
+
+el('ui_language').addEventListener('change',async function(){
+  var field=el('ui_language'),status=el('ui_language_status');
+  field.disabled=true;
+  status.textContent='';
+  try{
+    var response=await fetch('/api/ui/preferences',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({language:field.value})
+    });
+    if(!response.ok) throw new Error();
+    var language=(await response.json()).language;
+    if(window.parent!==window){
+      window.parent.postMessage({type:'nd-language',language:language},location.origin);
+    }else{
+      location.reload();
+    }
+  }catch(e){
+    status.textContent=t('无法保存界面语言。');
+    field.value=document.documentElement.lang;
+    field.disabled=false;
+  }
+});
 
 el('search_add_group').onclick=function(){addSearchGroup(true);};
 el('search_apply_conditions').onclick=function(){applySearchConditions(false);};
@@ -1095,6 +1148,7 @@ document.querySelector('main').addEventListener('change',function(event){
   if(!event.target.closest('#search_builder')) markPreviewStale();
 });
 load();
+loadUiLanguage();
 setInterval(function(){if(desktopScheduler&&!document.hidden) loadLaunchdStatus();},10000);
 </script>
 </body></html>

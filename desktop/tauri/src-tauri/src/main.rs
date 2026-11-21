@@ -70,10 +70,15 @@ fn save_config_download(window: &WebviewWindow, url: Url, suggested: &Path) {
         .and_then(OsStr::to_str)
         .unwrap_or("neurodaily-config.json");
     let app = window.app_handle().clone();
+    let title = match url.query_pairs().find(|(key, _)| key == "language") {
+        Some((_, language)) if language == "en" => "Export saved settings",
+        Some((_, language)) if language == "ru" => "Экспорт сохранённых настроек",
+        _ => "导出已保存的配置",
+    };
     app.dialog()
         .file()
         .set_parent(window)
-        .set_title("导出已保存的配置")
+        .set_title(title)
         .set_file_name(name)
         .add_filter("JSON", &["json"])
         .save_file(move |target| {
@@ -278,7 +283,14 @@ fn sidecar_path() -> std::path::PathBuf {
     dir.join(name)
 }
 
+fn initialize_tls() {
+    // Updater uses reqwest's rustls-no-provider feature. Register its ring
+    // provider before either the export or authenticated update client starts.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 fn main() {
+    initialize_tls();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -319,7 +331,7 @@ fn main() {
                             .filter(|port| *port != 0)
                         {
                             sidecar_port.store(port, Ordering::Relaxed);
-                            let url = format!("http://127.0.0.1:{port}/settings")
+                            let url = format!("http://127.0.0.1:{port}/desktop")
                                 .parse()
                                 .expect("valid sidecar URL");
                             let h = handle.clone();
@@ -415,6 +427,40 @@ mod tests {
         super::write_config_export(&path, shared_config).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), shared_config);
         assert_eq!(std::fs::read_dir(folder.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn native_config_download_uses_the_initialized_http_client() {
+        use std::io::{Read, Write};
+
+        super::initialize_tls();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = Url::parse(&format!(
+            "http://{}/api/config/export",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut request = [0; 4096];
+            assert!(socket.read(&mut request).unwrap() > 0);
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}")
+                .unwrap();
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("shared configuration.json");
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(super::download_config(
+                url,
+                tauri_plugin_dialog::FilePath::Path(path.clone()),
+            ))
+            .unwrap();
+        server.join().unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"{}");
     }
 
     #[cfg(windows)]

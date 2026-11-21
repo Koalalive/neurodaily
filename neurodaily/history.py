@@ -31,6 +31,7 @@ def db_path() -> str:
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(db_path())
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
@@ -95,8 +96,11 @@ def init_db() -> None:
             )
         """)
         columns = {column["name"] for column in conn.execute("PRAGMA table_info(search_history)")}
-        if "snapshot" not in columns:
-            conn.execute("ALTER TABLE search_history ADD COLUMN snapshot TEXT")
+        for column in ("snapshot", "task", "checkpoint"):
+            if column not in columns:
+                conn.execute(f"ALTER TABLE search_history ADD COLUMN {column} TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS history_task_status "
+                     "ON search_history(status, id) WHERE task IS NOT NULL")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS delivered_records (
                 profile TEXT NOT NULL,
@@ -207,12 +211,16 @@ def delivery_lease(profile: str, destination: str, seconds: int = 900):
                              (profile, destination, token))
 
 
-def mark_delivered(profile: str, destination: str, ids) -> None:
+def mark_delivered(profile: str, destination: str, ids, *,
+                   connection: sqlite3.Connection | None = None) -> None:
+    if connection is not None:
+        now = datetime.now().isoformat()
+        connection.executemany("INSERT OR IGNORE INTO delivered_records VALUES (?, ?, ?, ?)",
+                               ((profile, destination, key, now) for key in ids))
+        return
     init_db()
     with _LOCK, closing(_connect()) as conn, conn:
-        now = datetime.now().isoformat()
-        conn.executemany("INSERT OR IGNORE INTO delivered_records VALUES (?, ?, ?, ?)",
-                         ((profile, destination, key, now) for key in ids))
+        mark_delivered(profile, destination, ids, connection=conn)
 
 
 def is_duplicate(fingerprint: str, max_age_hours: int | None = None) -> dict | None:
@@ -239,7 +247,11 @@ def is_duplicate(fingerprint: str, max_age_hours: int | None = None) -> dict | N
                      AND started_at >= ? ORDER BY id DESC LIMIT 1""",
                 (fingerprint, today_start),
             ).fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    result = dict(row)
+    result.pop("checkpoint", None)
+    return result
 
 
 def list_runs(limit: int = 100, profile: str | None = None) -> list[dict]:
@@ -257,6 +269,8 @@ def list_runs(limit: int = 100, profile: str | None = None) -> list[dict]:
     out = []
     for r in rows:
         d = dict(r)
+        d.pop("checkpoint", None)
+        d["task"] = json.loads(d["task"]) if d["task"] else None
         d["source_counts"] = json.loads(d.get("source_counts") or "{}")
         d["has_snapshot"] = bool(d.pop("snapshot", None))
         out.append(d)
@@ -272,6 +286,8 @@ def get_run(run_id: int) -> dict | None:
     if not row:
         return None
     d = dict(row)
+    d.pop("checkpoint", None)
+    d["task"] = json.loads(d["task"]) if d["task"] else None
     d["source_counts"] = json.loads(d.get("source_counts") or "{}")
     d["snapshot"] = json.loads(d["snapshot"]) if d.get("snapshot") else None
     return d
@@ -289,7 +305,7 @@ def delete_run(run_id: int) -> bool:
     """Delete one history record. Returns True if a row was removed."""
     init_db()
     with _LOCK, closing(_connect()) as conn:
-        cur = conn.execute("DELETE FROM search_history WHERE id=?", (run_id,))
+        cur = conn.execute("DELETE FROM search_history WHERE id=? AND status!='running'", (run_id,))
         conn.commit()
         return cur.rowcount > 0
 
@@ -298,7 +314,7 @@ def clear_history() -> int:
     """Delete all history records. Returns number of rows removed."""
     init_db()
     with _LOCK, closing(_connect()) as conn:
-        cur = conn.execute("DELETE FROM search_history")
+        cur = conn.execute("DELETE FROM search_history WHERE status!='running'")
         conn.commit()
         return cur.rowcount
 

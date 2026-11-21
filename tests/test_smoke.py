@@ -442,6 +442,7 @@ class JournalMetricsTests(unittest.TestCase):
         self.assertTrue(m is None or m.get("source") != "config")
 
     def test_render_config_hardcoded_badge(self):
+        from bs4 import BeautifulSoup
         r = demo.build_result()
         from neurodaily.config import DEFAULT_CONFIG, Journal
         cfg = DEFAULT_CONFIG()
@@ -449,7 +450,7 @@ class JournalMetricsTests(unittest.TestCase):
         r.config = cfg
         h = render_html(r, cfg)
         self.assertIn("IF 99.9", h)
-        self.assertIn("中科院 1区", h)
+        self.assertIn("中科院分区 1区", BeautifulSoup(h, "html.parser").get_text(" ", strip=True))
 
     def test_journal_from_dict_accepts_if_alias(self):
         from neurodaily.config import Journal
@@ -793,13 +794,14 @@ class RunNowTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             presets = {entry["label"]: entry["config"] for entry in response.json()}
             self.assertEqual({label: value["profile"] for label, value in presets.items()},
-                             {"神经科学": "neuro", "肿瘤学": "oncology"})
+                             {"神经科学": "neuro", "肿瘤学": "oncology", "重症医学": "critical-care"})
             for value in presets.values():
                 self.assertNotIn("output", value)
                 self.assertNotIn("scheduled", value)
                 self.assertEqual(validate({**cfg.to_dict(), **value}), [])
             self.assertIn("Surgical Procedures, Operative",
                           [term for d in presets["肿瘤学"]["disciplines"] for term in d["mesh_terms"]])
+            self.assertIn("Sepsis", [term for d in presets["重症医学"]["disciplines"] for term in d["mesh_terms"]])
             self.assertEqual(path.read_bytes(), before)
 
     def test_oncology_report_shows_its_topic_without_neuroscience_history(self):

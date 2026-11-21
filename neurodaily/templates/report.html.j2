@@ -1,14 +1,14 @@
 {% macro tags_meta(it, badge_class) -%}
 <div class="meta">
   <span class="badge {{ badge_class }}">{{ it.kind_label }}</span>
-  {% if "top-journal" in it.tags and it.source != "pubmed" and it.source != "arxiv" %}<span class="badge b-journal">★ {{ it.source }}</span>{% endif %}
-  {% if it.extra.get('journal') and it.extra.get('journal') != it.source %}<span class="tag tj">{{ it.extra.get('journal') }}</span>{% endif %}
+  {% if "top-journal" in it.tags and it.source != "pubmed" and it.source != "arxiv" %}<span class="badge b-journal" data-no-i18n>★ {{ it.source }}</span>{% endif %}
+  {% if it.extra.get('journal') and it.extra.get('journal') != it.source %}<span class="tag tj" data-no-i18n>{{ it.extra.get('journal') }}</span>{% endif %}
   {% if it.extra.get('metrics') %}{% set m = it.extra.get('metrics') %}{% if m.get('if') %}<span class="tag tj" title="官方 JCR 影响因子">IF {{ m['if'] }}</span>{% endif %}{% if m.get('jcr') %}<span class="tag t">JCR {{ m['jcr'] }}</span>{% endif %}{% if m.get('cas') %}<span class="tag t">中科院 {{ m['cas'] }}</span>{% endif %}{% if not m.get('if') and m.get('oa_2yr') %}<span class="tag t" title="OpenAlex 2yr mean citedness（非 JCR IF）">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}{% endif %}
-  <span class="tag t">{{ it.source }}</span>
+  <span class="tag t" data-no-i18n>{{ it.source }}</span>
   {% if it.extra.get('search_match') == 'unknown' %}<span class="tag bad">待确认</span>{% endif %}
   {% if it.date_display %}<span class="tag t">{{ it.date_display }}</span>{% endif %}
   {% if it.doi %}<span class="tag t">doi:{{ it.doi }}</span>{% endif %}
-  {% for t in it.tags[:4] if t != "top-journal" %}<span class="tag">{{ t }}</span>{% endfor %}
+  {% for t in it.tags[:4] if t != "top-journal" %}<span class="tag" data-no-i18n>{{ t }}</span>{% endfor %}
 </div>
 {%- endmacro %}
 
@@ -20,7 +20,7 @@
     {% set version = {'published': '正式发表', 'preprint': '预印本'}.get(record.get('kind')) %}
     {% if version and not label.startswith(version) %}{% set label = version ~ ' · ' ~ label %}{% endif %}
   {% endif %}
-  {% if url %}<a class="ext" href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ label }}</a>{% else %}<span>{{ label }}</span>{% endif %}
+  {% if url %}<a class="ext" href="{{ url }}" target="_blank" rel="noopener noreferrer" data-no-i18n>{{ label }}</a>{% else %}<span data-no-i18n>{{ label }}</span>{% endif %}
   {% if not loop.last %}<span aria-hidden="true"> · </span>{% endif %}
 {% endfor %}
 {%- endmacro %}
@@ -42,7 +42,7 @@
       <summary>
         <span class="chevron"></span>
         <div class="card-main">
-          <h3>{% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>{% else %}{{ it.title }}{% endif %}</h3>
+          <h3 data-no-i18n>{% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>{% else %}{{ it.title }}{% endif %}</h3>
           {{ tags_meta(it, badge_class) }}
         </div>
       </summary>
@@ -53,14 +53,14 @@
           <div class="evidence">
             {% if rules %}
               <b>命中依据</b>
-              <ul>{% for rule in rules %}<li>{{ rule }}</li>{% endfor %}</ul>
+              <ul data-no-i18n>{% for rule in rules %}<li>{{ rule }}</li>{% endfor %}</ul>
             {% endif %}
             {% if missing %}<p><b>无法判断的字段</b> · {{ missing|join('、') }}</p>{% endif %}
           </div>
         {% endif %}
-        {% if it.summary %}<p class="summary">{{ it.summary }}</p>{% endif %}
-        {% if it.author_display %}<div class="byline"><b>Authors:</b> {{ it.author_display }}{% if it.corresponding_display %} <span class="corr">✉ corresponding: {{ it.corresponding_display }}</span>{% endif %}</div>{% endif %}
-        {% if it.affiliation_display %}<div class="byline aff"><b>Affiliations:</b> {{ it.affiliation_display }}</div>{% endif %}
+        {% if it.summary %}<p class="summary" data-no-i18n>{{ it.summary }}</p>{% endif %}
+        {% if it.author_display %}<div class="byline"><b>Authors:</b> <span data-no-i18n>{{ it.author_display }}</span>{% if it.corresponding_display %} <span class="corr">✉ <b>Corresponding authors:</b> <span data-no-i18n>{{ it.corresponding_display }}</span></span>{% endif %}</div>{% endif %}
+        {% if it.affiliation_display %}<div class="byline aff"><b>Affiliations:</b> <span data-no-i18n>{{ it.affiliation_display }}</span></div>{% endif %}
         {% if it.extra.get('provenance')|default([], true)|length > 1 %}<div class="byline"><b>合并来源</b> · {{ record_links(it.extra.get('provenance')) }}</div>{% endif %}
         {% if it.extra.get('related_versions') %}<div class="byline"><b>相关版本</b> · {{ record_links(it.extra.get('related_versions'), versions=true) }}</div>{% endif %}
         <div class="foot">
@@ -227,19 +227,19 @@
   {% if result.ai_summary %}<a href="#ai-summary">🧠 AI 摘要</a>{% endif %}
   {% if result.on_this_day %}<a href="#on-this-day">📅 历史上的今天</a>{% endif %}
   <a href="#papers">📄 最新论文</a>
-  <a href="#industry">💊 产业 / Funding</a>
+  <a href="#industry">💊 产业与融资</a>
   <a href="#trials_conferences">🧪 临床试验</a>
-  <a href="#policy">🏛️ 政策 / 新闻</a>
+  <a href="#policy">🏛️ 政策与新闻</a>
   {% if result.config and result.config.journals %}<a href="#journals">📚 期刊</a>{% endif %}
   {% if result.health %}<a href="#source-health">来源状态</a>{% endif %}
 </nav>
 <header>
   <div class="wrap">
-    <h1><span class="logo">NeuroDaily</span> — {{ digest_title }}</h1>
-    <div class="sub">Auto-aggregated {{ today }} · profile: {{ result.config_profile }}</div>
+    <h1><span class="logo">NeuroDaily</span> — <span>{{ digest_title }}</span></h1>
+    <div class="sub"><span>Auto-aggregated</span> {{ today }} · <span>Profile</span>: <span data-no-i18n>{{ result.config_profile }}</span></div>
     {% if result.config %}
     <div class="chips">
-      {% for d in result.config.active_disciplines() %}<span class="chip">{{ d.name }}</span>{% endfor %}
+      {% for d in result.config.active_disciplines() %}<span class="chip" data-no-i18n>{{ d.name }}</span>{% endfor %}
     </div>
     {% endif %}
     <div class="stats">
@@ -254,7 +254,10 @@
       <a class="btn ghost" id="settingsLink" href="/settings">⚙ Settings</a>
       <a class="btn ghost" id="histLink" href="/history">History</a>
       <a class="btn ghost" id="promptLink" href="/api/prompt" target="_blank" rel="noopener">Focus prompt</a>
-      <span class="runmsg" id="runMsg"></span>
+      <a class="runmsg" id="runMsg" hidden></a>
+      {% if result.report_base_url and result.history_id %}
+      <a class="runmsg" href="/history/{{ result.history_id }}" data-task="{{ result.history_id }}" data-revision="{{ result.report_revision }}"><span>任务</span> #{{ result.history_id }}</a>
+      {% endif %}
     </div>
   </div>
 </header>
@@ -269,20 +272,20 @@
   <section id="journals">
     <h2 class="sec-title"><span class="dot"></span>Top Journals
       <span class="count">({{ result.config.journals|length }})</span></h2>
-    <p class="sec-desc">Curated watch-list of leading journals — click to browse each site.
-      IF / JCR / 中科院分区来自导入的官方表（<code>config/journal_metrics.json</code>）；
-      <code>OA 2yr</code> 为 <strong>OpenAlex</b> 自动拉取的 2 年平均被引（非 JCR IF）。</p>
+    <p class="sec-desc"><span>Curated watch-list of leading journals — click to browse each site.</span>
+      <span>IF、JCR 和中科院分区来自导入的官方表。</span>
+      <code>OA 2yr</code>: <span>OpenAlex 两年平均被引次数（非 JCR IF）</span></p>
     <div class="journals">
       {% for j in result.config.journals %}
       <div class="journal">
-        <div class="cat">{{ j.category }}</div>
-        <h4>{% if j.url %}<a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.name }}</a>{% else %}{{ j.name }}{% endif %}</h4>
+        <div class="cat" data-no-i18n>{{ j.category }}</div>
+        <h4 data-no-i18n>{% if j.url %}<a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.name }}</a>{% else %}{{ j.name }}{% endif %}</h4>
         {% set m = jm(j.name) %}
         {% if m %}<div class="meta" style="margin-top:6px">
           {% if m.get('if') %}<span class="tag tj">IF {{ m['if'] }}</span>{% endif %}
           {% if m.get('jcr') %}<span class="tag t">JCR {{ m['jcr'] }}</span>{% endif %}
-          {% if m.get('cas') %}<span class="tag t">中科院 {{ m['cas'] }}</span>{% endif %}
-          {% if not m.get('if') and m.get('oa_2yr') %}<span class="tag t" title="OpenAlex，非 JCR IF">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}
+          {% if m.get('cas') %}<span class="tag t"><span>中科院分区</span> {{ m['cas'] }}</span>{% endif %}
+          {% if not m.get('if') and m.get('oa_2yr') %}<span class="tag t" title="OpenAlex 两年平均被引次数（非 JCR IF）">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}
         </div>{% endif %}
       </div>
       {% endfor %}
@@ -304,7 +307,7 @@
           {% set candidates = h.get('candidate_count', h.get('candidates')) %}
           {% set queries = h.get('queries') or ([h.query] if h.get('query') else []) %}
           <tr>
-            <td>{{ h.source }}</td>
+            <td data-no-i18n>{{ h.source }}</td>
             <td><span class="{{ 'ok' if state == 'ok' else 'bad' if state in ('failed', 'timeout', 'limited', 'partial') else 't' }}">{{ state_labels.get(state, state) }}</span></td>
             <td>{{ candidates if candidates is not none else '—' }}</td>
             <td>{{ h.get('fetched') if h.get('fetched') is not none else '—' }}</td>
@@ -315,8 +318,8 @@
             <tr><td colspan="6" class="source-detail">
               {% if h.get('coverage') %}<p>{{ coverage_labels.get(h.coverage, h.coverage) }}</p>{% endif %}
               {% if h.get('truncated') %}<p>已到达抓取上限。</p>{% endif %}
-              {% if h.get('unknown') %}<p>{{ h.unknown }} 条因字段不足待确认。</p>{% endif %}
-              {% if h.get('lookback_days') %}<p>请求回溯 · {{ h.lookback_days }} 天</p>{% endif %}
+              {% if h.get('unknown') %}<p data-i18n="{count} 条因字段不足待确认。" data-i18n-count="{{ h.unknown }}">{{ h.unknown }} 条因字段不足待确认。</p>{% endif %}
+              {% if h.get('lookback_days') %}<p data-i18n="请求回溯 · {count} 天" data-i18n-count="{{ h.lookback_days }}">请求回溯 · {{ h.lookback_days }} 天</p>{% endif %}
               {% if h.get('error') %}<p>{{ h.error }}</p>{% endif %}
               {% if queries %}<details><summary>实际查询</summary>{% for query in queries %}<code>{{ query }}</code>{% endfor %}</details>{% endif %}
             </td></tr>
@@ -331,7 +334,7 @@
   {% if result.config %}
   <section id="prompt">
     <h2 class="sec-title"><span class="dot"></span>Structured Focus Prompt</h2>
-    <div class="prompt">{{ result.config.to_prompt() }}</div>
+    <div class="prompt" data-no-i18n>{{ result.config.to_prompt() }}</div>
   </section>
   {% endif %}
 
@@ -364,7 +367,7 @@ if (IS_FILE) {
       await fetch(base + '/api/status', {cache: 'no-store'});
       location.href = base + path;
     } catch (e) {
-      alert('服务未启动：请双击 scripts/启动 NeuroDaily.command，或运行 scripts/start.sh');
+      alert((window.ndT||String)('服务未启动：请双击 scripts/启动 NeuroDaily.command，或运行 scripts/start.sh'));
     }
   };
   if (settingsLink) settingsLink.addEventListener('click', function(e){
@@ -381,6 +384,7 @@ if (IS_FILE) {
 
 var runBtn = document.getElementById('runNow');
 var runMsg = document.getElementById('runMsg');
+var reportTask = document.querySelector('[data-task][data-revision]');
 if (runBtn) {
   runBtn.addEventListener('click', function () {
     if (IS_FILE) { window.gotoServer('/run'); return; }
@@ -398,8 +402,18 @@ if (runBtn) {
         var run = (await response.json()).search;
         var busy = !!run && run.status === 'running';
         runBtn.disabled = busy;
-        runBtn.textContent = busy ? 'Running…' : '▶ Run now';
-        if (runMsg) runMsg.textContent = busy && run.scheduled_for ? '定时检索正在运行' : '';
+        var t = window.ndT || String;
+        runBtn.textContent = t(busy ? 'Running…' : '▶ Run now');
+        if (runMsg) {
+          runMsg.hidden = !busy;
+          if (busy) {
+            runMsg.href = '/history/' + run.id;
+            var kind = t(run.scheduled_for ? '定时检索' : '手动检索');
+            runMsg.textContent = window.ndT ? t('{kind} #{id} 进行中', {kind:kind,id:run.id}) : kind + ' #' + run.id + ' 进行中';
+          }
+        }
+        if (run && reportTask && run.id === Number(reportTask.dataset.task) &&
+            run.report_revision > Number(reportTask.dataset.revision)) location.reload();
       } catch (e) { /* Retain the last known state during a short interruption. */ }
       finally { runStatusPending = false; }
     }
@@ -410,7 +424,7 @@ if (runBtn) {
 }
 </script>
 
-<footer>Generated automatically by NeuroDaily · {{ result.generated_at }}</footer>
+<footer><span>Generated automatically by NeuroDaily</span> · {{ result.generated_at }}</footer>
 <script>
 // Make every top-level section collapsible (AI summary, papers, trials, ...).
 (function initCollapsibleSections(){
