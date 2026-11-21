@@ -1,8 +1,8 @@
 class Neurodaily < Formula
   desc "Research digest and scheduled literature tracking in your browser"
   homepage "https://github.com/Koalalive/neurodaily"
-  url "ssh://git@github.com/Koalalive/neurodaily.git", using: :git, tag: "v1.0.6"
-  version "1.0.6"
+  url "ssh://git@github.com/Koalalive/neurodaily.git", using: :git, tag: "v1.0.7"
+  version "1.0.7"
   license "Apache-2.0"
 
   depends_on :macos
@@ -234,6 +234,7 @@ class Neurodaily < Formula
     system(*pip, "install", "--no-index", "--no-deps", "--no-compile", *build_wheels)
     system(*pip, "wheel", "--no-index", "--no-deps", "--no-build-isolation", "--wheel-dir", wheelhouse, buildpath)
 
+    pkgshare.install "LICENSE", "NOTICE"
     bin.mkpath
     (bin/"neurodaily").write <<~SH
       #!/bin/sh

@@ -43,6 +43,7 @@ class DigestResult:
     report_base_url: str = ""
     report_revision: int = 1
     report_locale: str = "zh"
+    geography: dict | None = None
 
     def counts(self) -> dict[str, int]:
         c: dict[str, int] = {}

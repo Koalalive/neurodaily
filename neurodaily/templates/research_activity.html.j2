@@ -1,0 +1,235 @@
+<section id="research-activity" data-no-i18n>
+  <style>
+    #research-activity{margin-block:1.5rem;padding:clamp(12px,2.5vw,24px);border:1px solid #33445d;border-radius:16px;background:#101928;color:#e2eaf5;color-scheme:dark}
+    #research-activity h2,#research-activity h3,#research-activity h4{color:#f1f6ff;margin:0 0 .6em}
+    #research-activity p{margin:.55em 0;color:#b9cbdf}
+    #research-activity .ra-controls{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+    #research-activity button{font:inherit;color:#e2eaf5;cursor:pointer;background:#1c2b40;border:1px solid #455d79;border-radius:7px;padding:4px 9px}
+    #research-activity button:hover,#research-activity button[aria-pressed=true]{background:#264464;border-color:#88bbf0}
+    #research-activity :focus-visible{outline:2px solid #b3d9ff;outline-offset:3px}
+    #research-activity .ra-map{width:100%;aspect-ratio:2;position:relative;overflow:hidden;border:1px solid #334f70;border-radius:12px;background:#0b172a}
+    #research-activity canvas{width:100%;height:100%;display:block}
+    #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0b172a;border-radius:20px;padding:0 4px;background:#b2c9de;color:#101928;font-size:11px;font-weight:750}
+    #research-activity .ra-marker[data-kind=paper]{background:#74d4ff}
+    #research-activity .ra-marker[data-kind=trial]{background:#8fe4c2}
+    #research-activity .ra-marker[data-kind=news]{background:#ffd080}
+    #research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#fff}
+    #research-activity .ra-caption{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:.85rem;color:#c3cfe0}
+    #research-activity .ra-cloud{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:.55em 0}
+    #research-activity .ra-cloud button{font-size:var(--word-size);overflow-wrap:anywhere;max-width:100%;text-align:left}
+    #research-activity .ra-cloud button span{font-size:.62em;color:#b9cde5;margin-inline-start:.35em}
+    #research-activity .ra-results{margin-block:12px 18px;padding:12px;border:1px solid #3b5574;border-radius:10px;background:#15233a;scroll-margin-top:12px}
+    #research-activity .ra-results ol{padding-inline-start:1.4rem;margin-bottom:0}
+    #research-activity .ra-results li+li{margin-top:10px}
+    #research-activity a{color:#9addff}
+    #research-activity .ra-evidence{font-size:.88rem;overflow-wrap:anywhere}
+  </style>
+  <h2 data-ra="heading">每日研究态势</h2>
+  {% if activity.records %}
+  <div class="ra-map-block" {% if not activity.land %}hidden{% endif %}>
+    <h3 data-ra="map">研究动态地图</h3>
+    <p data-ra="mapNote"></p>
+    <div class="ra-controls" aria-label="地图筛选"></div>
+    <div class="ra-map">
+      <canvas width="960" height="480" aria-hidden="true"></canvas>
+      <div class="ra-markers"></div>
+    </div>
+    <div class="ra-caption"><button class="ra-unknown" type="button"></button><span>Made with Natural Earth</span></div>
+    <p class="ra-deferred" hidden></p>
+    <div class="ra-map-results ra-results" hidden></div>
+  </div>
+  <div style="margin-top:18px">
+    <h3 data-ra="keywords">关键词词云</h3>
+    <p data-ra="wordNote"></p>
+    <div class="ra-cloud"></div>
+    <div class="ra-keyword-results ra-results" hidden></div>
+  </div>
+  <noscript>Enable JavaScript to use the map and keyword cloud.</noscript>
+  {% endif %}
+  <script type="application/json" id="nd-research-data">{{ activity|tojson }}</script>
+  <script>
+  (() => {
+    const root = document.getElementById('research-activity');
+    const data = JSON.parse(document.getElementById('nd-research-data').textContent);
+    const copies = {
+      zh: {heading:'每日研究态势',map:'研究动态地图', mapNote:'点击地点查看条目和定位依据。国家级点位为示意，机构所在地与研究地点分别标注。',
+        keywords:'关键词词云', wordNote:'点击词条查看代表性结果。数字是本期涵盖该词的条目数。',
+        all:'全部', paper:'论文', trial:'临床试验', news:'新闻与政策', unknown:'未定位', empty:'当前筛选没有定位结果。',
+        noWords:'本期没有可识别的关键词。', original:'原文', site:'登记坐标', country:'国家级示意',
+        institution:'作者机构', study_site:'研究地点', trial_site:'试验站点', event:'事件发生地', model:'AI 判定', metadata:'来源元数据'},
+      en: {heading:'Daily research activity',map:'Research activity map', mapNote:'Select a location to see its records and evidence. Country markers are approximate. Affiliations and study sites are labelled separately.',
+        keywords:'Keyword cloud', wordNote:'Select a term to see representative records. Counts show matching records in this report.',
+        all:'All',paper:'Papers',trial:'Clinical trials',news:'News and policy',unknown:'Unlocated',empty:'No mapped records match this filter.',
+        noWords:'No keywords identified for this report.',original:'Source',site:'Registry coordinates',country:'Country-level marker',
+        institution:'Author affiliation',study_site:'Study site',trial_site:'Trial site',event:'Event location',model:'AI inference',metadata:'Source metadata'},
+      ru: {heading:'Исследования за день',map:'Карта исследований',mapNote:'Выберите точку, чтобы увидеть записи и источники геоданных. Точки стран приблизительны. Организации авторов и места исследований подписаны отдельно.',
+        keywords:'Облако ключевых слов',wordNote:'Выберите термин, чтобы увидеть записи по теме. Число показывает количество совпадений в отчёте.',
+        all:'Все',paper:'Публикации',trial:'Клинические исследования',news:'Новости и политика',unknown:'Без геоданных',empty:'Для этого фильтра нет точек на карте.',
+        noWords:'Ключевые слова не найдены.',original:'Источник',site:'Координаты из реестра',country:'Приблизительная точка страны',
+        institution:'Организация авторов',study_site:'Место исследования',trial_site:'Центр испытания',event:'Место события',model:'Вывод ИИ',metadata:'Метаданные источника'}
+    };
+    const c = copies[document.documentElement.lang] || copies[{{ language|tojson }}] || copies.zh;
+    root.querySelectorAll('[data-ra]').forEach(node => {node.textContent = c[node.dataset.ra];});
+    document.querySelectorAll('a[href="#research-activity"]').forEach(link => {
+      link.textContent = c.heading;
+      link.hidden = false;
+    });
+    const kind = id => data.records[id].kind === 'policy' ? 'news' : data.records[id].kind;
+    const node = (tag, value) => {
+      const element = document.createElement(tag);
+      if (value) element.textContent = value;
+      return element;
+    };
+    const control = (label) => {
+      const button = node('button', label);
+      button.type = 'button';
+      return button;
+    };
+    let localeNames;
+    try { localeNames = new Intl.DisplayNames([document.documentElement.lang || 'zh'], {type:'region'}); }
+    catch (_) {}
+    const placeName = place => place.precision === 'country' && localeNames && place.country
+      ? localeNames.of(place.country) : place.name;
+    function show(panel, label, ids, places = []) {
+      panel.removeAttribute('role');
+      panel.hidden = false;
+      const heading = node('h4', label);
+      heading.tabIndex = -1;
+      panel.replaceChildren(heading);
+      if (!ids.length) {panel.append(node('p', c.empty)); heading.focus(); return;}
+      const list = node('ol');
+      for (const id of ids) {
+        const record = data.records[id];
+        const li = node('li');
+        li.append(node('strong', record.title), node('p', [c[kind(id)], record.source, record.date].filter(Boolean).join(' · ')));
+        if (record.summary) li.append(node('p', record.summary));
+        for (const place of places.filter(entry => entry.id === id)) {
+          const evidence = node('p', [placeName(place), c[place.role], c[place.precision], c[place.method], place.evidence].filter(Boolean).join(' · '));
+          evidence.className = 'ra-evidence';
+          li.append(evidence);
+        }
+        if (record.url) {
+          const a = node('a', c.original);
+          a.href = record.url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          li.append(a);
+        }
+        list.append(li);
+      }
+      panel.append(list);
+      heading.focus();
+    }
+    const canvas = root.querySelector('canvas');
+    if (data.land.length && canvas) {
+      const map = root.querySelector('.ra-map');
+      const ctx = canvas.getContext('2d');
+      const markers = root.querySelector('.ra-markers');
+      const filters = root.querySelector('.ra-controls');
+      const unknown = root.querySelector('.ra-unknown');
+      const results = root.querySelector('.ra-map-results');
+      if (data.deferred.length) {
+        const deferred = root.querySelector('.ra-deferred');
+        const count = data.deferred.length;
+        deferred.textContent = ({
+          zh: count + ' 条记录的 AI 定位未完成。',
+          en: 'AI geography was incomplete for ' + count + ' records.',
+          ru: 'Записей с незавершённой геолокацией ИИ: ' + count + '.'
+        })[document.documentElement.lang];
+        deferred.hidden = false;
+      }
+      filters.setAttribute('aria-label', c.map);
+      let selected = 'all';
+      const x = lon => (lon + 180) / 360;
+      const y = lat => (90 - lat) / 180;
+      if (ctx) {
+        ctx.fillStyle = '#243b55';
+        ctx.strokeStyle = '#587696';
+        ctx.lineWidth = .7;
+        for (const polygon of data.land) {
+          ctx.beginPath();
+          for (const ring of polygon) {
+            ring.forEach(([lon, lat], i) => ctx[i ? 'lineTo' : 'moveTo'](x(lon)*canvas.width, y(lat)*canvas.height));
+            ctx.closePath();
+          }
+          ctx.fill('evenodd');
+          ctx.stroke();
+        }
+      }
+      const matches = id => selected === 'all' || kind(id) === selected;
+      function drawMarkers() {
+        const groups = [];
+        const width = map.clientWidth, height = map.clientHeight;
+        const inset = (value, size) => Math.max(13, Math.min(size - 13, value * size));
+        for (const place of data.places) {
+          if (!matches(place.id)) continue;
+          const px = inset(x(place.lon), width), py = inset(y(place.lat), height);
+          let group = groups.find(entry => Math.hypot(px-entry.x, py-entry.y) < 26);
+          if (!group) {group = {x:px,y:py,places:[]}; groups.push(group);}
+          group.places.push(place);
+        }
+        markers.replaceChildren();
+        for (const group of groups) {
+          const ids = [...new Set(group.places.map(place => place.id))];
+          const label = [...new Set(group.places.map(placeName))].join(' · ');
+          const button = control(ids.length.toString());
+          button.className = 'ra-marker';
+          const kinds = new Set(ids.map(kind));
+          if (kinds.size === 1) button.dataset.kind = kind(ids[0]);
+          button.style.left = group.x + 'px';
+          button.style.top = group.y + 'px';
+          button.setAttribute('aria-label', label + ' · ' + ids.length);
+          button.title = label + ' · ' + ids.length;
+          button.addEventListener('click', () => {
+            markers.querySelectorAll('[aria-pressed=true]').forEach(marker => marker.setAttribute('aria-pressed','false'));
+            button.setAttribute('aria-pressed','true');
+            show(results, label, ids, group.places);
+          });
+          markers.append(button);
+        }
+        const withoutPlace = data.unknown.filter(matches);
+        unknown.textContent = c.unknown + ' (' + withoutPlace.length + ')';
+        unknown.disabled = !withoutPlace.length;
+        unknown.onclick = () => show(results, c.unknown, withoutPlace);
+        if (!groups.length && results.hidden) {
+          results.setAttribute('role', 'status');
+          results.textContent = c.empty;
+          results.hidden = false;
+        } else if (groups.length && results.getAttribute('role') === 'status') {
+          results.hidden = true;
+        }
+      }
+      for (const type of ['all','paper','trial','news']) {
+        const button = control(c[type]);
+        button.setAttribute('aria-pressed', String(type === selected));
+        button.addEventListener('click', () => {
+          selected = type;
+          filters.querySelectorAll('button').forEach(entry => entry.setAttribute('aria-pressed', String(entry === button)));
+          results.hidden = true;
+          results.removeAttribute('role');
+          drawMarkers();
+        });
+        filters.append(button);
+      }
+      drawMarkers();
+      if (typeof ResizeObserver === 'function') new ResizeObserver(drawMarkers).observe(map);
+      else window.addEventListener('resize', drawMarkers);
+    }
+    const cloud = root.querySelector('.ra-cloud');
+    const results = root.querySelector('.ra-keyword-results');
+    if (!data.keywords.length) cloud.append(node('p', c.noWords));
+    for (const word of data.keywords) {
+      const button = control(word.term);
+      button.style.setProperty('--word-size', (0.86 + 0.65*Math.sqrt(word.count/data.keywords[0].count)) + 'rem');
+      button.append(node('span', String(word.count)));
+      button.setAttribute('aria-pressed', 'false');
+      button.addEventListener('click', () => {
+        cloud.querySelectorAll('[aria-pressed=true]').forEach(entry => entry.setAttribute('aria-pressed','false'));
+        button.setAttribute('aria-pressed','true');
+        show(results, word.term, word.entries);
+      });
+      cloud.append(button);
+    }
+  })();
+  </script>
+</section>

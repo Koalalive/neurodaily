@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from .config import Config, DEFAULT_CONFIG
 from .digest import DigestResult
-from .bibliometrics import render_bibliometrics
+from .research_activity import report_activity
 from .ui_translations import localize_document
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
@@ -86,7 +86,7 @@ def render_html(result: DigestResult, config: Config | None = None, *, locale: s
     language = locale or getattr(result, "report_locale", None) or "zh"
     env = _stdlib_loader()
     if env is None:
-        return localize_document(_inject_bibliometrics(_fallback_plain(result), result, _cfg, language), language)
+        return localize_document(_fallback_plain(result), language)
     try:
         from . import journal_metrics
         profile = getattr(_cfg, "profile", result.config_profile)
@@ -104,19 +104,21 @@ def render_html(result: DigestResult, config: Config | None = None, *, locale: s
             "sort_label": {"relevance": "相关性", "latest": "最新发布", "journal": "重点期刊"}.get(sort),
         }
         html = template.render(**ctx)
-        html = _inject_bibliometrics(html, result, _cfg, language)
+        if result.items:
+            try:
+                section = env.get_template("research_activity.html.j2").render(
+                    activity=report_activity(result, _cfg, _external_url), language=language,
+                )
+                offset = re.search(r"<main\b[^>]*>", html).end()
+                html = html[:offset] + section + html[offset:]
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("Could not render research activity")
         html = _inject_on_this_day(html, result)
         html = _inject_ai_summary(html, result)
         return localize_document(_inject_graph_links(html), language)
     except Exception:
-        return localize_document(_inject_bibliometrics(_fallback_plain(result), result, _cfg, language), language)
-
-
-def _inject_bibliometrics(html: str, result: DigestResult, config: Config | None, locale: str) -> str:
-    section = render_bibliometrics(result.items, getattr(config, "journals", ()), locale=locale)
-    main = re.search(r"<main\b[^>]*>", html)
-    offset = main.end() if main else html.rfind("</body>")
-    return html[:offset] + section + html[offset:]
+        return localize_document(_fallback_plain(result), language)
 
 
 def _inject_ai_summary(html: str, result: DigestResult) -> str:

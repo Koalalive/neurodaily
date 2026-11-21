@@ -6,18 +6,19 @@ import json
 
 _COPY = {
     "zh": {"settings": "设置", "dashboard": "最新日报", "history": "运行历史", "run": "开始检索",
-           "report": "日报", "task": "任务", "close": "关闭", "tabs": "工作区标签页"},
+           "report": "日报", "task": "任务", "billing": "API 账单", "close": "关闭", "tabs": "工作区标签页"},
     "en": {"settings": "Settings", "dashboard": "Latest report", "history": "Run history", "run": "Run search",
-           "report": "Report", "task": "Task", "close": "Close", "tabs": "Workspace tabs"},
+           "report": "Report", "task": "Task", "billing": "API billing", "close": "Close", "tabs": "Workspace tabs"},
     "ru": {"settings": "Настройки", "dashboard": "Последний отчёт", "history": "История запусков", "run": "Поиск",
-           "report": "Отчёт", "task": "Задача", "close": "Закрыть", "tabs": "Вкладки"},
+           "report": "Отчёт", "task": "Задача", "billing": "Расходы API", "close": "Закрыть", "tabs": "Вкладки"},
 }
 
 
-def render_workspace(language: str, after: int) -> str:
+def render_workspace(language: str, after: int, latest_date: str = "") -> str:
     return (_PAGE.replace("__LANG__", language)
             .replace("__COPY__", json.dumps(_COPY, ensure_ascii=False))
-            .replace("__AFTER__", str(after)))
+            .replace("__AFTER__", str(after))
+            .replace("__LATEST_DATE__", json.dumps(latest_date)))
 
 
 _PAGE = r"""<!doctype html><html lang="__LANG__"><head><meta charset="utf-8">
@@ -25,18 +26,13 @@ _PAGE = r"""<!doctype html><html lang="__LANG__"><head><meta charset="utf-8">
 <title>NeuroDaily · 神通寰宇</title>
 <style>
 *{box-sizing:border-box}body{margin:0;height:100dvh;display:flex;flex-direction:column;background:#0b0b0c;color:#ededf2;font:14px -apple-system,Segoe UI,sans-serif}
-.toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#17171a;border-bottom:1px solid #333338;overflow-x:auto}
-.brand{font-weight:700;white-space:nowrap;margin-right:8px;color:#a5e6fc}button{font:inherit;white-space:nowrap;color:inherit;border:1px solid #3a3a40;background:#202024;border-radius:6px;padding:6px 9px;cursor:pointer}
+button{font:inherit;white-space:nowrap;color:inherit;border:1px solid #3a3a40;background:#202024;border-radius:6px;padding:6px 9px;cursor:pointer}
 button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;outline-offset:2px}
 #tabs{display:flex;overflow-x:auto;flex-shrink:0;min-height:41px;padding:5px 8px 0;gap:3px;border-bottom:1px solid #333338;background:#111114}
 .tab{display:flex;align-items:center;gap:2px;border-bottom:2px solid transparent}.tab:has([aria-selected=true]){border-color:#67dafa;background:#23232a}
 .tab button{background:transparent;border:0;padding:5px 8px}.tab button:hover{background:#34343c}.tab .close{font-size:16px;color:#adadb9}
 #panes{flex:1;min-height:0}iframe{border:0;width:100%;height:100%;background:#0b0b0c}iframe[hidden]{display:none}
 </style></head><body>
-<header class="toolbar"><span class="brand">NeuroDaily</span>
-<button data-open="/settings" data-label="settings"></button><button data-open="/" data-label="dashboard"></button>
-<button data-open="/history" data-label="history"></button><button data-open="/run" data-label="run"></button>
-</header>
 <div id="tabs" role="tablist"></div><main id="panes"></main>
 <script>
 (() => {
@@ -51,15 +47,16 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
   const unfinished = new Set();
   const tablist = document.getElementById('tabs');
   const panes = document.getElementById('panes');
-  const toolbar = document.querySelector('.toolbar');
+  const pinned = ['/', '/history', '/run', '/settings'];
   const word = key => translations[language][key];
   const localUrl = path => new URL(path, location.origin);
   const route = url => url.origin === location.origin &&
-    /^(\/|\/settings|\/run|\/history(?:\/compare|\/\d+(?:\/report)?)?|\/report\/latest|\/reports\/[^/]+)$/.test(url.pathname);
+    /^(\/|\/settings|\/billing|\/run|\/history(?:\/compare|\/\d+(?:\/report)?)?|\/report\/latest|\/reports\/[^/]+)$/.test(url.pathname);
 
   function title(path) {
     const pathname = localUrl(path).pathname;
     if (pathname === '/settings') return word('settings');
+    if (pathname === '/billing') return word('billing');
     if (pathname === '/run') return word('run');
     if (pathname === '/history' || pathname === '/history/compare') return word('history');
     const run = pathname.match(/^\/history\/(\d+)(\/report)?$/);
@@ -69,13 +66,10 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
 
   function labels() {
     tablist.setAttribute('aria-label', word('tabs'));
-    toolbar.querySelectorAll('[data-label]').forEach(button => {
-      button.textContent = word(button.dataset.label);
-    });
     tabs.forEach(tab => {
-      tab.button.textContent = title(tab.path);
+      tab.button.textContent = [tab.date, title(tab.path)].filter(Boolean).join(' · ');
       tab.iframe.title = tab.button.textContent;
-      tab.close.setAttribute('aria-label', `${word('close')} ${tab.button.textContent}`);
+      tab.close?.setAttribute('aria-label', `${word('close')} ${tab.button.textContent}`);
     });
   }
 
@@ -87,6 +81,7 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
       item.button.setAttribute('aria-selected', String(current));
       item.button.tabIndex = current ? 0 : -1;
     });
+    if (!tab.iframe.hasAttribute('src')) refresh(tab);
   }
 
   function refresh(tab) {
@@ -95,7 +90,12 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     tab.iframe.src = url.href;
   }
 
-  function openTab(path) {
+  function openTab(path, select = true) {
+    const existing = tabs.find(tab => tab.path === path);
+    if (existing) {
+      if (select) activate(existing);
+      return existing;
+    }
     const id = ++serial;
     const group = document.createElement('div');
     group.className = 'tab';
@@ -112,7 +112,12 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     const iframe = document.createElement('iframe');
     iframe.id = `pane-${id}`;
     iframe.setAttribute('aria-labelledby', button.id);
-    const tab = {path, group, iframe, button, close};
+    const fixed = pinned.includes(path);
+    const tab = {path, group, iframe, button, close:fixed ? null : close,
+      date:path === '/' ? __LATEST_DATE__ : ''};
+    button.setAttribute('aria-selected', 'false');
+    button.tabIndex = -1;
+    iframe.hidden = true;
     button.addEventListener('click', () => activate(tab));
     close.addEventListener('click', () => {
       const index = tabs.indexOf(tab);
@@ -123,15 +128,24 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
       if (tabs.length) activate(tabs[Math.min(index, tabs.length - 1)]);
       else openTab('/settings');
     });
-    iframe.addEventListener('load', () => connect(iframe));
-    group.append(button, close);
+    iframe.addEventListener('load', () => {
+      connect(iframe);
+      if (path === '/' && iframe.hasAttribute('src')) {
+        const date = iframe.contentDocument?.querySelector('meta[name="nd-report-date"]')?.content;
+        tab.date = /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? date : '';
+        labels();
+      }
+    });
+    group.append(button);
+    if (!fixed) group.append(close);
     tabs.push(tab);
     tablist.append(group);
-    refresh(tab);
     panes.append(iframe);
     labels();
-    activate(tab);
-    group.scrollIntoView({block: 'nearest', inline: 'nearest'});
+    if (select) {
+      activate(tab);
+      group.scrollIntoView({block: 'nearest', inline: 'nearest'});
+    }
     return tab;
   }
 
@@ -191,6 +205,7 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     if (announced.has(id)) return;
     announced.add(id);
     openTab(`/history/${id}/report`);
+    tabs.filter(tab => tab.path === '/' && tab.iframe.hasAttribute('src')).forEach(refresh);
   }
 
   function updateReport(task) {
@@ -200,6 +215,7 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
       unfinished.add(task.id);
     } else if (unfinished.delete(task.id)) {
       tabs.filter(tab => tab.path === `/history/${task.id}/report`).forEach(refresh);
+      tabs.filter(tab => tab.path === '/' && tab.iframe.hasAttribute('src')).forEach(refresh);
     }
   }
 
@@ -223,10 +239,6 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     finally { busy = false; }
   }
 
-  toolbar.addEventListener('click', event => {
-    const path = event.target.dataset.open;
-    if (path) openTab(path);
-  });
   tablist.addEventListener('keydown', event => {
     const direction = {ArrowLeft: -1, ArrowRight: 1}[event.key];
     if (!direction) return;
@@ -242,7 +254,7 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
       language = data.language;
       document.documentElement.lang = language;
       labels();
-      tabs.forEach(refresh);
+      tabs.filter(tab => tab.iframe.hasAttribute('src')).forEach(refresh);
     }
     if (data?.type === 'nd-report' && Number.isSafeInteger(data.taskId) && data.taskId > 0) {
       showReport(data.taskId);
@@ -250,6 +262,7 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     }
     if (data?.type === 'nd-navigate' && data.path === '/run') openTab('/run');
   });
+  pinned.forEach(path => openTab(path, false));
   openTab('/settings');
   checkTasks();
   setInterval(checkTasks, 2000);

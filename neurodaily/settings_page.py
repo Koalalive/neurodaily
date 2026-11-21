@@ -313,6 +313,7 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
       <span id="ai_test_status" role="status"></span>
     </div>
     <p class="desc">使用兼容 Chat Completions 的接口。测试使用当前输入，仅发送一条简短请求，可在保存前验证。</p>
+    <p><a href="/billing">API 账单与地图设置</a></p>
   </section>
 
   <section>

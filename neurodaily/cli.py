@@ -56,13 +56,18 @@ def cmd_run(args) -> int:
                      mode=_mode)
         try:
             from . import ai_summary as _ai
-            _txt = _ai.generate(result)
+            _txt = _ai.generate(result) if not result.skipped else ""
             if _txt:
                 result.ai_summary = _txt
                 result.ai_summary_meta = {"model": _ai.load_cfg().get("model", "")}
                 print("[neurodaily] 🧠 AI summary generated")
         except Exception as e:
             print(f"[neurodaily] ⚠ AI summary skipped: {e}")
+        try:
+            from .research_activity import enrich_geography
+            enrich_geography(result)
+        except Exception:
+            print("[neurodaily] ⚠ AI geography unavailable. The map uses source metadata.")
     # default filename from config
     from datetime import datetime
     fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d.html"

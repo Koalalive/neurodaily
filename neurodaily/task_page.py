@@ -2,7 +2,8 @@
 from html import escape
 
 
-_PHASES = {"search": "检索", "report": "日报", "metrics": "期刊指标", "ai": "AI 摘要", "delivery": "投递"}
+_PHASES = {"search": "检索", "report": "日报", "metrics": "期刊指标", "ai": "AI 摘要",
+           "geolocation": "AI 地理定位", "delivery": "投递"}
 _STATES = {
     "running": "进行中", "pending": "等待中", "sending": "发送中", "completed": "完成",
     "failed": "失败", "partial": "部分完成", "interrupted": "中断", "skipped": "已跳过",

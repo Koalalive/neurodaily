@@ -411,6 +411,8 @@ IF、JCR 和中科院分区来自导入的官方表。|IF, JCR and CAS rankings 
 请求回溯 · {count} 天|Requested lookback · {count} days|Глубина запроса · {count} дн.
 实际查询|Executed query|Выполненный запрос
 结构化聚焦提示词|Structured Focus Prompt|Структурированный промпт по теме
+API 账单与地图设置|API billing and map settings|Расходы API и настройки карты
+AI 地理定位|AI geography|Геолокация ИИ
 提示|Warnings|Предупреждения
 由神通寰宇自动生成|Generated automatically by NeuroDaily|Сформировано автоматически в NeuroDaily
 展开|Expand|Развернуть

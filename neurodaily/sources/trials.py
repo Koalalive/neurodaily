@@ -9,6 +9,28 @@ from ..models import Item
 BASE = "https://clinicaltrials.gov/api/v2/studies"
 
 
+def _trial_sites(value) -> list[dict]:
+    """Keep public facility metadata and the registry's optional location point."""
+    sites = []
+    if not isinstance(value, list):
+        return sites
+    for location in value:
+        if not isinstance(location, dict):
+            continue
+        site = {key: location[key].strip() for key in ("facility", "city", "state", "country")
+                if isinstance(location.get(key), str) and location[key].strip()}
+        if not site:
+            continue
+        point = location.get("geoPoint")
+        if isinstance(point, dict):
+            lat, lon = point.get("lat"), point.get("lon")
+            if (type(lat) in (float, int) and type(lon) in (float, int)
+                    and -90 <= lat <= 90 and -180 <= lon <= 180 and (lat or lon)):
+                site["geoPoint"] = {"lat": lat, "lon": lon}
+        sites.append(site)
+    return sites
+
+
 def fetch(config, logger=None) -> list[Item]:
     opts = config.source_opts("trials")
     max_results = int(opts.get("max_results", 10))
@@ -81,7 +103,8 @@ def fetch(config, logger=None) -> list[Item]:
             if sponsor and sponsor not in affiliations:
                 affiliations.append(sponsor)
             # add site organizations (locations)
-            for loc in clm.get("locations", []):
+            trial_sites = _trial_sites(clm.get("locations"))
+            for loc in trial_sites:
                 fac = loc.get("facility", "")
                 city = loc.get("city", "")
                 country = loc.get("country", "")
@@ -105,6 +128,7 @@ def fetch(config, logger=None) -> list[Item]:
                        "conditions": conds2,
                        "phase": p.get("designModule", {}).get("phases", []),
                        "sponsor": sponsor,
+                       "trial_sites": trial_sites,
                        "enrollment": p.get("designModule", {}).get("enrollmentInfo", {}).get("count")},
             ))
             if len(items) >= max_results:

@@ -16,13 +16,16 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlsplit
 
 import httpx
+
+from . import api_billing
 
 ROOT = os.environ.get("NEURODAILY_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG_PATH = os.path.join(ROOT, "config", "ai_summary.json")
@@ -456,18 +459,62 @@ def _write_cache(path: str, text: str, model: str, refs: dict | None = None) -> 
 
 
 def _chat_request(base_url: str, model: str, key: str, messages: list[dict],
-                  max_tokens: int, timeout: int) -> dict:
+                  max_tokens: int, timeout: int, *, purpose: str = "other",
+                  run_id: int | None = None, profile: str | None = None,
+                  temperature: float = 0.4, response_format: dict | None = None) -> dict:
     url = base_url.rstrip("/").removesuffix("/chat/completions") + "/chat/completions"
-    response = httpx.post(
-        url, headers={"Authorization": f"Bearer {key}"},
-        json={"model": model, "temperature": 0.4, "max_tokens": max_tokens, "messages": messages},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    message = response.json()["choices"][0]["message"]
-    if not isinstance(message, dict):
-        raise ValueError("Invalid chat response")
-    return message
+    request = {"model": model, "temperature": temperature, "max_tokens": max_tokens, "messages": messages}
+    if response_format is not None:
+        request["response_format"] = response_format
+    try:
+        rate = api_billing.price_for(base_url, model)
+    except Exception:
+        logging.getLogger(__name__).warning("Could not read model pricing settings")
+        rate = None
+    called_at = datetime.now(timezone.utc)
+    response = body = None
+    status = "request_error"
+
+    def safe_label(value):
+        if isinstance(value, str) and key and (value == key or (len(key) >= 8 and key in value)):
+            return None
+        return value
+
+    try:
+        response = httpx.post(url, headers={"Authorization": f"Bearer {key}"}, json=request, timeout=timeout)
+        response.raise_for_status()
+        status = "invalid_response"
+        body = response.json()
+        message = body["choices"][0]["message"]
+        if not isinstance(message, dict):
+            raise ValueError("Invalid chat response")
+        status = "success"
+        return message
+    except httpx.HTTPStatusError as exc:
+        status = "http_error"
+        response = exc.response
+        try:
+            body = response.json()
+        except (TypeError, ValueError):
+            pass
+        raise
+    except httpx.TimeoutException:
+        status = "timeout"
+        raise
+    except (httpx.RequestError, httpx.InvalidURL):
+        status = "network_error"
+        raise
+    finally:
+        metadata = body if isinstance(body, dict) else {}
+        try:
+            api_billing.record_call(purpose=purpose, run_id=run_id, profile=safe_label(profile),
+                                    base_url=base_url, model=safe_label(model), status=status,
+                                    http_status=getattr(response, "status_code", None),
+                                    response_id=safe_label(metadata.get("id")), usage=metadata.get("usage"),
+                                    rate=rate, called_at=called_at)
+        except Exception:
+            # A local accounting problem must never block or repeat a paid request.
+            logging.getLogger(__name__).warning("Could not record model request usage")
 
 
 def test_connection(draft: dict) -> dict:
@@ -480,7 +527,8 @@ def test_connection(draft: dict) -> dict:
         return {"ok": False, "message": "请先填写 API 密钥。"}
     try:
         message = _chat_request(cfg["base_url"], cfg["model"], key,
-                                [{"role": "user", "content": "Reply with OK."}], 24, 15)
+                                [{"role": "user", "content": "Reply with OK."}], 24, 15,
+                                purpose="connection_test")
         if not any(isinstance(message.get(field), str) and message[field].strip()
                    for field in ("content", "reasoning_content")):
             raise ValueError("Empty chat response")
@@ -499,12 +547,14 @@ def test_connection(draft: dict) -> dict:
     return {"ok": True, "message": "API 连通，模型已返回测试回复。"}
 
 
-def _call_llm(text: str, cfg: dict, key: str, base_url: str, model: str) -> str:
+def _call_llm(text: str, cfg: dict, key: str, base_url: str, model: str, *,
+              run_id: int | None = None, profile: str | None = None) -> str:
     last = None
     for attempt in range(3):
         try:
             messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": text}]
-            message = _chat_request(base_url, model, key, messages, int(cfg.get("max_tokens", 8000)), 120)
+            message = _chat_request(base_url, model, key, messages, int(cfg.get("max_tokens", 8000)), 120,
+                                    purpose="summary", run_id=run_id, profile=profile)
             out = (message["content"] or "").strip()
             if len(out) < 120:
                 raise ValueError("summary too short")
@@ -518,7 +568,7 @@ def _call_llm(text: str, cfg: dict, key: str, base_url: str, model: str) -> str:
 
 def generate(result, cfg: dict | None = None, force: bool = False,
              api_key_override: str | None = None, base_url: str | None = None,
-             model: str | None = None) -> str:
+             model: str | None = None, *, run_id: int | None = None, profile: str | None = None) -> str:
     cfg = cfg or load_cfg()
     if not cfg.get("enabled", True):
         return ""
@@ -534,7 +584,9 @@ def generate(result, cfg: dict | None = None, force: bool = False,
         result.ai_summary_refs = refs
         return _ground_summary(cached_text, refs)
 
-    out = _call_llm(text, cfg, key, base, mdl)
+    out = _call_llm(text, cfg, key, base, mdl,
+                    run_id=getattr(result, "history_id", None) if run_id is None else run_id,
+                    profile=getattr(result, "config_profile", None) if profile is None else profile)
     out = _ground_summary(out, refs)
     result.ai_summary_refs = refs
     _write_cache(path, out, mdl, refs)

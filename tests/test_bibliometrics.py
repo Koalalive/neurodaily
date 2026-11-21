@@ -34,9 +34,11 @@ class BibliometricsTests(unittest.TestCase):
             ],
             sections={}, health=[], generated_at="2025-01-05T10:00:00", config=config,
         )
-        html = render_html(result, locale="en-US")
-        start = html.index('id="bibliometrics"')
-        panel = html[start:html.index("</script>", start)]
+        html = render_html(result, locale="en")
+        self.assertNotIn('id="bibliometrics"', html)
+        html_metrics = render_bibliometrics(result.items, config.journals, locale="en")
+        start = html_metrics.index('id="bibliometrics"')
+        panel = html_metrics[start:html_metrics.index("</script>", start)]
         all_papers = panel[panel.index('data-bib-period="all"'):panel.index('data-bib-period="2025"')]
         self.assertIn("Bibliometrics <b>3</b>", panel)
         self.assertIn('value="unknown">Unknown year', panel)
@@ -50,10 +52,9 @@ class BibliometricsTests(unittest.TestCase):
         self.assertNotIn("<svg/onload=test>", panel)
         self.assertIn("critical care digest", html)
 
-    def test_empty_statistics_remain_available_offline_and_in_plain_report(self):
+    def test_plain_report_omits_inline_statistics(self):
         self.assertIn("В этом отчёте нет статей.", render_bibliometrics([], locale="ru"))
         result = DigestResult(items=[], sections={}, health=[], generated_at="", config=DEFAULT_CONFIG())
         with patch("neurodaily.render._stdlib_loader", return_value=None):
             html = render_html(result, locale="ru")
-        self.assertIn("Библиометрия", html)
-        self.assertIn('id="bibliometrics"', html)
+        self.assertNotIn('id="bibliometrics"', html)

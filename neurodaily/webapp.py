@@ -26,7 +26,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Event, Lock, Thread
 
-from fastapi import FastAPI, BackgroundTasks, Request
+from fastapi import FastAPI, BackgroundTasks, Query, Request
 from starlette.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +40,20 @@ from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
 from .run_page import RUN_HTML
 from .ui_translations import UI_LANGUAGES, localize_document
 from . import __version__, history as hist, task_runs
+
+
+def _saved_report_date(path: Path, html: str = "") -> str:
+    try:
+        if not html:
+            with path.open(encoding="utf-8", errors="replace") as handle:
+                html = handle.read(65536)
+        meta = re.search(r'<meta name="nd-report-date" content="(\d{4}-\d{2}-\d{2})"', html)
+        if meta:
+            return meta[1]
+        filename = re.search(r"\d{4}-\d{2}-\d{2}", path.name)
+        return filename[0] if filename else datetime.fromtimestamp(path.stat().st_mtime).date().isoformat()
+    except OSError:
+        return ""
 
 
 def _cfg_with_hours(cfg: Config, hours: int) -> Config:
@@ -93,7 +107,13 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
     def _report(path, ui):
         if ui:
-            return _page(Path(path).read_text(encoding="utf-8", errors="replace"))
+            path = Path(path)
+            html = path.read_text(encoding="utf-8", errors="replace")
+            if 'name="nd-report-date"' not in html:
+                date = _saved_report_date(path, html)
+                html = html.replace("</head>", f'<meta name="nd-report-date" content="{date}"></head>', 1)
+            html = re.sub(r'<details id="bibliometrics"\b[^>]*>[\s\S]*?</details>', "", html, count=1)
+            return _page(html)
         return FileResponse(path, media_type="text/html")
 
     def _cfg() -> Config:
@@ -128,7 +148,9 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         after = latest["id"] if latest else 0
         if latest and latest["status"] == "running" and not latest["report_ready"]:
             after -= 1
-        return HTMLResponse(render_workspace(_language(), after), headers={"Cache-Control": "no-store"})
+        report = _latest_report(_cfg(), include_demo=False)
+        date = _saved_report_date(report) if report else ""
+        return HTMLResponse(render_workspace(_language(), after, date), headers={"Cache-Control": "no-store"})
 
     @app.get("/api/ui/reports")
     def api_workspace_reports(after: int = 0):
@@ -258,7 +280,17 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         except Exception:
             stage("ai", "failed", "AI 摘要生成失败，请检查设置中的 AI 连通性。")
 
-        if refreshed or result.ai_summary:
+        geo_updated = False
+        try:
+            from .research_activity import enrich_geography
+            geo_updated = enrich_geography(result)
+            if geo_updated:
+                partial = bool(result.geography.get("deferred"))
+                stage("geolocation", "partial" if partial else "completed")
+        except Exception:
+            stage("geolocation", "failed", "AI 地理定位未完成。")
+
+        if refreshed or result.ai_summary or geo_updated:
             try:
                 result.report_revision = 2
                 save_report(result, str(path))
@@ -373,6 +405,48 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     @app.get("/settings", response_class=HTMLResponse)
     def settings_page():
         return _page(SETTINGS_HTML)
+
+    @app.get("/billing", response_class=HTMLResponse)
+    def billing_page():
+        from .render import _stdlib_loader
+
+        language = _language()
+        template = _stdlib_loader().get_template("billing.html.j2")
+        return _page(template.render(language=language))
+
+    @app.get("/api/billing")
+    def api_billing_report(
+        days: int = Query(30, ge=1, le=3650),
+        limit: int = Query(50, ge=1, le=250),
+        offset: int = Query(0, ge=0),
+        purpose: str | None = None,
+    ):
+        from .api_billing import billing_report
+
+        try:
+            return JSONResponse(billing_report(days, limit, offset, purpose),
+                                headers={"Cache-Control": "no-store"})
+        except ValueError as exc:
+            return JSONResponse({"message": str(exc)}, status_code=400)
+
+    @app.get("/api/billing/settings")
+    def api_billing_settings():
+        from .api_billing import load_settings
+
+        return JSONResponse(load_settings(), headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/billing/settings")
+    async def api_billing_settings_save(request: Request):
+        from .api_billing import save_settings
+
+        draft = await _service_draft(request)
+        if draft is None:
+            return JSONResponse({"message": "Invalid billing settings."}, status_code=400)
+        try:
+            return JSONResponse(await run_in_threadpool(save_settings, draft),
+                                headers={"Cache-Control": "no-store"})
+        except ValueError as exc:
+            return JSONResponse({"message": str(exc)}, status_code=400)
 
     @app.get("/api/config")
     def api_config_get():

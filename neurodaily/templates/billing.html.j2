@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>API 账单 · NeuroDaily</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;color:#ecf1f8;background:#0b0b0c}
+*{box-sizing:border-box}body{margin:0}main{max-width:1150px;margin:auto;padding:clamp(12px,3vw,28px)}
+a{color:#9fddff}h1,h2{margin:.3em 0 .6em}p{color:#c4ccda;margin:.6em 0}
+section{border:1px solid #38404f;background:#141922;border-radius:12px;margin:14px 0;padding:15px}
+.flex{display:flex;flex-wrap:wrap;align-items:center;gap:9px}.table{overflow-x:auto;margin-block:12px}
+table{width:100%;border-collapse:collapse;text-align:left;font-size:.9rem}th,td{padding:8px;border-bottom:1px solid #353e4c}
+th{color:#d8e5f7;background:#1e2735}td{vertical-align:top}td:first-child,td:nth-child(n+4){white-space:nowrap}
+small{color:#bfccdf;display:block;margin-top:3px}input,select,button{font:inherit;color:inherit;background:#232d3c;border:1px solid #596c85;border-radius:6px;padding:6px 8px}
+button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.55;cursor:default}
+:focus-visible{outline:2px solid #81c9ff;outline-offset:2px}.rate{padding:10px;margin:8px 0;border:1px solid #394b65;border-radius:7px}
+.rate label{display:flex;flex-direction:column;gap:3px;flex:1;min-width:12ch}.rate label:nth-child(-n+2){flex:2;min-width:20ch}.rate input{min-width:0;width:100%}.rate button{align-self:flex-end}
+.error{color:#ffb7b7}.total{font-weight:600;color:#d9effb}.pager{justify-content:flex-end}
+</style>
+</head>
+<body>
+<main data-no-i18n>
+<a href="/settings" data-copy="settings">设置</a>
+<h1 data-copy="title">API 账单</h1>
+<p data-copy="basis"></p>
+<section aria-labelledby="usage-title">
+  <h2 id="usage-title" data-copy="usage">调用明细</h2>
+  <div class="flex">
+    <label><span data-copy="period">统计周期</span> <select id="days"></select></label>
+    <label><span data-copy="purpose">用途</span> <select id="purpose"></select></label>
+    <button id="refresh" type="button" data-copy="refresh">刷新</button>
+  </div>
+  <p id="totals" class="total" role="status"></p>
+  <div class="table"><table>
+    <thead><tr>
+      <th scope="col" data-copy="time">时间</th><th scope="col" data-copy="purpose">用途</th>
+      <th scope="col" data-copy="provider">模型与服务</th><th scope="col" data-copy="status">状态</th>
+      <th scope="col" data-copy="inputTokens">输入 token</th><th scope="col" data-copy="cachedTokens">缓存命中</th>
+      <th scope="col" data-copy="outputTokens">输出 token</th><th scope="col" data-copy="totalTokens">总 token</th>
+      <th scope="col" data-copy="cost">费用估算</th>
+    </tr></thead>
+    <tbody id="calls"></tbody>
+  </table></div>
+  <div class="flex pager">
+    <button id="prev" type="button" data-copy="prev" disabled>上一页</button>
+    <span id="range"></span>
+    <button id="next" type="button" data-copy="next" disabled>下一页</button>
+  </div>
+</section>
+<section aria-labelledby="prefs-title">
+  <h2 id="prefs-title" data-copy="preferences">费率与 AI 定位</h2>
+  <form id="preferences">
+    <label><input type="checkbox" id="geo-enabled"> <span data-copy="geo">启用 AI 地理定位</span></label>
+    <p data-copy="geoNote"></p>
+    <p data-copy="rateNote"></p>
+    <div id="rates"></div>
+    <div class="flex">
+      <button id="add-rate" type="button" data-copy="add">添加费率</button>
+      <button id="save" type="submit" data-copy="save">保存</button>
+      <span id="save-status" role="status"></span>
+    </div>
+  </form>
+</section>
+</main>
+<script>
+(() => {
+  const copy = {
+    zh: {
+      title:'API 账单',settings:'返回设置',basis:'按服务商返回的用量和已保存费率估算。最终费用以服务商账单为准。',usage:'调用明细',
+      period:'统计周期',purpose:'用途',refresh:'刷新',time:'时间',provider:'模型与服务',status:'状态',inputTokens:'输入 token',
+      cachedTokens:'缓存命中',outputTokens:'输出 token',totalTokens:'总 token',cost:'费用估算',prev:'上一页',next:'下一页',
+      preferences:'费率与 AI 定位',geo:'启用 AI 地理定位',geoNote:'启用后，已配置并启用的摘要模型会处理出处不明确的地图条目，可能产生额外费用。',
+      rateNote:'按每百万 token 填写费率。缓存费率如留空，统一使用输入费率。费率修改从下一次请求起生效。',
+      add:'添加费率',save:'保存',remove:'移除',saved:'已保存',base_url:'API 基础地址',model:'模型 ID',currency:'币种',
+      input:'输入费率',output:'输出费率',cached_input:'缓存输入费率',all:'全部',summary:'AI 摘要',
+      connection_test:'连通性测试',geolocation:'AI 地理定位',other:'其他',success:'成功',http_error:'HTTP 错误',timeout:'超时',
+      network_error:'连接失败',invalid_response:'响应无效',request_error:'请求失败',empty:'该时段没有调用记录。',unknown:'未知',
+      loadError:'暂时无法读取账单。',saveError:'无法保存设置。请检查费率和服务地址。',days:n=>'过去 '+n+' 天',
+      totals:t=>['调用 '+t.calls+' 次','有用量 '+t.usage_reported_calls+' 次','已报告 token '+t.total_tokens,
+        '费用未知 '+t.unknown_cost_calls+' 次'], task:'任务', rates:'当次费率'
+    },
+    en: {
+      title:'API billing',settings:'Back to settings',basis:'Estimates use provider-reported usage and saved rates. The provider invoice determines the final charge.',usage:'API calls',
+      period:'Date range',purpose:'Purpose',refresh:'Refresh',time:'Time',provider:'Model and provider',status:'Status',inputTokens:'Input tokens',
+      cachedTokens:'Cache hits',outputTokens:'Output tokens',totalTokens:'Total tokens',cost:'Estimated cost',prev:'Previous',next:'Next',
+      preferences:'Rates and AI geography',geo:'Enable AI geography',geoNote:'The enabled summary model can resolve uncertain locations when configured. This can incur additional charges.',
+      rateNote:'Enter prices per million tokens. Leave the cached rate blank to use the input rate. Changes apply to future requests.',
+      add:'Add rate',save:'Save',remove:'Remove',saved:'Saved',base_url:'API base URL',model:'Model ID',currency:'Currency',
+      input:'Input rate',output:'Output rate',cached_input:'Cached input rate',all:'All',summary:'AI summary',
+      connection_test:'Connection test',geolocation:'AI geography',other:'Other',success:'Succeeded',http_error:'HTTP error',timeout:'Timed out',
+      network_error:'Connection failed',invalid_response:'Invalid response',request_error:'Request failed',empty:'No calls in this period.',unknown:'Unknown',
+      loadError:'The billing data could not be loaded.',saveError:'Could not save settings. Check the rates and API base URL.',days:n=>'Last '+n+' days',
+      totals:t=>[t.calls+' calls',t.usage_reported_calls+' with usage',t.total_tokens+' tokens reported',t.unknown_cost_calls+' without a cost estimate'],
+      task:'Run',rates:'Rate at request time'
+    },
+    ru: {
+      title:'Расходы API',settings:'К настройкам',basis:'Расчёт использует данные поставщика о токенах и сохранённые тарифы. Итоговая сумма указана в счёте поставщика.',usage:'Запросы API',
+      period:'Период',purpose:'Назначение',refresh:'Обновить',time:'Время',provider:'Модель и поставщик',status:'Статус',inputTokens:'Входные токены',
+      cachedTokens:'Из кеша',outputTokens:'Выходные токены',totalTokens:'Всего токенов',cost:'Оценка стоимости',prev:'Назад',next:'Далее',
+      preferences:'Тарифы и геолокация',geo:'Геолокация с помощью ИИ',geoNote:'Настроенная модель резюме уточняет местоположения. При вызове модели возможна дополнительная плата.',
+      rateNote:'Укажите цену за миллион токенов. Если ставка для кеша не указана, применяется входная ставка. Изменения применяются к новым запросам.',
+      add:'Добавить тариф',save:'Сохранить',remove:'Убрать',saved:'Сохранено',base_url:'Базовый URL API',model:'ID модели',currency:'Валюта',
+      input:'Входной тариф',output:'Выходной тариф',cached_input:'Тариф кеша',all:'Все',summary:'Резюме ИИ',
+      connection_test:'Проверка связи',geolocation:'Геолокация ИИ',other:'Другое',success:'Успешно',http_error:'Ошибка HTTP',timeout:'Тайм-аут',
+      network_error:'Сбой соединения',invalid_response:'Недопустимый ответ',request_error:'Ошибка запроса',empty:'За этот период запросов нет.',unknown:'Неизвестно',
+      loadError:'Не удалось получить данные о расходах.',saveError:'Ошибка сохранения. Проверьте тарифы и URL API.',days:n=>'Последние '+n+' дней',
+      totals:t=>['Запросов '+t.calls,'С данными '+t.usage_reported_calls,'Токенов '+t.total_tokens,'Без оценки '+t.unknown_cost_calls],
+      task:'Запуск',rates:'Тариф на момент запроса'
+    }
+  }[document.documentElement.lang] || {};
+  const el = id => document.getElementById(id);
+  document.title = copy.title + ' · NeuroDaily';
+  document.querySelectorAll('[data-copy]').forEach(item => item.textContent = copy[item.dataset.copy]);
+  const create = (tag, text) => {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  async function request(path, options) {
+    const response = await fetch(path, options);
+    if (!response.ok) throw new Error('Could not load API billing');
+    return response.json();
+  }
+  for (const days of [7,30,90,365]) el('days').add(new Option(copy.days(days), days, days === 30, days === 30));
+  for (const key of ['all','summary','connection_test','geolocation','other']) el('purpose').add(new Option(copy[key], key === 'all' ? '' : key));
+  const limit = 50;
+  let offset = 0;
+  let loadRevision = 0;
+  function callRow(call) {
+    const tr = create('tr');
+    const time = create('td', new Date(call.called_at).toLocaleString(document.documentElement.lang));
+    const purpose = create('td', copy[call.purpose]);
+    if (call.run_id && Number.isSafeInteger(call.run_id)) {
+      const run = create('a', copy.task + ' #' + call.run_id);
+      run.href = '/history/' + call.run_id;
+      purpose.append(create('small')).appendChild(run);
+    }
+    const model = create('td', call.model || '—');
+    model.append(create('small', [call.base_url, call.profile].filter(Boolean).join(' · ')));
+    const status = create('td', [copy[call.status] || call.status, call.http_status].filter(Boolean).join(' · '));
+    const cost = create('td', call.estimated_cost === null ? copy.unknown : call.estimated_cost + ' ' + call.currency);
+    if (call.rate) {
+      cost.title = copy.rates + ' · ' + [copy.input + ' ' + call.rate.input, copy.output + ' ' + call.rate.output,
+        call.rate.cached_input != null && copy.cached_input + ' ' + call.rate.cached_input].filter(Boolean).join(' · ') + ' ' + call.rate.currency;
+    }
+    tr.append(time, purpose, model, status,
+      ...['input_tokens','cached_input_tokens','output_tokens','total_tokens'].map(field => create('td', call[field] ?? '—')), cost);
+    return tr;
+  }
+  async function loadCalls() {
+    const revision = ++loadRevision;
+    const start = offset;
+    const params = new URLSearchParams({days:el('days').value, limit, offset:start});
+    if (el('purpose').value) params.set('purpose', el('purpose').value);
+    try {
+      const {calls, totals, total_calls:count} = await request('/api/billing?' + params);
+      if (revision !== loadRevision) return;
+      el('totals').classList.remove('error');
+      const amounts = Object.entries(totals.cost_by_currency).map(([currency, value]) => value + ' ' + currency);
+      el('totals').textContent = [...copy.totals(totals), ...amounts].join(' · ');
+      el('calls').replaceChildren(...calls.map(callRow));
+      if (!calls.length) {
+        const row = create('tr');
+        const cell = create('td', copy.empty);
+        cell.colSpan = 9;
+        row.append(cell);
+        el('calls').append(row);
+      }
+      el('range').textContent = count ? (start+1) + '–' + (start+calls.length) + ' / ' + count : '';
+      el('prev').disabled = start === 0;
+      el('next').disabled = start+calls.length >= count;
+    } catch (_) {
+      if (revision !== loadRevision) return;
+      el('totals').classList.add('error');
+      el('totals').textContent = copy.loadError;
+    }
+  }
+  for (const id of ['days','purpose','refresh']) {
+    el(id).addEventListener(id === 'refresh' ? 'click' : 'change', () => {offset = 0; loadCalls();});
+  }
+  el('prev').onclick = () => {offset = Math.max(0, offset-limit); loadCalls();};
+  el('next').onclick = () => {offset += limit; loadCalls();};
+  const fields = ['base_url','model','currency','input','output','cached_input'];
+  let currentModel = {};
+  const form = el('preferences');
+  function addRate(rate) {
+    const row = create('div');
+    row.className = 'rate flex';
+    for (const field of fields) {
+      const label = create('label', copy[field]);
+      const input = create('input');
+      input.name = field;
+      input.autocomplete = 'off';
+      input.value = rate[field] ?? '';
+      input.required = field !== 'cached_input';
+      if (field === 'base_url') input.type = 'url';
+      if (field === 'currency') {input.maxLength = 3; input.pattern = '[A-Za-z]{3}';}
+      if (['input','output','cached_input'].includes(field)) {input.type = 'number'; input.min = '0'; input.step = 'any';}
+      label.append(input);
+      row.append(label);
+    }
+    const remove = create('button', copy.remove);
+    remove.type = 'button';
+    remove.onclick = () => row.remove();
+    row.append(remove);
+    el('rates').append(row);
+  }
+  function fillSettings(settings) {
+    el('geo-enabled').checked = settings.geo_enabled;
+    el('rates').replaceChildren();
+    settings.rates.forEach(addRate);
+  }
+  el('add-rate').onclick = () => addRate(currentModel);
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    el('save').disabled = true;
+    const saveStatus = el('save-status');
+    const rates = [...el('rates').children].map(row => Object.fromEntries([...row.querySelectorAll('input')].map(input => [input.name, input.value])));
+    try {
+      fillSettings(await request('/api/billing/settings', {method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({rates, geo_enabled:el('geo-enabled').checked})}));
+      saveStatus.classList.remove('error');
+      saveStatus.textContent = copy.saved;
+    } catch (_) {
+      saveStatus.classList.add('error');
+      saveStatus.textContent = copy.saveError;
+    } finally {
+      el('save').disabled = false;
+    }
+  });
+  el('save').disabled = true;
+  el('add-rate').disabled = true;
+  el('geo-enabled').disabled = true;
+  request('/api/billing/settings').then(settings => {
+    fillSettings(settings);
+    for (const id of ['save','add-rate','geo-enabled']) el(id).disabled = false;
+  }).catch(() => {el('save-status').textContent = copy.loadError;});
+  request('/api/ai/settings').then(({base_url, model}) => {currentModel = {base_url, model};}).catch(() => {});
+  loadCalls();
+})();
+</script>
+</body>
+</html>

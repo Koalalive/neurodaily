@@ -89,7 +89,7 @@ class WebKitSession:
     def open_dashboard(self, settings):
         self.top()
         if self.tab_count():
-            self.click('.toolbar [data-open="/"]')
+            self.click('#tabs > .tab:first-child [role=tab]')
         else:
             assert self.ready(settings, EXPORT_LINK)
             self.click("header a[href='/']")
@@ -210,11 +210,16 @@ def smoke(executable, version):
             paper_link = f'main details summary a[href="{PAPER_URL}"]'
             if driver.tab_count():
                 # A scheduled run opens its own report without closing settings.
-                until(lambda: driver.tab_count() == 2, "The scheduled report did not open as a tab")
-                driver.click('#tabs [role=tab]:first-child')
+                until(lambda: driver.tab_count() == 5, "The scheduled report did not open as a tab")
+                assert not driver.command("/elements", {"using": "css selector", "value": ".toolbar"})
+                driver.click('#tabs > .tab:nth-child(4) [role=tab]')
                 until(lambda: driver.panel(settings, EXPORT_LINK), "The original settings tab was lost")
                 driver.click("header a[href='/']")
-                assert driver.tab_count() == 3, "Dashboard navigation replaced an original tab"
+                assert driver.tab_count() == 5, "Dashboard navigation duplicated or replaced a tab"
+                until(lambda: driver.command("/execute/sync", {
+                    "script": "return /^\\d{4}-\\d{2}-\\d{2}/.test(document.querySelector('#tabs [role=tab]').textContent)",
+                    "args": [],
+                }), "The latest report tab did not show its date")
             else:
                 driver.open_dashboard(settings)
             dashboard = base + "/"

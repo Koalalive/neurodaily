@@ -16,6 +16,7 @@ def _items() -> list[Item]:
              summary="A human brain bank with >70 years of cognitive follow-up identifies "
                      "oligodendrocytes as active contributors to age-related cognitive decline.",
              authors=["Demo Author", "Second Author"], source="journal", kind="paper",
+             affiliations=["Example brain bank, United Kingdom"],
              date="2026-08-25", doi="10.1038/s41591-026-04608-y",
              extra={"journal": "Nature Medicine"}),
         Item(title="Psychedelics align brain activity with context",
@@ -50,7 +51,9 @@ def _items() -> list[Item]:
              url="https://clinicaltrials.gov/study/demo-mrclean",
              summary="Randomized trial demonstrating improved functional outcomes with "
                      "intra-arterial treatment in acute ischemic stroke.",
-             source="trials", kind="trial", date="2026-06-01"),
+             source="trials", kind="trial", date="2026-06-01",
+             extra={"trial_sites": [{"facility": "Demo trial site", "city": "Rotterdam",
+                                    "country": "Netherlands", "geoPoint": {"lat": 51.923, "lon": 4.479}}]}),
         Item(title="SANTE: anterior nucleus DBS for drug-resistant epilepsy",
              url="https://clinicaltrials.gov/study/demo-sante",
              summary="Long-term follow-up of thalamic stimulation showing sustained reduction in "
