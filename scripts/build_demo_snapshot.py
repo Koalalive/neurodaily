@@ -15,7 +15,7 @@ from neurodaily.config import Config
 from neurodaily.digest import run
 from neurodaily.render import render_html
 from neurodaily.research_activity import enrich_geography
-from neurodaily.topic_map import enrich_topics
+from neurodaily.topic_map import available, build_topics, enrich_topics
 
 OUT = Path(os.environ.get("NEURODAILY_DEMO_DIR", "docs/demo"))
 CONFIG = Path("config/demo.json")
@@ -40,7 +40,13 @@ def main() -> int:
     result = run(cfg, check_duplicate=False, record=False, force=True, mode="daily")
     ai_summary.generate_all(result)
     enrich_geography(result)
-    enrich_topics(result, force=True)
+    print(f"topic sklearn={available()} items={len(result.items)}", flush=True)
+    try:
+        ok = enrich_topics(result, force=True)
+        print(f"topic enrich={ok} points={len((result.topics or {}).get('points', []))}", flush=True)
+    except Exception:
+        import traceback
+        traceback.print_exc()
     OUT.mkdir(parents=True, exist_ok=True)
     for lang in ("zh", "en", "ru"):
         (OUT / f"latest-report.{lang}.html").write_text(
