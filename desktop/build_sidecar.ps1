@@ -6,6 +6,7 @@ $Py = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $Py)) { throw "missing .venv; create it first" }
 
 & $Py -m pip install --quiet --upgrade pyinstaller
+& $Py -m pip install --quiet "scikit-learn>=1.4"
 & $Py -m PyInstaller --clean --noconfirm desktop/sidecar/neurodaily-server.spec
 
 $Triple = (rustc -vV | Select-String '^host:').ToString().Split(' ')[1]
