@@ -73,4 +73,15 @@ jobs:
             exit 0
           fi
           git commit -m "chore: update daily demo snapshot [skip ci]"
-          git push
+          # Main can advance while the demo is being built. Keep the freshly
+          # generated demo and rebase/merge onto the latest main before pushing.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git merge --no-edit -X ours origin/main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Could not push daily demo after 3 attempts" >&2
+          exit 1
