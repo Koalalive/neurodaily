@@ -243,6 +243,7 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
     <div class="inline">
       <label><input type="checkbox" id="otd_enabled"> Include "On This Day" (neuroscience history)</label>
       <label><input type="checkbox" id="otd_notify"> Desktop notification daily</label>
+      <label><input type="checkbox" id="topic_map_enabled"> Include LDA + t-SNE topic map</label>
     </div>
     <div class="inline" style="margin-top:10px">
       <label>"On This Day" language</label>
@@ -766,6 +767,7 @@ function render(){
   el('sch_enabled').checked=!!sc.enabled;
   el('sch_hour').value=(sc.hour!=null?sc.hour:8); el('sch_minute').value=(sc.minute!=null?sc.minute:0);
   el('otd_enabled').checked=(otd.enabled!==false); el('otd_notify').checked=(otd.notify!==false);
+  el('topic_map_enabled').checked=(o.topic_map!==false);
   el('otd_lang').value = otd.lang || 'zh';
   var w = BASE.windows || {};
   el('win_daily').value = (w.daily_paper_hours != null ? w.daily_paper_hours : 36);
@@ -930,6 +932,7 @@ function collect(){
   data.output.dir=el('out_dir').value.trim();
   data.output.filename_format=el('out_fmt').value.trim();
   data.output.open_on_finish=el('out_open').checked;
+  data.output.topic_map=el('topic_map_enabled').checked;
   data.scheduled=Object.assign({},data.scheduled||{});
   data.scheduled.enabled=el('sch_enabled').checked;
   data.scheduled.hour=parseInt(el('sch_hour').value||'8',10);
