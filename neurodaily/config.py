@@ -476,6 +476,15 @@ def DEFAULT_CONFIG() -> Config:
         "https://www.thelancet.com/rssfeed/lanpsy_current.xml",
         "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml",
     ]
+    sources["policy"]["feed_kinds"] = {
+        url: ("paper" if any(host in url for host in (
+            "nature.com/subjects/", "nature.com/mp.rss", "nature.com/nm.rss",
+            "nature.com/ncomms.rss", "nature.com/npjmentalhealth.rss",
+            "nature.com/natmentalhealth.rss", "cell.com/action/showFeed",
+            "psychiatryonline.org/action/showFeed", "thelancet.com/rssfeed",
+        )) else "funding" if "fda.gov" in url else "news")
+        for url in policy_feeds
+    }
     windows = {
         "daily_paper_hours": 36,
         "manual_paper_hours": 240,
