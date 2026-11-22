@@ -94,8 +94,8 @@ def _windows(config: Config, mode: str) -> tuple[dict, int]:
     daily = mode == "daily"
     return {
         "paper": hours("daily_paper_hours" if daily else "manual_paper_hours", 36 if daily else 240),
-        "trial": hours("trials_hours", 36),
-        "conference": hours("trials_hours", 36),
+        "trial": hours("trials_hours", 168),
+        "conference": hours("trials_hours", 168),
         "funding": hours("funding_hours", 36),
         "industry": hours("funding_hours", 36),
         "drug": hours("news_hours", 36),

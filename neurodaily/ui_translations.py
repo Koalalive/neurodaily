@@ -359,6 +359,12 @@ RSS（可选）|RSS (optional)|RSS (необязательно)
 📡 来源状态|📡 Source Health|📡 Состояние источников
 🧪 Clinical Trials|🧪 Clinical Trials|🧪 Клинические испытания
 🗓️ Academic Conferences|🗓️ Academic Conferences|🗓️ Академические конференции
+🗓️ 学术会议|🗓️ Academic conferences|🗓️ Академические конференции
+学术会议|Academic conferences|Академические конференции
+🧭 主题景观|🧭 Topic landscape|🧭 Тематический ландшафт
+主题景观|Topic landscape|Тематический ландшафт
+🗺️ 研究动态地图|🗺️ Research activity map|🗺️ Карта исследовательской активности
+研究动态地图|Research activity map|Карта исследовательской активности
 检索时间窗|Search window|Окно поиска
 Trials|Trials|Испытания
 Conferences|Conferences|Конференции

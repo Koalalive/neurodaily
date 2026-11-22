@@ -500,10 +500,27 @@ class WindowTests(unittest.TestCase):
         self.assertIn("old trial", titles)
         self.assertIn("undated paper", titles)
 
+    def test_report_nav_translation_keys(self):
+        from neurodaily.ui_translations import _translation_script
+        import json, re
+        for lang, expected in (
+            ("en", {"🗓️ 学术会议": "🗓️ Academic conferences",
+                    "🧭 主题景观": "🧭 Topic landscape",
+                    "🗺️ 研究动态地图": "🗺️ Research activity map"}),
+            ("ru", {"🗓️ 学术会议": "🗓️ Академические конференции",
+                    "🧭 主题景观": "🧭 Тематический ландшафт",
+                    "🗺️ 研究动态地图": "🗺️ Карта исследовательской активности"}),
+        ):
+            payload = re.search(r"const messages = (\{.*?\});", _translation_script(lang)).group(1)
+            messages = json.loads(payload)
+            for source, target in expected.items():
+                self.assertEqual(messages.get(source), target)
+
     def test_default_windows(self):
         w = DEFAULT_CONFIG().windows
-        for key in ("daily_paper_hours", "trials_hours", "news_hours"):
+        for key in ("daily_paper_hours", "news_hours"):
             self.assertEqual(w[key], 36)
+        self.assertEqual(w["trials_hours"], 168)
         self.assertEqual(w["funding_hours"], 168)
         self.assertGreaterEqual(w["manual_paper_hours"], 36)
 

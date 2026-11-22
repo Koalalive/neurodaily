@@ -89,7 +89,7 @@
     "trials": {
       "enabled": true,
       "max_results": 100,
-      "lookback_days": 2,
+      "lookback_days": 7,
       "query": ""
     },
     "policy": {
@@ -192,7 +192,7 @@
   "windows": {
     "daily_paper_hours": 168,
     "manual_paper_hours": 240,
-    "trials_hours": 36,
+    "trials_hours": 168,
     "funding_hours": 168,
     "news_hours": 36,
     "other_lookback_days": 7

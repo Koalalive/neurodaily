@@ -438,7 +438,7 @@ def DEFAULT_CONFIG() -> Config:
         "biorxiv":    {"enabled": True, "max_results": 500, "lookback_days": 2},
         "fda_drugs":  {"enabled": True, "max_results": 500, "lookback_days": 2},
         "fda_devices":{"enabled": True, "max_results": 500, "lookback_days": 2},
-        "trials":     {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "trials":     {"enabled": True, "max_results": 500, "lookback_days": 7},
         "conferences":{"enabled": True, "max_results": 50, "lookback_days": 365},
         "google_news_zh": {"enabled": True, "max_results": 100, "lookback_days": 2,
                             "queries": ["脑科学 OR 神经科学", "脑机接口", "脑电 研究",
@@ -492,7 +492,7 @@ def DEFAULT_CONFIG() -> Config:
     windows = {
         "daily_paper_hours": 36,
         "manual_paper_hours": 240,
-        "trials_hours": 36,
+        "trials_hours": 168,
         "funding_hours": 168,
         "news_hours": 36,
         "other_lookback_days": 7,

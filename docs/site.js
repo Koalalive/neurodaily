@@ -60,7 +60,7 @@
       ref_arch: "架构与数据流",
       ref_config: "配置参考",
       ref_actions: "GitHub Actions 手册",
-      ref_en: "English documentation",
+      ref_en: "英文文档",
       ref_ru: "俄语文档",
       footer_feedback: "反馈问题"
     },    en: {
@@ -182,7 +182,7 @@
       ref_arch: "Архитектура и поток данных",
       ref_config: "Справочник конфигурации",
       ref_actions: "Руководство GitHub Actions",
-      ref_en: "English documentation",
+      ref_en: "Документация на английском",
       ref_ru: "Документация на русском",
       footer_feedback: "Сообщить о проблеме"
     }
