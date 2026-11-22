@@ -224,11 +224,12 @@ def smoke(executable, version):
                 driver.open_dashboard(settings)
             dashboard = base + "/"
             until(lambda: driver.panel(dashboard, paper_link), "The saved report did not load in the desktop app")
+            # WebDriver's coordinate click cannot reliably scroll nested WebKit
+            # webviews; dispatch the same click event the user would generate.
             driver.command("/execute/sync", {
-                "script": "document.querySelector(arguments[0]).scrollIntoView({block: 'center'});",
+                "script": "document.querySelector(arguments[0]).click();",
                 "args": [paper_link],
             })
-            driver.click(paper_link)
             until(url_log.is_file, "The report link did not invoke the system's xdg-open dispatcher")
             assert url_log.read_text(encoding="utf-8").splitlines() == [PAPER_URL]
             assert driver.panel(dashboard, paper_link), "The external link navigated away from the app"
