@@ -15,7 +15,7 @@ NeuroDaily 是一个**自托管的神经科学与精神病学每日情报系统*
 
 ```bash
 docker run -d --name neurodaily \
-  -p 8031:8031 \
+  -p 127.0.0.1:8031:8031 \
   -v "$PWD/config:/app/neurodaily/config" \
   -v "$PWD/output:/app/neurodaily/output" \
   --restart unless-stopped \
@@ -27,7 +27,7 @@ docker run -d --name neurodaily \
 离线演示（不联网）：
 
 ```bash
-docker run --rm -p 8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
+docker run --rm -p 127.0.0.1:8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
 ```
 
 ### 卷与环境变量
@@ -42,7 +42,7 @@ docker run --rm -p 8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
 
 ### 标签
 
-`latest` · `YYYYMMDD`
+`latest` 跟随最近一次完整发布。需要固定版本时，使用同名 GitHub Release 对应的版本标签，省略前缀 `v`。发布镜像支持 Linux amd64 和 arm64。
 
 ### 链接
 
@@ -62,7 +62,7 @@ NeuroDaily is a **self-hosted daily digest for neuroscience and psychiatry**. It
 
 ```bash
 docker run -d --name neurodaily \
-  -p 8031:8031 \
+  -p 127.0.0.1:8031:8031 \
   -v "$PWD/config:/app/neurodaily/config" \
   -v "$PWD/output:/app/neurodaily/output" \
   --restart unless-stopped \
@@ -74,7 +74,7 @@ Open <http://127.0.0.1:8031>.
 Offline demo:
 
 ```bash
-docker run --rm -p 8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
+docker run --rm -p 127.0.0.1:8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
 ```
 
 ### Volumes & environment
@@ -89,7 +89,7 @@ docker run --rm -p 8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
 
 ### Tags
 
-`latest` · `YYYYMMDD`
+`latest` tracks the most recent complete release. Pin an image using the corresponding GitHub release version without the `v` prefix. Release images support Linux amd64 and arm64.
 
 ### Links
 
@@ -109,7 +109,7 @@ NeuroDaily — это **автономная система ежедневной
 
 ```bash
 docker run -d --name neurodaily \
-  -p 8031:8031 \
+  -p 127.0.0.1:8031:8031 \
   -v "$PWD/config:/app/neurodaily/config" \
   -v "$PWD/output:/app/neurodaily/output" \
   --restart unless-stopped \
@@ -121,7 +121,7 @@ docker run -d --name neurodaily \
 Демо без сети:
 
 ```bash
-docker run --rm -p 8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
+docker run --rm -p 127.0.0.1:8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
 ```
 
 ### Тома и переменные
@@ -136,7 +136,7 @@ docker run --rm -p 8031:8031 -e NEURODAILY_DEMO=1 koalalive/neurodaily:latest
 
 ### Теги
 
-`latest` · `YYYYMMDD`
+`latest` указывает на последний полный выпуск. Для фиксации версии используйте тег одноимённого выпуска GitHub без префикса `v`. Образы поддерживают Linux amd64 и arm64.
 
 ### Ссылки
 

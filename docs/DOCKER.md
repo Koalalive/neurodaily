@@ -36,7 +36,7 @@ Dockerfile 关键点：
 ### 3.1 快速运行（无持久化）
 
 ```bash
-docker run -d --name neurodaily -p 8031:8031 neurodaily:local
+docker run -d --name neurodaily -p 127.0.0.1:8031:8031 neurodaily:local
 open http://127.0.0.1:8031
 ```
 
@@ -44,7 +44,7 @@ open http://127.0.0.1:8031
 
 ```bash
 docker run -d --name neurodaily \
-  -p 8031:8031 \
+  -p 127.0.0.1:8031:8031 \
   -v "$PWD/config:/app/neurodaily/config" \
   -v "$PWD/output:/app/neurodaily/output" \
   --restart unless-stopped \
@@ -71,7 +71,7 @@ services:
   neurodaily:
     build: .
     ports:
-      - "8031:8031"
+      - "127.0.0.1:8031:8031"
     volumes:
       - ./config:/app/neurodaily/config
       - ./output:/app/neurodaily/output
@@ -128,7 +128,7 @@ DOCKERHUB_USER=<用户名> DOCKERHUB_TOKEN=<token> ./scripts/push_dockerhub.sh
 ### 6.3 拉取运行（其他人）
 
 ```bash
-docker run -d -p 8031:8031 --name neurodaily <用户名>/neurodaily:latest
+docker run -d -p 127.0.0.1:8031:8031 --name neurodaily <用户名>/neurodaily:latest
 ```
 
 ## 7. 排障

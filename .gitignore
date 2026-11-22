@@ -27,6 +27,12 @@ config/webhooks.json
 # personal AI summary config + key
 config/ai_summary.json
 
+# alternate local environment and user-interface settings
+.env
+.env.*
+!.env.example
+config/ui.json
+
 # desktop / Tauri build artifacts
 build/
 dist/

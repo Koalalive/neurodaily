@@ -51,7 +51,7 @@ docker build -t neurodaily:local .
 
 # 运行（挂载配置与输出）
 docker run -d --name neurodaily \
-  -p 8031:8031 \
+  -p 127.0.0.1:8031:8031 \
   -v "$PWD/config:/app/neurodaily/config" \
   -v "$PWD/output:/app/neurodaily/output" \
   --restart unless-stopped \
@@ -84,7 +84,7 @@ done
 ```bash
 DEMO=1 bash scripts/docker_deploy.sh up
 # 或
-docker run --rm -p 8031:8031 -e NEURODAILY_DEMO=1 neurodaily:local
+docker run --rm -p 127.0.0.1:8031:8031 -e NEURODAILY_DEMO=1 neurodaily:local
 ```
 
 ## 5. 推送 Docker Hub
