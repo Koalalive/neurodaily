@@ -9,8 +9,9 @@
   --ink: #21213a;
   --muted: #5b5a6b;
   --rule: #d7d5cc;
-  --sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --serif: "Songti SC", "Noto Serif CJK SC", "STSong", Georgia, serif;
+  --serif: "Songti SC", "Noto Serif CJK SC", "STSong", "Source Serif 4",
+           "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  --sans: var(--serif);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -250,3 +251,9 @@ footer { background: #08080f; color: var(--lavender); border-top: 1px solid var(
 footer a { color: var(--lavender); }
 code { color: #e7d9a3; }
 ::selection { color: #111; background: var(--gold); }
+
+/* Unified serif typography across the public site. */
+button, input, select, textarea, nav, .button, .wordmark, .mini, .hint {
+  font-family: var(--serif);
+}
+code, pre, kbd, samp { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
