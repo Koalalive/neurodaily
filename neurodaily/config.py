@@ -439,6 +439,10 @@ def DEFAULT_CONFIG() -> Config:
         "fda_drugs":  {"enabled": True, "max_results": 500, "lookback_days": 2},
         "fda_devices":{"enabled": True, "max_results": 500, "lookback_days": 2},
         "trials":     {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "conferences":{"enabled": True, "max_results": 50, "lookback_days": 365},
+        "google_news_zh": {"enabled": True, "max_results": 100, "lookback_days": 2,
+                            "queries": ["脑科学 OR 神经科学", "脑机接口", "脑电 研究",
+                                        "脑磁图", "功能磁共振", "神经影像"]},
         "policy":     {"enabled": True, "max_results": 500, "lookback_days": 2},
     }
     output = {

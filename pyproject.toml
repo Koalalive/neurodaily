@@ -28,4 +28,4 @@ build-backend = "setuptools.build_meta"
 include = ["neurodaily*"]
 
 [tool.setuptools.package-data]
-neurodaily = ["templates/*.j2", "data/presets/*.json", "data/search_quality_sample.json", "data/natural_earth_*.json"]
+neurodaily = ["templates/*.j2", "data/presets/*.json", "data/conferences.json", "data/search_quality_sample.json", "data/natural_earth_*.json"]

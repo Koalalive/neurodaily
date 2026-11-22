@@ -1,7 +1,7 @@
 """Source registry: maps config key -> fetch function."""
 from __future__ import annotations
 
-from . import arxiv, biorxiv, europe_pmc, fda, gdelt, generic, journalpapers, nih_brain, openalex, pubmed, rss, trials
+from . import arxiv, biorxiv, conferences, europe_pmc, fda, gdelt, generic, google_news, journalpapers, nih_brain, openalex, pubmed, rss, trials
 
 BUILTIN = {
     "journal": journalpapers.fetch,
@@ -11,6 +11,8 @@ BUILTIN = {
     "fda_drugs": fda.fetch_drugs,
     "fda_devices": fda.fetch_devices,
     "trials": trials.fetch,
+    "conferences": conferences.fetch,
+    "google_news_zh": google_news.fetch,
     "policy": rss.fetch,
     "europe_pmc": europe_pmc.fetch,
     "openalex": openalex.fetch,

@@ -280,6 +280,11 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     deduped = [item for item in merge_records(tag_items(items, config))
                if item.extra.get("search_match") == "match" or _mark_match(item, plan, scoped) == "match"]
     deduped.sort(key=lambda item: _rank(item, plan), reverse=True)
+    try:
+        from .seen import filter_seen
+        deduped = filter_seen(deduped, config)
+    except Exception:
+        logging.getLogger(__name__).exception("Optional seen deduplication failed")
 
     from .research_events import link_records, track_trial_changes
     from .sources import crossref

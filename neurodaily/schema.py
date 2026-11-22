@@ -76,6 +76,8 @@ class SourceModel(BaseModel):
 class SearchModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field("", max_length=1800)
+    authors: list[str] = Field(default_factory=list, max_length=25)
+    author_mode: Literal["track", "intersect"] = "intersect"
     sets: dict[str, str] = Field(default_factory=dict)
     rules: dict[Literal["news", "policy", "trial"], str] = Field(default_factory=dict)
     journal_mode: Literal["any", "only", "prefer"] = "any"

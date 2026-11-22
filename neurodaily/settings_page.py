@@ -157,6 +157,16 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
         <p class="hint" id="search_builder_status" role="status"></p>
       </details>
 
+      <div class="inline" style="margin-top:8px">
+        <label for="search_authors">Scholar tracking</label>
+        <input id="search_authors" placeholder="Nolan Williams, Jane Doe" style="flex:1">
+        <select id="search_author_mode" style="width:auto">
+          <option value="intersect">Track within this topic</option>
+          <option value="track">Track all new works</option>
+        </select>
+      </div>
+      <p class="hint">Names are matched against PubMed author fields and local author metadata. Use ORCID/affiliation to disambiguate common names.</p>
+
       <div>
         <label for="search_query">Search expression</label>
         <textarea id="search_query" rows="3" spellcheck="false" aria-describedby="search_query_help"
@@ -223,7 +233,8 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
       <div><label>Report directory</label><input id="out_dir"></div>
       <div><label>Filename format</label><input id="out_fmt"></div>
     </div>
-    <div class="inline" style="margin-top:10px"><label><input type="checkbox" id="out_open"> Open report when finished</label></div>
+    <div class="inline" style="margin-top:10px"><label><input type="checkbox" id="out_open"> Open report when finished</label>
+      <label><input type="checkbox" id="out_seen_dedup"> Hide items already shown on a previous day</label></div>
   </section>
 
   <section>
@@ -717,7 +728,7 @@ function sourceRow(k,o){
     '<label><input type="checkbox" class="s-en" '+(o.enabled!==false?'checked':'')+'> On</label>'+
     '<input type="number" class="s-max" title="max_results" value="'+(o.max_results!=null?o.max_results:20)+'">'+
     '<input type="number" class="s-look" title="lookback_days" value="'+(o.lookback_days!=null?o.lookback_days:1)+'">';
-  if(['trials','europe_pmc','openalex','gdelt','nih_brain'].includes(k)){
+  if(['trials','europe_pmc','openalex','gdelt','nih_brain','google_news_zh'].includes(k)){
     var query=document.createElement('input');
     query.className='s-query';
     query.style.gridColumn='1 / -1';
@@ -760,10 +771,13 @@ function render(){
   (BASE.disciplines||[]).forEach(function(x){dbox.appendChild(disciplineRow(x));});
   el('global_keywords').value=csv(BASE.global_keywords);
   renderSearch(BASE.search);
+  el('search_authors').value=csv((BASE.search||{}).authors);
+  el('search_author_mode').value=(BASE.search||{}).author_mode||'intersect';
   var sbox=el('sources'); sbox.innerHTML='';
   Object.keys(BASE.sources||{}).forEach(function(k){sbox.appendChild(sourceRow(k,BASE.sources[k]));});
   var o=BASE.output||{};
   el('out_dir').value=o.dir||''; el('out_fmt').value=o.filename_format||''; el('out_open').checked=!!o.open_on_finish;
+  el('out_seen_dedup').checked=!!o.seen_dedup;
   var sc=BASE.scheduled||{}; var otd=sc.on_this_day||{};
   el('sch_enabled').checked=!!sc.enabled;
   el('sch_hour').value=(sc.hour!=null?sc.hour:8); el('sch_minute').value=(sc.minute!=null?sc.minute:0);
@@ -918,6 +932,9 @@ function collect(){
   data.global_keywords=split(el('global_keywords').value);
   var search=collectSearch(data.search);
   if(search) data.search=search;
+  data.search=Object.assign({},data.search||{});
+  data.search.authors=split(el('search_authors').value);
+  data.search.author_mode=el('search_author_mode').value;
   data.sources={};
   [].slice.call(el('sources').querySelectorAll('.row')).forEach(function(r){
     var key=r.dataset.key;
@@ -933,6 +950,7 @@ function collect(){
   data.output.dir=el('out_dir').value.trim();
   data.output.filename_format=el('out_fmt').value.trim();
   data.output.open_on_finish=el('out_open').checked;
+  data.output.seen_dedup=el('out_seen_dedup').checked;
   data.output.topic_map=el('topic_map_enabled').checked;
   data.scheduled=Object.assign({},data.scheduled||{});
   data.scheduled.enabled=el('sch_enabled').checked;

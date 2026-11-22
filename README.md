@@ -62,9 +62,12 @@ NeuroDaily 适合需要持续跟踪论文、预印本、临床试验和监管产
 
 | 能力 | 说明 |
 |---|---|
-| **七源聚合** | 期刊 RSS · PubMed · arXiv · bioRxiv · ClinicalTrials.gov · openFDA · 政策/新闻 |
+| **多源聚合** | 期刊 RSS · PubMed · arXiv · bioRxiv · ClinicalTrials.gov · openFDA · Google News 中文 · 会议日历 · 政策/新闻 |
 | **创投/产业情报** | BCI 融资、neurotech 融资、MedTech Dive、Crunchbase（`kind=funding`） |
 | **AI 每日摘要** | 按需概述研究、临床监管和产业动态，摘要引用回到原始条目。可关闭，结果带缓存 |
+| **学术会议** | 内置会议日历，显示开始/截止倒计时和官网链接；不区分国内/国外 |
+| **学者追踪** | 检索配置支持指定学者姓名，可选择“主题内追踪”或“全部新作追踪”（如 Nolan Williams） |
+| **跨日去重** | 可选隐藏前一天已经出现过的条目，保留 30 天 seen 记录 |
 | **历史上的今天** | 936 篇约千字学科史长文，按日轮换，精确日/近邻/经典标注 |
 | **交互式日报** | 离线研究地图、LDA + t-SNE 主题景观、各来源状态和外部引用图谱入口 |
 | **API 账单** | 按次记录模型用量和估算费用，可配置费率与 AI 地理定位。 [用法与商用许可](docs/RESEARCH_ACTIVITY.md) |

@@ -386,6 +386,8 @@ def _remote(node: Node | None, source: str) -> str:
     if not words or not re.fullmatch(r"[\w\s]+", node.value):
         return ""
     if source == "pubmed":
+        if node.field == "AU":
+            return f'"{node.value}"[au]'
         field = {"TI": "ti", "AB": "tiab", "TIAB": "tiab", "AK": "tiab", "TS": "tiab"}.get(node.field)
         if node.field == "MH":
             return f'"{node.value}"[mh:noexp]'
@@ -413,6 +415,14 @@ def compile_scoped_search(search: dict | None) -> dict[str, SearchPlan]:
 def compile_search(search: dict | None, journal_catalog=()) -> SearchPlan:
     spec = search or {}
     expression = spec.get("query", "").strip()
+    authors = tuple(str(name).strip() for name in (spec.get("authors") or []) if str(name).strip())
+    author_mode = spec.get("author_mode") or "intersect"
+    if authors:
+        author_expression = " OR ".join(f'AU="{name.replace(chr(34), "")}"' for name in authors)
+        if expression:
+            expression = f"({expression}) {'OR' if author_mode == 'track' else 'AND'} ({author_expression})"
+        else:
+            expression = author_expression
     sets = {key.lstrip("#"): value.strip() for key, value in spec.get("sets", {}).items()}
     if len(sets) != len(spec.get("sets", {})):
         raise ValueError("编号集合重复")
