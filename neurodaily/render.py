@@ -140,11 +140,20 @@ def _place_research_map(html: str, env, activity: dict, language: str) -> str:
 def _place_topic_map(html: str, env, topics: dict | None, language: str) -> str:
     if not topics or not topics.get("enabled") or not topics.get("points"):
         return html
-    section = re.search(r'<section id="research-activity"(?=[\s>])[^>]*>.*?</section>', html, re.S)
-    if section is None:
-        return html
     block = env.get_template("topic_map.html.j2").render(topics=topics, language=language)
-    return html[:section.end()] + "\n" + block + html[section.end():]
+    section = re.search(r'<section id="research-activity"(?=[\s>])[^>]*>.*?</section>', html, re.S)
+    if section is not None:
+        return html[:section.end()] + "\n" + block + html[section.end():]
+    # No AI geography/map (for example the public demo without an API key):
+    # place the topic landscape after the AI summary or at the start of main.
+    main = re.search(r"<main\b[^>]*>", html)
+    if main is None:
+        return html
+    offset = main.end()
+    summary = re.match(r'\s*<section id="ai-summary">.*?</section>', html[offset:], re.S)
+    if summary:
+        offset += summary.end()
+    return html[:offset] + "\n" + block + html[offset:]
 
 
 def refresh_saved_research_map(html: str, language: str) -> str:
