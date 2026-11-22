@@ -1,0 +1,4 @@
+# Only the repository owner reviews changes to automation and workflow files.
+/.github/workflows/ @Koalalive
+/.github/CODEOWNERS @Koalalive
+/scripts/check_secrets.py @Koalalive

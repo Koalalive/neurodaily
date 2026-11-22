@@ -15,6 +15,8 @@ concurrency:
 
 jobs:
   update-demo:
+    environment:
+      name: automation
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

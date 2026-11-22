@@ -160,3 +160,13 @@ The website language switch is in `docs/site.js`; current expected document link
 4. `v1.0.8` release exists, is not a draft, and contains Windows/Linux/macOS CLI/wheel assets.
 5. Run a fresh browser check for the homepage language labels and both report navigation labels.
 6. Record any failure with run URL, job name, exact failing step, and whether it is a test-only compatibility issue or a product regression.
+
+## Security controls
+
+- The LLM key is stored in the GitHub Environment `automation`, not as a repository secret.
+- `daily-demo` and `daily-digest` declare `environment: automation`; other workflows cannot read that environment secret.
+- `.github/CODEOWNERS` assigns workflow/security files to `@Koalalive`.
+- `main` is protected by a ruleset requiring a pull request and code-owner review; the GitHub Actions integration has a bypass for the demo snapshot push.
+- `secret-scan.yml` runs `scripts/check_secrets.py` on push and pull requests.
+- Local pre-commit: `git config core.hooksPath .githooks` (the hook scans staged files).
+- GitHub Secret Scanning and push protection are enabled on the public repository.
