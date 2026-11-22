@@ -111,7 +111,7 @@ h2 { font-size: clamp(2rem, 4vw, 3.3rem); line-height: 1.2; }
 h3 { font-size: 1.04rem; line-height: 1.5; }
 .feature-grid, .install-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: clamp(20px, 3.6vw, 46px);
   margin: 32px 0 0;
 }
