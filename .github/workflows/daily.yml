@@ -57,6 +57,7 @@ jobs:
       - name: Run digest
         env:
           RUN_DEMO: ${{ inputs.demo }}
+          PRIVATE_REPOSITORY: ${{ github.event.repository.private }}
           NEURODAILY_SMTP_PASSWORD: ${{ secrets.NEURODAILY_SMTP_PASSWORD }}
           NEURODAILY_LLM_API_KEY: ${{ secrets.NEURODAILY_LLM_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.NEURODAILY_LLM_API_KEY }}
@@ -64,10 +65,18 @@ jobs:
           report="$NEURODAILY_HOME/output/report.html"
           if [ "$RUN_DEMO" = "true" ]; then
             .venv/bin/python -m neurodaily run --demo --no-open --output "$report"
-          else
+          elif [ "$PRIVATE_REPOSITORY" = "true" ]; then
             .venv/bin/python -m neurodaily run --mode daily --no-open --output "$report"
+          else
+            run_log="$NEURODAILY_HOME/output/digest.log"
+            if ! .venv/bin/python -m neurodaily run --mode daily --no-open --output "$report" >"$run_log" 2>&1; then
+              echo 'Daily run failed. Reproduce with the same configuration in a private environment.'
+              exit 1
+            fi
+            echo 'Daily run completed. Check the configured delivery destination.'
           fi
       - uses: actions/upload-artifact@v4
+        if: ${{ github.event.repository.private == true || inputs.demo == true }}
         with:
           name: neurodaily-report
           path: ${{ env.NEURODAILY_HOME }}/output/report.html
