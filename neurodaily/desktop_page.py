@@ -82,7 +82,9 @@ html,body{height:100%;overflow:hidden}
       if (pa !== -1 || pb !== -1) return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
       return (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99') || a.order - b.order;
     });
-    tabs.forEach(tab => { tablist.append(tab.group); panes.append(tab.iframe); });
+    // Reorder only the tab strip. Moving iframes would detach the active frame
+    // and break WebDriver/native dialogs.
+    tabs.forEach(tab => tablist.append(tab.group));
   }
 
   function activate(tab) {
