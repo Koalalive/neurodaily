@@ -43,10 +43,12 @@ def render_task(task: dict, receipts: list[dict], css: str) -> str:
     link = f"<a href='/history/{run_id}/report'>打开本次日报</a>" if task["report_ready"] else ""
     error = f"<p role='status'>{escape(task['error'])}</p>" if task.get("error") else ""
     kind = "定时检索" if task["scheduled_for"] else "手动检索"
+    report_date = ((task.get("started_at") or task.get("scheduled_for") or "")[:10])
     refresh = "setTimeout(() => location.reload(), 3000);" if task["status"] == "running" else ""
     return f"""<!doctype html><html lang='zh'><head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>NeuroDaily 任务 #{run_id}</title>{css}</head><body><main class='wrap'>
+<meta name='nd-report-date' content='{escape(report_date)}'>
+<title>{escape(report_date or '日报')} · 日报</title>{css}</head><body><main class='wrap'>
 <p><a href='/history'>运行历史</a> · <a href='/'>日报首页</a></p>
 <h1><span>任务</span> #{run_id} · <span>{kind}</span></h1>
 <p><span data-no-i18n>{escape(task['profile'])}</span> · <span>{state(task)}</span> · {task.get('item_count', 0)} <span>条结果</span></p>
@@ -60,7 +62,7 @@ def render_task(task: dict, receipts: list[dict], css: str) -> str:
 <p id='retry-message' role='status'></p>
 </main><script>
 const t=window.ndT||String;
-if(window.ndT) document.title=t('神通寰宇 · 任务 #{{id}}', {{id:{run_id}}});
+
 {refresh}
 document.querySelectorAll('[data-retry]').forEach(button => {{
   button.addEventListener('click', async () => {{

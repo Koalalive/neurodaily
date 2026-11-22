@@ -242,8 +242,6 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             task_runs.finish(attempt, "failed", error)
             return
         stage("search", "completed")
-        stage("report", "running")
-
         fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d_%H%M%S.html"
         path = Path(cfg.output_dir(), datetime.now().strftime(fmt)).absolute()
         if path.exists():
@@ -252,23 +250,15 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
         result.report_base_url = base
         result.report_locale = _language()
-        save_report(result, str(path))
-        attempt.update(report_ready=True, report_file=str(path), report_revision=1)
-        task_runs.stage(attempt, "report", "completed")
-        task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
-        index_saved_report(result)
-        app.state.last_run = result
 
-        refreshed = False
         stage("metrics", "running")
         try:
             from .journal_metrics import ensure_fresh, for_item
             if ensure_fresh([j.name for j in cfg.journals]):
                 for item in result.items:
                     metrics = for_item(item, cfg)
-                    if metrics and item.extra.get("metrics") != metrics:
+                    if metrics:
                         item.extra["metrics"] = metrics
-                        refreshed = True
             stage("metrics", "completed")
         except Exception:
             stage("metrics", "failed", "期刊指标更新失败。")
@@ -283,26 +273,26 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         except Exception:
             stage("ai", "failed", "AI 摘要生成失败，请检查设置中的 AI 连通性。")
 
-        geo_updated = False
         try:
             from .research_activity import enrich_geography
-            geo_updated = enrich_geography(result)
-            if geo_updated:
+            if enrich_geography(result):
                 partial = bool(result.geography.get("deferred"))
                 stage("geolocation", "partial" if partial else "completed")
+            else:
+                stage("geolocation", "skipped", "未启用或缺少大模型 API。")
         except Exception:
             stage("geolocation", "failed", "AI 地理定位未完成。")
 
-        if refreshed or result.ai_summary or geo_updated:
-            try:
-                result.report_revision = 2
-                save_report(result, str(path))
-                attempt["report_revision"] = 2
-                task_runs.save(attempt, result=result)
-            except Exception:
-                logging.getLogger(__name__).exception("Could not update the saved report")
-                stage("report", "partial", "补充内容保存失败，初版报告仍可查看。")
-                result = task_runs.load_result(attempt["id"]) or result
+        # Publish the report only after all optional sections are ready, so tabs
+        # never show a half-finished report that is rewritten a few seconds later.
+        stage("report", "running")
+        result.report_revision = 1
+        save_report(result, str(path))
+        attempt.update(report_ready=True, report_file=str(path), report_revision=1)
+        task_runs.stage(attempt, "report", "completed")
+        task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
+        index_saved_report(result)
+        app.state.last_run = result
 
         stage("delivery", "running")
         try:

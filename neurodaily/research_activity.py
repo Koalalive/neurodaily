@@ -43,8 +43,7 @@ def enrich_geography(result: DigestResult) -> bool:
     if result.skipped or not result.items or not api_billing.load_settings()["geo_enabled"]:
         return False
     cfg = ai_summary.load_cfg()
-    if not cfg.get("enabled"):
-        return False
+    # Summary and map have independent switches; the map only needs a key.
     key = ai_summary.api_key(cfg)
     if not key:
         return False
@@ -52,6 +51,23 @@ def enrich_geography(result: DigestResult) -> bool:
     model = cfg["model"]
     cache_key = hashlib.sha256(json.dumps([base, model]).encode()).hexdigest()
     cache_dir = Path(DEFAULT_DIRS["output"], "geography_cache", cache_key)
+    # News/policy feeds often carry only a headline. Fetch the article text so the
+    # geolocation model can trace the event location instead of leaving it unknown.
+    try:
+        from .sources.http import get as _get, strip_html as _strip_html
+        candidates = [item for item in result.items
+                      if item.kind in {"news", "policy"} and item.url
+                      and not item.extra.get("article_text")][:24]
+        for item in candidates:
+            response = _get(item.url, timeout=8.0, retries=0,
+                            user_agent="Mozilla/5.0 NeuroDaily")
+            if response is not None:
+                text = _strip_html(response.text)
+                if text:
+                    item.extra["article_text"] = text[:4000]
+    except Exception:
+        pass
+
     if result.config and result.config.source_opts("europe_pmc").get("enabled"):
         from .sources.europe_pmc import last_author_metadata
 
@@ -73,13 +89,16 @@ def enrich_geography(result: DigestResult) -> bool:
 
 
 def report_activity(result: DigestResult, external_url) -> dict:
-    from .geography import locate_items
-
     mapped = _mapped(_index(result.items))
-    geo = result.geography if result.geography is not None else locate_items(mapped)
+    if result.geography is None:
+        # The map is an AI feature: without an LLM run it stays unavailable.
+        return {"enabled": False, "reason": "llm_required", "land": [], "places": [],
+                "unknown": [], "deferred": [], "records": {}}
+    geo = result.geography
     places = [place for place in geo["places"] if place["id"] in mapped]
     covered = {place["id"] for place in places}
     return {
+        "enabled": True,
         "land": _land() if mapped else [],
         "places": places,
         "unknown": [record_id for record_id in mapped if record_id not in covered],
@@ -87,6 +106,9 @@ def report_activity(result: DigestResult, external_url) -> dict:
         "records": {
             record_id: {
                 "title": item.title, "source": item.source, "kind": item.kind,
+                "journal": (item.extra.get("journal") if item.kind == "paper" else "") or "",
+                "venue": (item.extra.get("journal") if item.kind == "paper" else
+                          (item.extra.get("feed") or item.source)),
                 "date": item.date_display, "url": external_url(item.url),
                 "summary": " ".join((item.summary or "").split())[:240].strip(),
             } for record_id, item in mapped.items()

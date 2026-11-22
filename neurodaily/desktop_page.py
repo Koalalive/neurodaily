@@ -28,6 +28,7 @@ _PAGE = r"""<!doctype html><html lang="__LANG__"><head><meta charset="utf-8">
 *{box-sizing:border-box}body{margin:0;height:100dvh;display:flex;flex-direction:column;background:#0b0b0c;color:#ededf2;font:14px -apple-system,Segoe UI,sans-serif}
 button{font:inherit;white-space:nowrap;color:inherit;border:1px solid #3a3a40;background:#202024;border-radius:6px;padding:6px 9px;cursor:pointer}
 button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;outline-offset:2px}
+html,body{height:100%;overflow:hidden}
 #tabs{display:flex;overflow-x:auto;flex-shrink:0;min-height:41px;padding:5px 8px 0;gap:3px;border-bottom:1px solid #333338;background:#111114}
 .tab{display:flex;align-items:center;gap:2px;border-bottom:2px solid transparent}.tab:has([aria-selected=true]){border-color:#67dafa;background:#23232a}
 .tab button{background:transparent;border:0;padding:5px 8px}.tab button:hover{background:#34343c}.tab .close{font-size:16px;color:#adadb9}
@@ -61,7 +62,7 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     if (pathname === '/run') return word('run');
     if (pathname === '/history' || pathname === '/history/compare') return word('history');
     const run = pathname.match(/^\/history\/(\d+)(\/report)?$/);
-    if (run) return `${word(run[2] ? 'report' : 'task')} #${run[1]}`;
+    if (run) return word('report');
     return word('dashboard');
   }
 
@@ -72,6 +73,16 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
       tab.iframe.title = tab.button.textContent;
       tab.close?.setAttribute('aria-label', `${word('close')} ${tab.button.textContent}`);
     });
+  }
+
+  function sortTabs() {
+    const rank = path => pinned.indexOf(path);
+    tabs.sort((a, b) => {
+      const pa = rank(a.path), pb = rank(b.path);
+      if (pa !== -1 || pb !== -1) return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
+      return (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99') || a.order - b.order;
+    });
+    tabs.forEach(tab => { tablist.append(tab.group); panes.append(tab.iframe); });
   }
 
   function activate(tab) {
@@ -115,7 +126,7 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     iframe.setAttribute('aria-labelledby', button.id);
     const fixed = pinned.includes(path);
     const tab = {path, group, iframe, button, close:fixed ? null : close,
-      date:path === '/' ? __LATEST_DATE__ : ''};
+      date:path === '/' ? __LATEST_DATE__ : '', order:id};
     button.setAttribute('aria-selected', 'false');
     button.tabIndex = -1;
     iframe.hidden = true;
@@ -131,11 +142,10 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     });
     iframe.addEventListener('load', () => {
       connect(iframe);
-      if (path === '/' && iframe.hasAttribute('src')) {
-        const date = iframe.contentDocument?.querySelector('meta[name="nd-report-date"]')?.content;
-        tab.date = /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? date : '';
-        labels();
-      }
+      const date = iframe.contentDocument?.querySelector('meta[name="nd-report-date"]')?.content;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date || '')) tab.date = date;
+      labels();
+      sortTabs();
     });
     group.append(button);
     if (!fixed) group.append(close);
@@ -143,6 +153,7 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
     tablist.append(group);
     panes.append(iframe);
     labels();
+    sortTabs();
     if (select) {
       activate(tab);
       group.scrollIntoView({block: 'nearest', inline: 'nearest'});

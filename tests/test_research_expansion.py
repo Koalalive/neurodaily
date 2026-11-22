@@ -25,6 +25,7 @@ class ResearchExpansionTests(unittest.TestCase):
     def test_map_follows_summary_and_legacy_cloud_is_removed(self):
         result = build_result()
         result.ai_summary = "Fixture summary."
+        result.geography = {"places": [], "unknown": []}
         soup = BeautifulSoup(render_html(result), "html.parser")
         self.assertEqual([node.get("id") for node in soup.main.find_all("section", recursive=False)][:2],
                          ["ai-summary", "research-activity"])
@@ -44,8 +45,9 @@ class ResearchExpansionTests(unittest.TestCase):
         self.assertNotIn("keywords", json.loads(migrated.select_one("#nd-research-data").string))
 
         result.ai_summary = ""
+        result.geography = None
         plain = BeautifulSoup(render_html(result), "html.parser")
-        self.assertEqual(plain.main.find("section")["id"], "research-activity")
+        self.assertIsNone(plain.select_one("#research-activity"))
 
     def test_scoped_preview_classifies_news_policy_and_papers_independently(self):
         cfg = DEFAULT_CONFIG()

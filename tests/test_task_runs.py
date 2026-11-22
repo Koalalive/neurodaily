@@ -52,10 +52,7 @@ class SearchTaskTests(unittest.TestCase):
                 self.assertTrue(entered.wait(5))
                 task = self.client.get("/api/search/status").json()["search"]
                 self.assertEqual((task["status"], task["phase"]), ("running", "ai"))
-                self.assertTrue(task["report_ready"])
-                base = self.client.get(f"/history/{task['id']}/report")
-                self.assertEqual(base.status_code, 200)
-                self.assertNotIn("Summary added", base.text)
+                self.assertFalse(task["report_ready"])
                 with TestClient(create_app(self.config_path)) as second:
                     self.assertEqual(second.post("/api/run?force=1").status_code, 409)
                     self.assertEqual(second.get("/api/search/status").json()["search"]["status"], "running")
@@ -66,7 +63,7 @@ class SearchTaskTests(unittest.TestCase):
             self.assertIn("Summary added", restarted.get("/").text)
             status = restarted.get("/api/status").json()
             self.assertEqual(status["item_count"], len(self.result.items))
-            self.assertEqual(status["search"]["report_revision"], 2)
+            self.assertEqual(status["search"]["report_revision"], 1)
 
     def test_recovery_keeps_ready_scheduled_report_and_marks_interrupted_work(self):
         due = datetime(2026, 11, 20, 8, 0)

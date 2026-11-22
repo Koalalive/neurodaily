@@ -254,7 +254,9 @@ def _candidate(item: Item, known: list[dict], names: _CountryNames) -> dict | No
         roles = ["event"]
     else:
         return None
-    abstract = _clean(item.extra.get("abstract"), 1500) or _clean(item.summary, 1500)
+    abstract = (_clean(item.extra.get("abstract"), 1800)
+                or _clean(item.extra.get("article_text"), 1800)
+                or _clean(item.summary, 1500))
     fields = [("title", _clean(item.title, 220))]
     fields.extend(("summary", sentence) for sentence in _SENTENCES.split(abstract, maxsplit=8))
     if "last_author_institution" in roles:
