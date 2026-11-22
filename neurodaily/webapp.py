@@ -36,6 +36,7 @@ from .desktop_schedule import RETRY_DELAY, run_schedule, scheduled_time
 from .desktop_page import render_workspace
 from .digest import preview_search, run as run_digest, render_html_for
 from .presets import research_presets
+from .security import validate_label, within
 from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
 from .run_page import RUN_HTML
 from .ui_translations import UI_LANGUAGES, localize_document
@@ -93,6 +94,24 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     app = FastAPI(title="NeuroDaily", version=__version__, lifespan=lifespan)
     app.state.last_run = None
     app.state.search_attempt = None
+
+    @app.middleware("http")
+    async def origin_guard(request: Request, call_next):
+        # State-changing APIs are same-origin only. This blocks a malicious
+        # web page from posting to localhost while the app is open.
+        if request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+            origin = request.headers.get("origin")
+            site = request.headers.get("sec-fetch-site")
+            if site and site not in {"same-origin", "none"}:
+                return JSONResponse({"error": "cross-site request blocked"}, status_code=403)
+            if origin:
+                from urllib.parse import urlsplit as _urlsplit
+                origin_host = _urlsplit(origin).hostname or ""
+                allowed = {request.url.hostname or "", "127.0.0.1", "localhost", "tauri.localhost"}
+                if origin_host not in allowed:
+                    return JSONResponse({"error": "cross-site request blocked"}, status_code=403)
+        return await call_next(request)
+
     search_lock = Lock()
     preferences = (Path(config_path).parent if config_path else Path(DEFAULT_DIRS["config"])) / "ui.json"
 
@@ -247,6 +266,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         stage("search", "completed")
         fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d_%H%M%S.html"
         path = Path(cfg.output_dir(), datetime.now().strftime(fmt)).absolute()
+        if not within(cfg.output_dir(), path):
+            raise ValueError("report output must stay inside the configured output directory")
         if path.exists():
             path = path.with_name(f"{path.stem}-{attempt['id']}{path.suffix}")
         result.history_id = attempt["id"]
@@ -268,11 +289,12 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
         stage("ai", "running")
         try:
-            from .ai_summary import generate, load_cfg
-            result.ai_summary = generate(result)
-            if result.ai_summary:
-                result.ai_summary_meta = {"model": load_cfg().get("model", "")}
-            stage("ai", "completed" if result.ai_summary else "skipped")
+            from .ai_summary import generate_all, load_cfg
+            summaries = generate_all(result, load_cfg())
+            if summaries:
+                result.ai_summary_meta = {"model": load_cfg().get("model", ""),
+                                          "languages": sorted(summaries)}
+            stage("ai", "completed" if summaries else "skipped")
         except Exception:
             stage("ai", "failed", "AI 摘要生成失败，请检查设置中的 AI 连通性。")
 
@@ -520,7 +542,9 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         })
 
     @app.get("/api/app-settings/export")
-    def api_app_settings_export(include_secrets: bool = False):
+    def api_app_settings_export(request: Request, include_secrets: bool = False):
+        if include_secrets and os.environ.get("NEURODAILY_ALLOW_SECRET_EXPORT") != "1":
+            return JSONResponse({"ok": False, "error": "secret export is disabled"}, status_code=403)
         from .app_settings import export_settings
         payload = export_settings(config_path, include_secrets=include_secrets)
         suffix = "-with-secrets" if include_secrets else ""
@@ -606,7 +630,11 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     def _launchd_label() -> str:
         cfg = _cfg()
         sched = cfg.scheduled or {}
-        return ((sched.get("launchd") or {}).get("label")) or "com.neurodaily.daily"
+        raw = ((sched.get("launchd") or {}).get("label")) or "com.neurodaily.daily"
+        try:
+            return validate_label(str(raw))
+        except ValueError:
+            return "com.neurodaily.daily"
 
     @app.get("/api/push")
     def api_push_get():
@@ -615,7 +643,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         e, w = _mail_cfg(), _hook_cfg()
         keys = ("enabled", "to", "recipients", "language", "smtp_host", "smtp_port",
                 "use_ssl", "username", "from", "from_name", "subject_template",
-                "attach_report", "attach_max_mb", "summary_papers", "summary_chars")
+                "attach_report", "attach_max_mb", "summary_papers", "summary_chars", "public_url")
         return JSONResponse({
             "email": {k: e.get(k) for k in keys},
             "webhooks": {"feishu": w.get("feishu", ""), "wecom": w.get("wecom", ""),
@@ -662,6 +690,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             tmp = path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 _json.dump(obj, f, ensure_ascii=False, indent=2)
+            os.chmod(tmp, 0o600)
             os.replace(tmp, path)
 
         if email:
@@ -828,6 +857,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             label = _launchd_label()
             content = _plist_content(cfg, pkg_root)
             plist_path = os.path.join(pkg_root, "scripts", f"{label}.plist")
+            if not within(os.path.join(pkg_root, "scripts"), plist_path):
+                raise ValueError("invalid schedule label")
             os.makedirs(os.path.dirname(plist_path), exist_ok=True)
             with open(plist_path, "w", encoding="utf-8") as f:
                 f.write(content)

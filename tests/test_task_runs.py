@@ -39,7 +39,7 @@ class SearchTaskTests(unittest.TestCase):
     def test_report_is_available_during_ai_and_exclusion_survives_app_restart(self):
         entered, release = Event(), Event()
 
-        def summarize(_):
+        def summarize(_result, *_args, **_kwargs):
             entered.set()
             if not release.wait(5):
                 raise AssertionError("test did not release the blocked model")

@@ -96,6 +96,12 @@ def fetch_rss(name: str, config, logger=None) -> list[Item]:
     url = (opts.get("url") or "").strip()
     if not url:
         return []
+    from ..security import validate_http_url
+    try:
+        validate_http_url(url, resolve=False)
+    except ValueError:
+        record_failure(f"Blocked RSS URL: {url}")
+        return []
     record_query("Configured RSS feed")
     mark_sampled()
     preview = bool(opts.get("preview"))

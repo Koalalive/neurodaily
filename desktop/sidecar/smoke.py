@@ -128,7 +128,8 @@ def running_service(executable: Path, home: Path, *, desktop=False, use_windows_
         (config_dir / "webhooks.json").write_text('{"feishu":"","wecom":""}', encoding="utf-8")
     log = home / "sidecar.log"
     env = {**os.environ, "NEURODAILY_HOME": str(home), "NEURODAILY_PORT": "0",
-           "NEURODAILY_MANAGED": "1", "NO_PROXY": "127.0.0.1,localhost"}
+           "NEURODAILY_MANAGED": "1", "NEURODAILY_ALLOW_PRIVATE_SOURCES": "1",
+           "NO_PROXY": "127.0.0.1,localhost"}
     env.pop("NEURODAILY_SIDECAR", None)
     env.pop("NEURODAILY_DEMO", None)
     if use_windows_appdata:

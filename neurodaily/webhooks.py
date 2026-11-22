@@ -71,6 +71,13 @@ def send_wecom(url: str, text: str) -> None:
 
 def send_all(result, cfg: dict | None = None) -> dict:
     cfg = cfg or load_cfg()
+    from .security import validate_http_url
+    for key in ("feishu", "wecom"):
+        if cfg.get(key):
+            try:
+                validate_http_url(str(cfg[key]), resolve=False)
+            except ValueError as exc:
+                raise ValueError(f"Blocked webhook URL for {key}: {exc}") from exc
     text = build_text(result, int(cfg.get("max_items", 8)))
     out = {}
     if cfg.get("feishu"):

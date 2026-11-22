@@ -109,6 +109,17 @@ def fetch(config, logger=None) -> list[Item]:
     feeds = config.policy_feeds
     if not feeds:
         return []
+    from ..security import validate_http_url
+    safe_feeds = []
+    for url in feeds:
+        try:
+            validate_http_url(url, resolve=False)
+            safe_feeds.append(url)
+        except ValueError:
+            record_failure(f"Blocked RSS URL: {url}")
+    feeds = safe_feeds
+    if not feeds:
+        return []
     record_query(f"Policy RSS · {len(feeds)} feed(s)")
     mark_sampled(truncated=preview and len(feeds) > 8)
     if preview:

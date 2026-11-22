@@ -39,6 +39,16 @@ class EmailRecipientTests(unittest.TestCase):
             self.assertIn(marker, html)
             self.assertTrue(subject)
 
+    def test_email_uses_language_specific_ai_summary(self):
+        item = Item("Example paper", kind="paper")
+        digest = result()
+        digest.ai_summary = "中文摘要"
+        digest.ai_summaries = {"zh": "中文摘要", "en": "English summary", "ru": "Русское резюме"}
+        _, html, text = mailer.render_email(digest, {"attach_report": False}, language="en")
+        self.assertIn("English summary", html)
+        self.assertIn("English summary", text)
+        self.assertNotIn("中文摘要", html)
+
     def test_future_push_time_is_queued(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "queue.json"

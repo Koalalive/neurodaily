@@ -56,11 +56,12 @@ def cmd_run(args) -> int:
                      mode=_mode)
         try:
             from . import ai_summary as _ai
-            _txt = _ai.generate(result) if not result.skipped else ""
-            if _txt:
-                result.ai_summary = _txt
-                result.ai_summary_meta = {"model": _ai.load_cfg().get("model", "")}
-                print("[neurodaily] 🧠 AI summary generated")
+            if not result.skipped:
+                summaries = _ai.generate_all(result, _ai.load_cfg())
+                if summaries:
+                    result.ai_summary_meta = {"model": _ai.load_cfg().get("model", ""),
+                                              "languages": sorted(summaries)}
+                    print(f"[neurodaily] 🧠 AI summary generated: {', '.join(sorted(summaries))}")
         except Exception as e:
             print(f"[neurodaily] ⚠ AI summary skipped: {e}")
         try:

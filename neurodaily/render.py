@@ -107,7 +107,7 @@ def render_html(result: DigestResult, config: Config | None = None, *, locale: s
         }
         html = template.render(**ctx)
         html = _inject_on_this_day(html, result)
-        html = _inject_ai_summary(html, result)
+        html = _inject_ai_summary(html, result, language)
         if result.items:
             try:
                 html = _place_research_map(html, env, report_activity(result, _external_url), language)
@@ -168,8 +168,9 @@ def refresh_saved_research_map(html: str, language: str) -> str:
         return html
 
 
-def _inject_ai_summary(html: str, result: DigestResult) -> str:
-    text = (getattr(result, "ai_summary", "") or "").strip()
+def _inject_ai_summary(html: str, result: DigestResult, language: str = "zh") -> str:
+    summaries = getattr(result, "ai_summaries", {}) or {}
+    text = (summaries.get(language) or getattr(result, "ai_summary", "") or "").strip()
     if not text:
         return html
     try:
@@ -180,12 +181,14 @@ def _inject_ai_summary(html: str, result: DigestResult) -> str:
     import html as _html
     meta = getattr(result, "ai_summary_meta", {}) or {}
     model = _html.escape(str(meta.get("model", "AI")))
+    ai_title = {"zh": "🧠 今日 AI 摘要", "en": "🧠 Today’s AI summary",
+                "ru": "🧠 ИИ-резюме за сегодня"}.get(language, "🧠 今日 AI 摘要")
     allowed = {it.url for it in (getattr(result, "items", None) or []) if getattr(it, "url", None)}
     refs = getattr(result, "ai_summary_refs", {}) or {}
     paras = render_ai_text(text, allowed, refs)
     section = (
         '<section id="ai-summary"><div class="sec-head"><div>'
-        f'<h2 class="sec-title"><span class="dot"></span>🧠 今日 AI 摘要'
+        f'<h2 class="sec-title"><span class="dot"></span>{ai_title}'
         f'<span class="count">({model})</span></h2>'
         '<p class="sec-desc">由 AI 依据当日抓取内容生成，仅供参考；请以原文为准。</p>'
         '</div></div>'

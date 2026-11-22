@@ -37,6 +37,7 @@ def _write(path: str, value: Any) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(value, stream, ensure_ascii=False, indent=2)
+        os.chmod(tmp, 0o600)
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):

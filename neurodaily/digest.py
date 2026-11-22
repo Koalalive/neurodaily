@@ -33,7 +33,8 @@ class DigestResult:
     config: object = None          # the Config used (so renderer can show prompt)
     errors: list[str] = field(default_factory=list)
     on_this_day: list = field(default_factory=list)   # 中文“历史上的今天”条目
-    ai_summary: str = ""                              # AI 每日摘要（可选）
+    ai_summary: str = ""                              # AI 每日摘要（默认语言）
+    ai_summaries: dict = field(default_factory=dict)  # language -> summary
     ai_summary_meta: dict = field(default_factory=dict)
     on_this_day_lang: str = "zh"
     history_id: int = 0            # id in search_history (0 = not recorded)

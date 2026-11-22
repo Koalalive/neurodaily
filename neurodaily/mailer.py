@@ -207,7 +207,8 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
     _lang = language
     _ai_title = labels["summary"]
     _otd_title = labels["otd"]
-    ai = (getattr(result, "ai_summary", "") or "").strip()
+    summaries = getattr(result, "ai_summaries", {}) or {}
+    ai = (summaries.get(language) or getattr(result, "ai_summary", "") or "").strip()
     if ai:
         try:
             from .ai_summary import _clean_summary

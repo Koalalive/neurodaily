@@ -40,7 +40,7 @@ class SearchReportTests(unittest.TestCase):
             "合并来源", "相关版本", "正式发表 · Published article", "无命中", "超时", "样本范围内的结果",
             "已到达抓取上限", "request deadline exceeded", "AB=&lt;b&gt;EEG&lt;/b&gt;",
             "2 条因字段不足待确认", "请求回溯 · 7 天",
-            '<a href="#source-health">来源状态</a>',
+            '<a href="#source-health">📡 来源状态</a>',
             'href="https://example.com/pubmed"', 'href="https://example.com/published"',
         ):
             self.assertIn(content, html)
