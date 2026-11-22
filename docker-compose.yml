@@ -2,7 +2,7 @@ services:
   neurodaily:
     build: .
     ports:
-      - "8031:8031"
+      - "127.0.0.1:8031:8031"
     volumes:
       - ./config:/app/neurodaily/config
       - ./output:/app/neurodaily/output

@@ -16,7 +16,7 @@ NeuroDaily 适合需要持续跟踪论文、预印本、临床试验和监管产
 ![python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 [![Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-README 是私有仓库的项目首页。安装包、Actions 产物和源码通过 GitHub 仓库访问权限分享。
+[项目主页](https://koalalive.github.io/neurodaily/)提供安装入口、界面演示和文档索引。
 
 ## 界面预览 · Screenshots
 
@@ -84,14 +84,14 @@ README 是私有仓库的项目首页。安装包、Actions 产物和源码通�
 
 ## 快速开始
 
-macOS 可用私有 Homebrew tap 安装，通过浏览器打开本机工作区。Windows 和 Linux 从私有仓库的 [GitHub Releases](https://github.com/Koalalive/neurodaily/releases/latest) 下载安装包。打开工作区后可选择学科、语言和推送方式，开始检索后在新标签页查看日报。服务器或 CI 可使用 CLI。 [GitHub Actions 手册](docs/GITHUB_ACTIONS.md)
+macOS 可用 Homebrew tap 安装，通过浏览器打开本机工作区。Windows 和 Linux 从 [GitHub Releases](https://github.com/Koalalive/neurodaily/releases/latest) 下载安装包。打开工作区后可选择学科、语言和推送方式，开始检索后在新标签页查看日报。服务器或 CI 可使用 CLI。 [GitHub Actions 手册](docs/GITHUB_ACTIONS.md)
 
 ### macOS（Homebrew）
 
-准备可访问私有仓库的 GitHub SSH 密钥，在终端执行以下命令。
+安装 Homebrew 后，在终端运行以下命令。
 
 ```bash
-brew tap koalalive/neurodaily git@github.com:Koalalive/neurodaily.git
+brew tap koalalive/neurodaily https://github.com/Koalalive/neurodaily.git
 brew install koalalive/neurodaily/neurodaily
 neurodaily web
 ```
@@ -134,7 +134,7 @@ scripts/start.sh
 
 ```bash
 docker build -t neurodaily:local .
-docker run -d --name neurodaily -p 8031:8031 neurodaily:local
+docker run -d --name neurodaily -p 127.0.0.1:8031:8031 neurodaily:local
 # http://127.0.0.1:8031
 ```
 
@@ -334,7 +334,7 @@ cp config/webhooks.example.json config/webhooks.json
 - 条目至少要有一个标题和一个链接；没有日期的条目不会被时间窗丢弃。
 - 去重按链接；建议 feed 提供 `pubDate` / `updated`。
 - 配置在每次运行时重新读取，**不需要重启服务**；设置页保存后下一次运行生效。
-- `config/` 已在 gitignore 中，可以放心填自己的私有源。
+- 本地配置文件默认由 Git 忽略。提交前仍应检查暂存内容，尤其是独立的配置备份和导出文件。
 
 验证：
 
@@ -471,7 +471,7 @@ make test                     # 同上
 | [竞品对照与接口路线](docs/ROADMAP.md) | 竞品边界、HTML 文献计量与接口优先级 |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | 运维手册（启停/调度/排障/维护记录） |
 | [`docs/INSTALL_REQUIREMENTS.md`](docs/INSTALL_REQUIREMENTS.md) | 平台安装方式与软硬件要求 |
-| [macOS Homebrew 指南](docs/MACOS_HOMEBREW.md) | 私有 tap、启动、升级与旧数据目录 |
+| [macOS Homebrew 指南](docs/MACOS_HOMEBREW.md) | Homebrew 安装、启动、升级与旧数据目录 |
 | [`docs/DESKTOP_TAURI.md`](docs/DESKTOP_TAURI.md) | Windows 与 Linux 的 Tauri 构建和更新 |
 
 ---
@@ -508,7 +508,7 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 scripts/start.sh          # http://127.0.0.1:8031
 ```
 
-On macOS, use the private Homebrew tap and run `neurodaily web` to open the local app in your browser. On Windows and Linux, download the installer from the private repository's Releases. Open Settings to choose a research preset, language, and delivery options. [macOS Homebrew](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest)
+On macOS, use the Homebrew tap and run `neurodaily web` to open the local app in your browser. On Windows and Linux, download the installer from GitHub Releases. Open Settings to choose a research preset, language, and delivery options. [macOS Homebrew](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest)
 
 Offline demo:
 
@@ -520,7 +520,7 @@ Offline demo:
 
 ```bash
 docker build -t neurodaily:local .
-docker run -d --name neurodaily -p 8031:8031 \
+docker run -d --name neurodaily -p 127.0.0.1:8031:8031 \
   -v "$PWD/config:/app/neurodaily/config" \
   -v "$PWD/output:/app/neurodaily/output" \
   neurodaily:local
@@ -600,7 +600,7 @@ NeuroDaily — автономная ежедневная научная свод
 
 ### Быстрый старт
 
-На macOS установите приложение через приватный tap Homebrew и запустите `neurodaily web`. В Windows и Linux скачайте установщик из Releases приватного репозитория. [Установка на macOS](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest)
+На macOS установите приложение через tap Homebrew и запустите `neurodaily web`. В Windows и Linux скачайте установщик из GitHub Releases. [Установка на macOS](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest)
 
 ```bash
 git clone https://github.com/Koalalive/neurodaily.git
@@ -621,7 +621,7 @@ scripts/start.sh          # http://127.0.0.1:8031
 
 ```bash
 docker build -t neurodaily:local .
-docker run -d --name neurodaily -p 8031:8031 \
+docker run -d --name neurodaily -p 127.0.0.1:8031:8031 \
   -v "$PWD/config:/app/neurodaily/config" \
   -v "$PWD/output:/app/neurodaily/output" \
   neurodaily:local

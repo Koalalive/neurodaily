@@ -1,18 +1,17 @@
 # macOS 安装与启动
 
-在 macOS 上，通过项目的私有 Homebrew tap 安装 NeuroDaily，用浏览器查看本机日报、设置和运行历史。安装前请准备能访问 `Koalalive/neurodaily` 的 GitHub 账号与 SSH 密钥，并完成 Homebrew 的终端环境配置。[Homebrew 安装文档](https://docs.brew.sh/Installation) · [GitHub SSH 配置](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
+在 macOS 上，通过项目的 Homebrew tap 安装 NeuroDaily，用浏览器查看本机日报、设置和运行历史。先完成 Homebrew 的终端环境配置。 [Homebrew 安装文档](https://docs.brew.sh/Installation)
 
 ## 首次安装
 
-在终端确认 SSH 能访问仓库。`git ls-remote` 返回 `HEAD` 的提交记录后，即可添加 tap 并安装公式。
+在终端添加 tap 并安装公式。
 
 ```bash
-git ls-remote git@github.com:Koalalive/neurodaily.git HEAD
-brew tap koalalive/neurodaily git@github.com:Koalalive/neurodaily.git
+brew tap koalalive/neurodaily https://github.com/Koalalive/neurodaily.git
 brew install koalalive/neurodaily/neurodaily
 ```
 
-tap 和源代码来自同一私有仓库。公式从 Git 版本标签安装项目，并由 Homebrew 准备 Python 3.13 和运行依赖。`brew tap` 的双参数形式让 Homebrew 直接使用指定的 SSH 地址。 [Homebrew tap 文档](https://docs.brew.sh/Taps)
+tap 和源代码来自同一个 GitHub 仓库。公式从 Git 版本标签安装项目，并由 Homebrew 准备 Python 3.13 和运行依赖。`brew tap` 的双参数形式让 Homebrew 直接使用项目的 HTTPS 地址。 [Homebrew tap 文档](https://docs.brew.sh/Taps)
 
 ## 启动和停止
 
@@ -44,7 +43,7 @@ neurodaily web
 | 现象 | 核对方法 |
 |---|---|
 | `brew: command not found` | 安装 Homebrew，并按安装程序提示将 `brew shellenv` 加到当前 shell 的配置中 |
-| `Permission denied (publickey)` 或 `Repository not found` | 确认 SSH 密钥已录入 GitHub，当前 SSH 账号已加入私有仓库。可用 `ssh -T git@github.com` 查看认证到的账号 |
+| 旧 tap 拉取时提示 `Permission denied (publickey)` | 用 `git -C "$(brew --repository koalalive/neurodaily)" remote set-url origin https://github.com/Koalalive/neurodaily.git` 改用 HTTPS |
 | Intel Mac 的 `python@3.13` 与 Python.org 链接冲突 | 先运行 `brew install --skip-link python@3.13`，再安装 NeuroDaily。配方通过 Homebrew 的版本目录访问 Python |
 | 浏览器没有自动打开 | 如果服务已启动，可直接访问 `http://127.0.0.1:8031/desktop` |
 | 端口 8031 已被占用 | 用 `lsof -nP -iTCP:8031 -sTCP:LISTEN` 确认是否已有实例。如需使用其他端口，可运行 `neurodaily web --port 8032` |

@@ -64,7 +64,7 @@ git -C "$scratch/source" checkout --quiet --detach "$commit"
 git -C "$scratch/source" tag "$release" "$commit"
 
 mkdir -p "$scratch/tap/Formula"
-sed "s|ssh://git@github.com/Koalalive/neurodaily.git|file://$scratch/source|" \
+sed "s|https://github.com/Koalalive/neurodaily.git|file://$scratch/source|" \
   "$source_formula" > "$scratch/tap/Formula/neurodaily.rb"
 git -C "$scratch/tap" init --quiet --initial-branch=main
 git -C "$scratch/tap" add Formula/neurodaily.rb

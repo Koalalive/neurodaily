@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101126">
+  <meta name="description" content="神通寰宇 NeuroDaily 聚合论文、预印本、临床试验及行业动态，按研究方向定时生成可追溯的 HTML 日报。">
+  <title>神通寰宇 NeuroDaily · 科研文献日报</title>
+  <link rel="icon" href="./assets/logo.png" type="image/png">
+  <link rel="stylesheet" href="./site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="masthead">
+    <div class="container topbar">
+      <a class="wordmark" href="./" aria-label="NeuroDaily 首页">
+        <img src="./assets/logo.png" alt="" width="36" height="36">
+        <span>NeuroDaily</span>
+      </a>
+      <nav aria-label="主导航">
+        <a href="#features">功能</a>
+        <a href="#demo">演示</a>
+        <a href="#install">安装</a>
+        <a href="https://github.com/Koalalive/neurodaily">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container hero-layout">
+        <div class="hero-copy">
+          <h1 id="hero-title">神通寰宇</h1>
+          <p class="hero-line">用一份可追溯的日报，<br>跟进领域内每天的进展。</p>
+          <p class="hero-description">按研究方向追踪论文、预印本、临床试验、监管与产业动态，生成带原始出处的 HTML 日报。</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#install">选择安装方式 <span aria-hidden="true">↓</span></a>
+            <a class="button button-secondary" href="#demo">查看日报演示</a>
+          </div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <img src="./assets/logo.png" alt="" width="256" height="256" fetchpriority="high">
+        </div>
+      </div>
+    </section>
+
+    <section class="section container" id="features" aria-labelledby="features-title">
+      <h2 id="features-title">从检索到日报</h2>
+      <dl class="feature-grid">
+        <div>
+          <dt>检索规则可配置</dt>
+          <dd>从神经科学、肿瘤学或重症医学预设出发，按期刊、字段、关键词与布尔逻辑定义检索范围。</dd>
+        </div>
+        <div>
+          <dt>结果可以追溯</dt>
+          <dd>汇总期刊 RSS、PubMed、预印本和临床监管来源，查看检索状态、本地历史及每条结果的原始链接。</dd>
+        </div>
+        <div>
+          <dt>定时检索与分享</dt>
+          <dd>定时生成日报，按需通过邮件、飞书或企业微信推送。文献数据可导出为 JSON 或 BibTeX。</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="demo-band" id="demo" aria-labelledby="demo-title">
+      <div class="section container">
+        <div class="section-heading">
+          <h2 id="demo-title">日报演示</h2>
+          <p>按版块浏览检索结果，从论文条目回到期刊或数据库。</p>
+        </div>
+        <figure>
+          <a class="demo-image" href="./assets/digest-demo.png" aria-label="查看完整日报演示截图">
+            <img src="./assets/digest-demo.png" width="1440" height="930" loading="lazy" decoding="async" alt="神经科学日报的来源统计、操作栏和最新论文列表">
+          </a>
+          <figcaption>本地离线演示 · 神经科学预设</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section container" id="install" aria-labelledby="install-title">
+      <h2 id="install-title">安装与运行</h2>
+      <div class="install-grid">
+        <article>
+          <h3>Windows / Linux</h3>
+          <p>Windows 可用 EXE 或 MSI 安装。Linux 可用 AppImage 或 DEB。</p>
+          <a href="https://github.com/Koalalive/neurodaily/releases/latest">查看最新正式版 <span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/Koalalive/neurodaily/blob/main/docs/INSTALL_REQUIREMENTS.md">系统要求 <span aria-hidden="true">↗</span></a>
+        </article>
+        <article>
+          <h3>macOS</h3>
+          <p>使用 Homebrew 安装，再用 <code>neurodaily web</code> 打开本机工作区。</p>
+          <a href="https://github.com/Koalalive/neurodaily/blob/main/docs/MACOS_HOMEBREW.md">Homebrew 安装指南 <span aria-hidden="true">↗</span></a>
+        </article>
+        <article>
+          <h3>Docker / 命令行</h3>
+          <p>面向本机、服务器和定时任务，支持用 CLI 生成离线演示或真实日报。</p>
+          <a href="https://github.com/Koalalive/neurodaily/blob/main/docs/DOCKER.md">Docker 部署手册 <span aria-hidden="true">↗</span></a>
+          <a href="https://hub.docker.com/r/koalalive/neurodaily/tags">Docker Hub 镜像标签 <span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/Koalalive/neurodaily#命令行">命令行用法 <span aria-hidden="true">↗</span></a>
+        </article>
+      </div>
+    </section>
+
+    <section class="reference-band" aria-labelledby="reference-title">
+      <div class="section container reference-layout">
+        <div>
+          <h2 id="reference-title">项目文档</h2>
+          <p>Python 负责检索与定时任务，FastAPI 提供本地工作区，Jinja2 生成独立 HTML 日报。Windows 和 Linux 用 Tauri 封装本地服务。</p>
+        </div>
+        <ul class="reference-links">
+          <li><a href="https://github.com/Koalalive/neurodaily/blob/main/docs/ARCHITECTURE.md">架构与数据流 <span aria-hidden="true">↗</span></a></li>
+          <li><a href="https://github.com/Koalalive/neurodaily/blob/main/docs/CONFIGURATION.md">配置参考 <span aria-hidden="true">↗</span></a></li>
+          <li><a href="https://github.com/Koalalive/neurodaily/blob/main/docs/GITHUB_ACTIONS.md">GitHub Actions 手册 <span aria-hidden="true">↗</span></a></li>
+          <li><a href="https://github.com/Koalalive/neurodaily#english" lang="en">English documentation <span aria-hidden="true">↗</span></a></li>
+          <li><a href="https://github.com/Koalalive/neurodaily#русский" lang="ru">Документация на русском <span aria-hidden="true">↗</span></a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-layout">
+      <span>神通寰宇 · NeuroDaily</span>
+      <a href="https://github.com/Koalalive/neurodaily/blob/main/LICENSE">Apache-2.0</a>
+      <a href="https://github.com/Koalalive/neurodaily/issues">反馈问题 <span aria-hidden="true">↗</span></a>
+    </div>
+  </footer>
+</body>
+</html>
