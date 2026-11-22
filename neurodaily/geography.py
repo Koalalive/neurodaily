@@ -264,7 +264,10 @@ def _fits_role(role: str, field: str, text: str) -> bool:
         return False
     if role == "study_site":
         return bool(_STUDY.search(text))
-    return role == "event" and not _BYLINE.search(text) and bool(_EVENT.search(text))
+    # News/policy RSS often supplies only a headline and a one-line summary;
+    # the article page may block bots. Let the model see any country/city
+    # sentence, while still rejecting bylines and personal addresses.
+    return role == "event" and not _BYLINE.search(text)
 
 
 def _candidate(item: Item, known: list[dict], names: _CountryNames) -> dict | None:
