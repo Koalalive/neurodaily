@@ -70,7 +70,7 @@ def start_app(executable, home):
 
 
 def check_report(opener, base_url, run_id):
-    with opener.open(f"{base_url}/history/{run_id}", timeout=5) as response:
+    with opener.open(f"{base_url}/history/{run_id}/report", timeout=5) as response:
         assert b"Scheduled smoke result" in response.read(), "Missing original report"
 
 

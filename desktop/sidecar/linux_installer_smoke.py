@@ -60,7 +60,7 @@ def check_deb_upgrade(baseline, baseline_version, candidate, candidate_version, 
         assert schedule["last_run"]["status"] == "completed", schedule
         assert history["count"] == 1, history
         run = history["runs"][0]
-        report_url = f"/history/{run['id']}"
+        report_url = f"/history/{run['id']}/report"
         report = report_bytes(opener, base_url, report_url)
         assert b"Scheduled smoke result" in report, "The baseline report is missing the offline fixture"
 

@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: daily-demo
+  cancel-in-progress: false
+
 jobs:
   update-demo:
     runs-on: ubuntu-latest
@@ -28,11 +32,33 @@ jobs:
           .venv/bin/pip install -q -e ".[topics]" "scikit-learn>=1.4"
           .venv/bin/python -c "import sklearn; print('sklearn', sklearn.__version__)"
 
+      - name: Verify demo configuration
+        run: |
+          .venv/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+          cfg = json.loads(Path("config/demo.json").read_text(encoding="utf-8"))
+          assert int(cfg["windows"]["trials_hours"]) >= 168, cfg["windows"]
+          assert int(cfg["sources"]["trials"]["lookback_days"]) >= 7, cfg["sources"]["trials"]
+          print("demo config: 168h trials window")
+          PY
+
       - name: Build 168h public demo
         env:
           DEEPSEEK_API_KEY: ${{ secrets.NEURODAILY_LLM_API_KEY }}
           NEURODAILY_NO_OPEN: "1"
         run: .venv/bin/python scripts/build_demo_snapshot.py
+
+      - name: Verify generated demo
+        run: |
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          for lang in ("zh", "en", "ru"):
+              page = Path(f"docs/demo/latest-report.{lang}.html").read_text(encoding="utf-8")
+              assert 'id="trials"' in page and 'id="conferences"' in page
+              assert 'data-no-i18n>🗓️ 学术会议' not in page
+          print("demo pages contain trials, conferences and translatable navigation")
+          PY
 
       - name: Commit updated demo
         run: |
