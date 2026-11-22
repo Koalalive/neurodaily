@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HOME=/app
 
 WORKDIR /app
-COPY pyproject.toml ./
+COPY pyproject.toml LICENSE NOTICE ./
 COPY neurodaily ./neurodaily
 RUN pip install --no-cache-dir .
 

@@ -287,31 +287,97 @@ jobs:
           xvfb-run -a python desktop/sidecar/linux_installer_smoke.py "$image" "$version"
           xvfb-run -a python desktop/sidecar/native_ui_smoke.py /usr/bin/neurodaily-desktop "$version"
 
-  publish:
-    needs: [build, homebrew, windows-installer, extra-installer]
-    if: startsWith(github.ref, 'refs/tags/')
+  cli-wheel:
+    name: Build and verify the Python CLI wheel
+    if: ${{ !startsWith(github.ref, 'refs/heads/verify/') }}
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify release metadata and build the wheel
+        shell: bash
+        run: |
+          args=()
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then args+=(--tag "$GITHUB_REF_NAME"); fi
+          python scripts/verify_release_version.py package "${args[@]}"
+          python -m pip install build
+          python -m build --wheel --outdir cli-dist
+          python scripts/verify_release_version.py package "${args[@]}" --wheels cli-dist
+      - name: Install and smoke test the CLI wheel
+        shell: bash
+        run: |
+          wheel=$(find "$PWD/cli-dist" -name '*.whl' -type f)
+          python -m venv "$RUNNER_TEMP/neurodaily-wheel-venv"
+          cli="$RUNNER_TEMP/neurodaily-wheel-venv/bin"
+          "$cli/python" -m pip install "$wheel"
+          "$cli/python" -m pip check
+          cd "$RUNNER_TEMP"
+          export NEURODAILY_HOME="$RUNNER_TEMP/neurodaily-wheel-home"
+          "$cli/neurodaily" web --help
+          "$cli/neurodaily" demo --no-open
+          compgen -G "$NEURODAILY_HOME/output/*.html" >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neurodaily-cli-wheel
+          path: cli-dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    needs: [build, homebrew, windows-installer, extra-installer, cli-wheel]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    concurrency:
+      group: neurodaily-release-publish
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: write
+    env:
+      DOCKER_IMAGE: docker.io/koalalive/neurodaily
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'koalalive' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify the tag and check release state
+        id: release_state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 scripts/verify_release_version.py package --tag "$GITHUB_REF_NAME")
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          publish=$(python3 scripts/verify_release_version.py release-state "$GITHUB_REF_NAME" "$RUNNER_TEMP/releases.json")
+          printf 'version=%s\nrevision=%s\npublish=%s\n' "$version" "$(git rev-parse HEAD)" "$publish" >> "$GITHUB_OUTPUT"
+          if [[ "$publish" == false ]]; then printf 'Release %s is already published.\n' "$GITHUB_REF_NAME"; fi
       - uses: actions/download-artifact@v4
+        if: steps.release_state.outputs.publish == 'true'
         with:
           pattern: neurodaily-*
           path: installers
           merge-multiple: true
-      - name: Verify all installer and updater assets
+      - name: Verify installers, signatures and CLI wheel
+        if: steps.release_state.outputs.publish == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y minisign
+          sudo apt-get install -y minisign skopeo
           python3 desktop/verify_update_assets.py installers "$GITHUB_REF_NAME"
+          python3 scripts/verify_release_version.py package --tag "$GITHUB_REF_NAME" --wheels installers
       - name: Upload assets to draft release
+        if: steps.release_state.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
           body: |
-            macOS 使用私有 Homebrew tap 安装命令行，并用 `neurodaily web` 在默认浏览器打开本机工作区。支持 Apple Silicon 和 Intel。安装与旧版数据迁移见 [macOS Homebrew 指南](https://github.com/Koalalive/neurodaily/blob/main/docs/MACOS_HOMEBREW.md)。
+            macOS 使用 Homebrew 安装命令行，并用 `neurodaily web` 在默认浏览器打开本机工作区。支持 Apple Silicon 和 Intel。安装与旧版数据迁移见 [macOS Homebrew 指南](https://github.com/Koalalive/neurodaily/blob/main/docs/MACOS_HOMEBREW.md)。
+
+            Release 附带 Python CLI wheel。同一版本的 `koalalive/neurodaily` Docker 镜像支持 Linux amd64 和 arm64。
 
             Windows 验证了 NSIS 和 MSI 全新安装，以及从 v1.0.4 覆盖升级。Ubuntu 验证了 DEB 安装和覆盖升级，以及 AppImage 解包运行。
 
@@ -328,7 +394,129 @@ jobs:
             installers/**/*.AppImage
             installers/**/*.deb
             installers/**/*.sig
+            installers/**/*.whl
+      - name: Verify Docker Hub destination and existing version
+        if: steps.release_state.outputs.publish == 'true'
+        id: docker_state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.release_state.outputs.version }}
+        run: |
+          source_private=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private')
+          exists=$(python3 scripts/verify_release_version.py docker-destination \
+            --source-private "$source_private" --image-tag "$RELEASE_VERSION")
+          printf 'exists=%s\n' "$exists" >> "$GITHUB_OUTPUT"
+      - name: Log in to Docker Hub
+        if: steps.release_state.outputs.publish == 'true'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Enable arm64 builds
+        if: steps.release_state.outputs.publish == 'true' && steps.docker_state.outputs.exists == 'false'
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - name: Set up Docker Buildx
+        if: steps.release_state.outputs.publish == 'true' && steps.docker_state.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v4
+      - name: Build amd64 and arm64 images without publishing
+        if: steps.release_state.outputs.publish == 'true' && steps.docker_state.outputs.exists == 'false'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.DOCKER_IMAGE }}:${{ steps.release_state.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.release_state.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.release_state.outputs.revision }}
+          outputs: type=oci,dest=${{ runner.temp }}/neurodaily-image.tar
+          push: false
+      - name: Publish and verify the Docker image tags
+        if: steps.release_state.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.release_state.outputs.version }}
+          RELEASE_REVISION: ${{ steps.release_state.outputs.revision }}
+        run: |
+          set -euo pipefail
+          authfile="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+          manifest="$RUNNER_TEMP/docker-index.json"
+          checked_tag() {
+            local source_private
+            source_private=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private') || return
+            python3 scripts/verify_release_version.py docker-destination \
+              --source-private "$source_private" --image-tag "$1"
+          }
+          read_platforms() {
+            skopeo inspect --authfile "$authfile" --raw "$1" > "$manifest"
+            jq -e '[.manifests[].platform | select(.os == "linux") | .architecture] | sort == ["amd64", "arm64"]' \
+              "$manifest" >/dev/null
+          }
+          manifest_digest() {
+            sha256sum "$1" | awk '{print "sha256:" $1}'
+          }
+          version_ref="$DOCKER_IMAGE:$RELEASE_VERSION"
+          exists=$(checked_tag "$RELEASE_VERSION")
+          staged_digest=""
+          if [[ "$exists" == false ]]; then
+            archive="oci-archive:$RUNNER_TEMP/neurodaily-image.tar"
+            read_platforms "$archive"
+            staged_digest=$(manifest_digest "$manifest")
+            verified_version=$(checked_tag "$RELEASE_VERSION")
+            test "$verified_version" = false
+            skopeo copy --authfile "$authfile" --all --preserve-digests "$archive" "docker://$version_ref"
+          fi
+
+          read_platforms "docker://$version_ref"
+          digest=$(manifest_digest "$manifest")
+          if [[ -n "$staged_digest" ]]; then test "$digest" = "$staged_digest"; fi
+          while IFS= read -r platform_digest; do
+            [[ "$platform_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            skopeo inspect --authfile "$authfile" --config "docker://$DOCKER_IMAGE@$platform_digest" |
+              jq -e --arg version "$RELEASE_VERSION" --arg revision "$RELEASE_REVISION" \
+                '.config.Labels["org.opencontainers.image.version"] == $version and
+                 .config.Labels["org.opencontainers.image.revision"] == $revision' >/dev/null
+          done < <(jq -r '.manifests[] | select(.platform.os == "linux") | .digest' "$manifest")
+
+          latest_exists=$(checked_tag latest)
+          latest=""
+          if [[ "$latest_exists" == true ]]; then
+            skopeo inspect --authfile "$authfile" --raw "docker://$DOCKER_IMAGE:latest" > "$manifest"
+            latest=$(manifest_digest "$manifest")
+          fi
+          if [[ "$latest" != "$digest" ]]; then
+            if [[ -n "$latest" ]]; then
+              previous=$(skopeo inspect --authfile "$authfile" --config "docker://$DOCKER_IMAGE@$latest" |
+                jq -r '.config.Labels["org.opencontainers.image.version"] // ""')
+              if [[ "$previous" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                python3 - "$RELEASE_VERSION" "${previous#v}" <<'PY'
+          import sys
+          target, current = (tuple(map(int, value.split('.'))) for value in sys.argv[1:])
+          if current > target:
+              raise SystemExit('Docker Hub latest already points to a newer version.')
+          PY
+              fi
+            fi
+            verified_latest=$(checked_tag latest)
+            test "$latest_exists" = "$verified_latest"
+            if [[ "$verified_latest" == true ]]; then
+              skopeo inspect --authfile "$authfile" --raw "docker://$DOCKER_IMAGE:latest" > "$manifest"
+              test "$latest" = "$(manifest_digest "$manifest")"
+            fi
+            skopeo copy --authfile "$authfile" --all --preserve-digests \
+              "docker://$DOCKER_IMAGE@$digest" "docker://$DOCKER_IMAGE:latest"
+          fi
+          read_platforms "docker://$DOCKER_IMAGE:latest"
+          test "$digest" = "$(manifest_digest "$manifest")"
+          printf 'Docker Hub %s and latest verified at %s\n' "$version_ref" "$digest"
       - name: Publish the complete release
+        if: steps.release_state.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest --repo "$GITHUB_REPOSITORY"

@@ -6,5 +6,9 @@ output/
 competition/
 config/profiles/
 config/email.json
+config/ai_summary.json
 config/webhooks.json
 config/config.json
+config/ui.json
+.env
+.env.*
