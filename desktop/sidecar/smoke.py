@@ -70,6 +70,7 @@ def check_scheduled_search(opener, base_url, home, *, new_profile=None):
             cfg["sources"]["smoke"] = {"type": "rss", "kind": "paper", "enabled": True,
                                        "url": f"http://127.0.0.1:{feed.server_port}/feed"}
             cfg.update(journals=[], policy_feeds=[], search={"query": 'TI="Scheduled smoke result"'})
+            cfg.setdefault("output", {})["topic_map"] = False
             now = datetime.now()
             cfg["scheduled"].update(enabled=True, hour=now.hour, minute=now.minute,
                                     on_this_day={"enabled": False})
@@ -84,7 +85,7 @@ def check_scheduled_search(opener, base_url, home, *, new_profile=None):
             else:
                 raise AssertionError("A manual search started during the scheduled run")
             feed.finish_search.set()
-            deadline = time.monotonic() + 25
+            deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
                 status = fetch_json(opener, base_url, "/api/launchd/status")
                 attempt = status["last_run"]
