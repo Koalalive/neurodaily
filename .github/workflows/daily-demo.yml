@@ -25,7 +25,8 @@ jobs:
       - name: Install
         run: |
           python -m venv .venv
-          .venv/bin/pip install -q -e ".[topics]"
+          .venv/bin/pip install -q -e ".[topics]" "scikit-learn>=1.4"
+          .venv/bin/python -c "import sklearn; print('sklearn', sklearn.__version__)"
 
       - name: Build 36h public demo
         env:
