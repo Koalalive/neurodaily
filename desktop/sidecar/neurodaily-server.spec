@@ -19,7 +19,8 @@ datas += collect_data_files("neurodaily")
 hiddenimports = []
 for pkg in ("uvicorn", "fastapi", "starlette", "pydantic", "jinja2",
             "feedparser", "httpx", "httpcore", "anyio", "h11", "click",
-            "certifi", "email_validator"):
+            "certifi", "email_validator", "sklearn", "scipy", "numpy",
+            "joblib", "threadpoolctl"):
     hiddenimports += collect_submodules(pkg)
 
 a = Analysis(

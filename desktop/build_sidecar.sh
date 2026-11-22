@@ -11,6 +11,8 @@ if [ ! -x "$PY" ]; then
 fi
 
 "$PY" -m pip install --quiet --upgrade pyinstaller
+# Topic landscape (LDA + t-SNE) is included in the desktop analysis pack.
+"$PY" -m pip install --quiet 'scikit-learn>=1.4' 
 "$PY" -m PyInstaller --clean --noconfirm desktop/sidecar/neurodaily-server.spec
 
 TRIPLE="$(rustc -vV | awk '/^host:/{print $2}')"

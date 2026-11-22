@@ -25,6 +25,57 @@ CFG_PATH = os.path.join(ROOT, "config", "email.json")
 LAST_PATH = os.path.join(ROOT, "output", "last_email.json")
 
 _WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+_WEEKDAYS_BY_LANG = {
+    "zh": _WEEKDAYS,
+    "en": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    "ru": ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"],
+}
+_LABELS = {
+    "zh": {"latest": "📄 最新论文", "industry": "💊 商业与监管",
+           "trials": "🧪 临床试验与会议", "policy": "🏛️ 政策与新闻",
+           "items": "条", "papers": "篇论文", "summary": "🧠 今日 AI 摘要",
+           "otd": "📅 历史上的今天", "footer": "本邮件由 NeuroDaily 自动生成。",
+           "attach": "完整交互式报告见附件 HTML（若附件缺失则因体积超限）。",
+           "subject": "神经病专家的厕所读物-{date} {weekday}"},
+    "en": {"latest": "📄 Latest papers", "industry": "💊 Industry & regulatory",
+           "trials": "🧪 Trials & conferences", "policy": "🏛️ Policy & news",
+           "items": "items", "papers": "papers", "summary": "🧠 AI daily overview",
+           "otd": "📅 On this day", "footer": "Generated automatically by NeuroDaily.",
+           "attach": "The complete interactive report is attached as HTML.",
+           "subject": "NeuroDaily Digest-{date} {weekday}"},
+    "ru": {"latest": "📄 Новые публикации", "industry": "💊 Индустрия и регулирование",
+           "trials": "🧪 Испытания и конференции", "policy": "🏛️ Политика и новости",
+           "items": "записей", "papers": "публикаций", "summary": "🧠 ИИ-обзор дня",
+           "otd": "📅 В этот день", "footer": "Письмо сформировано автоматически NeuroDaily.",
+           "attach": "Полный интерактивный отчёт приложен в HTML.",
+           "subject": "NeuroDaily — {date} {weekday}"},
+}
+
+
+def recipients(cfg: dict) -> list[dict]:
+    """Return normalised per-recipient settings while keeping legacy `to`."""
+    result = []
+    rows = cfg.get("recipients")
+    if isinstance(rows, list) and rows:
+        for row in rows:
+            if isinstance(row, str):
+                row = {"address": row}
+            if not isinstance(row, dict):
+                continue
+            address = str(row.get("address") or "").strip()
+            if not address:
+                continue
+            result.append({"address": address,
+                           "time": str(row.get("time") or "").strip(),
+                           "language": str(row.get("language") or cfg.get("language") or "zh")})
+    if result:
+        return result
+    to = cfg.get("to") or []
+    if isinstance(to, str):
+        to = [to]
+    return [{"address": str(address).strip(), "time": "",
+             "language": str(cfg.get("language") or "zh")}
+            for address in dict.fromkeys(to) if str(address).strip()]
 
 DEFAULT_CFG = {
     "enabled": True,
@@ -46,6 +97,8 @@ DEFAULT_CFG = {
     "summary_papers": 12,
     "summary_chars": 420,
     "attach_max_mb": 8,
+    "language": "zh",
+    "recipients": [],
 }
 
 
@@ -79,18 +132,21 @@ def _truncate(s: str, n: int) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
-def _date_parts(result) -> tuple[str, str]:
+def _date_parts(result, language: str = "zh") -> tuple[str, str]:
     raw = str(getattr(result, "generated_at", "") or "")[:10]
     try:
         d = datetime.strptime(raw, "%Y-%m-%d")
     except Exception:
         d = datetime.now()
-    return d.strftime("%Y-%m-%d"), _WEEKDAYS[d.weekday()]
+    weekdays = _WEEKDAYS_BY_LANG.get(language, _WEEKDAYS)
+    return d.strftime("%Y-%m-%d"), weekdays[d.weekday()]
 
 
-def subject_for(result, cfg: dict) -> str:
-    date, weekday = _date_parts(result)
-    tpl = cfg.get("subject_template") or DEFAULT_CFG["subject_template"]
+def subject_for(result, cfg: dict, language: str = "zh") -> str:
+    date, weekday = _date_parts(result, language)
+    labels = _LABELS.get(language, _LABELS["zh"])
+    tpl = cfg.get(f"subject_template_{language}") or (
+        cfg.get("subject_template") if language == "zh" else labels["subject"])
     try:
         return tpl.format(date=date, weekday=weekday)
     except Exception:
@@ -122,8 +178,10 @@ def _item_html(it, accent: str, summary_len: int = 320) -> str:
     )
 
 
-def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
+def render_email(result, cfg: dict | None = None, language: str | None = None) -> tuple[str, str, str]:
     cfg = cfg or load_cfg()
+    language = language or cfg.get("language") or "zh"
+    labels = _LABELS.get(language, _LABELS["zh"])
     accent = "#0369a1"
     sections = result.sections or {}
     papers_all = sections.get("papers", [])
@@ -133,7 +191,7 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
     summary_mode = (cfg.get("body_mode") or "summary") == "summary"
     n_papers = int(cfg.get("summary_papers", 12)) if summary_mode else int(cfg.get("max_papers", 40))
     papers = papers_all[:n_papers]
-    date, weekday = _date_parts(result)
+    date, weekday = _date_parts(result, language)
 
     parts = [
         '<div style="max-width:680px;margin:0 auto;font-family:-apple-system,Segoe UI,Roboto,'
@@ -145,11 +203,9 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
         '<div style="padding:18px 20px;border:1px solid #eeeeee;border-top:none;border-radius:0 0 8px 8px">'
     ]
 
-    _lang = getattr(result, "on_this_day_lang", "zh")
-    _ai_title = {"zh": "🧠 今日 AI 摘要", "en": "🧠 AI daily overview",
-                 "ru": "🧠 ИИ-обзор дня"}.get(_lang, "🧠 今日 AI 摘要")
-    _otd_title = {"zh": "📅 历史上的今天", "en": "📅 On This Day",
-                  "ru": "📅 В этот день"}.get(_lang, "📅 历史上的今天")
+    _lang = language
+    _ai_title = labels["summary"]
+    _otd_title = labels["otd"]
     ai = (getattr(result, "ai_summary", "") or "").strip()
     if ai:
         try:
@@ -187,14 +243,16 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
             )
 
     if papers:
-        hint = f"显示前 {len(papers)} 篇" + (f"（共 {len(papers_all)} 篇）" if summary_mode else "")
-        parts.append(f'<h2 style="font-size:16px;color:{accent};margin:20px 0 6px">📄 最新论文</h2>'
+        hint = (f"显示前 {len(papers)} 篇" if language == "zh" else f"Showing {len(papers)} papers") + (
+            f"（共 {len(papers_all)} 篇）" if language == "zh" and summary_mode else
+            (f" (of {len(papers_all)})" if language != "zh" and summary_mode else ""))
+        parts.append(f'<h2 style="font-size:16px;color:{accent};margin:20px 0 6px">{labels["latest"]}</h2>'
                      f'<div style="color:#888;font-size:12px;margin-bottom:6px">{hint}</div>')
         parts.extend(_item_html(it, accent) for it in papers)
 
     if summary_mode:
-        counts = [("💊 商业与监管", len(industry)), ("🧪 临床试验与会议", len(trials)),
-                  ("🏛️ 政策与新闻", len(policy))]
+        counts = [(labels["industry"], len(industry)), (labels["trials"], len(trials)),
+                  (labels["policy"], len(policy))]
         line = " · ".join(f"{name} {n} 条" for name, n in counts if n)
         if line:
             parts.append(f'<div style="margin:16px 0;color:#555;font-size:13px">{line}</div>')
@@ -202,8 +260,8 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
         for item in industry[:max_other] + trials[:max_other] + policy[:max_other]:
             parts.append(_item_html(item, accent, summary_len=120))
     else:
-        for title, items in [("💊 商业与监管", industry), ("🧪 临床试验与会议", trials),
-                             ("🏛️ 政策与新闻", policy)]:
+        for title, items in [(labels["industry"], industry), (labels["trials"], trials),
+                             (labels["policy"], policy)]:
             if items:
                 parts.append(f'<h2 style="font-size:16px;color:{accent};margin:22px 0 6px">{title}</h2>')
                 parts.extend(_item_html(it, accent) for it in items[: int(cfg.get("max_other", 15))])
@@ -214,14 +272,14 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
 
     if cfg.get("attach_report", True):
         parts.append('<div style="margin-top:14px;color:#888;font-size:12px">'
-                     "完整交互式报告见附件 HTML（若附件缺失则因体积超限）。</div>")
+                     + labels["attach"] + "</div>")
     parts.append(
         '<div style="margin-top:18px;padding-top:12px;border-top:1px solid #eeeeee;color:#999;font-size:11px">'
-        "本邮件由 NeuroDaily 自动生成。</div></div></div>"
+        + labels["footer"] + "</div></div></div>"
     )
     html = "".join(parts)
 
-    lines = [f"NeuroDaily {date} {weekday} — {len(result.items)} 条", ""]
+    lines = [f"NeuroDaily {date} {weekday} — {len(result.items)} {labels['items']}", ""]
     if ai:
         lines += [f"== {_ai_title.replace('🧠 ','')} ==", ai, ""]
     if otd:
@@ -232,18 +290,18 @@ def render_email(result, cfg: dict | None = None) -> tuple[str, str, str]:
                 body = _truncate(body.split("\n\n")[0], int(cfg.get("summary_chars", 420)))
             lines += [f"{e.get('year')} {e.get('title')}", body, ""]
     if papers:
-        lines.append(f"== 最新论文（前 {len(papers)} 篇，共 {len(papers_all)} 篇）==")
+        lines.append(f"== {labels['latest']} ==")
         for it in papers:
             lines.append(f"- {it.title} ({it.source})")
             if it.url:
                 lines.append(f"  {it.url}")
         lines.append("")
-    lines.append(f"商业/监管 {len(industry)} · 试验/会议 {len(trials)} · 政策/新闻 {len(policy)}")
+    lines.append(f"{labels['industry']} {len(industry)} · {labels['trials']} {len(trials)} · {labels['policy']} {len(policy)}")
     limit = int(cfg.get("max_other", 15))
     for item in industry[:limit] + trials[:limit] + policy[:limit]:
         lines.append(f"- {item.title}" + (f"  {item.url}" if item.url else ""))
     text = "\n".join(lines)
-    return subject_for(result, cfg), html, text
+    return subject_for(result, cfg, language), html, text
 
 
 

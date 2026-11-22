@@ -14,6 +14,9 @@ dependencies = [
     "python-dateutil>=2.9",
 ]
 
+[project.optional-dependencies]
+topics = ["scikit-learn>=1.4"]
+
 [project.scripts]
 neurodaily = "neurodaily.cli:main"
 

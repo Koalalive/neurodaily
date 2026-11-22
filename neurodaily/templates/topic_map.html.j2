@@ -1,0 +1,116 @@
+<section id="topic-map" data-no-i18n>
+  <style>
+    #topic-map{margin-block:1.5rem;padding:clamp(12px,2.5vw,24px);border:1px solid #3a4a63;border-radius:16px;background:#101928;color:#e2eaf5}
+    #topic-map h2,#topic-map h3,#topic-map h4{color:#f1f6ff;margin:0 0 .6em}
+    #topic-map p{color:#b9cbdf}
+    #topic-map .tm-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:14px}
+    #topic-map .tm-canvas{width:100%;aspect-ratio:1.8;border:1px solid #334f70;border-radius:12px;background:#0b172a;cursor:crosshair}
+    #topic-map .tm-side{padding:12px;border:1px solid #3b5574;border-radius:10px;background:#15233a;min-height:220px}
+    #topic-map .tm-side h3{font-size:1rem;margin-bottom:8px}
+    #topic-map .tm-side p{margin:.35em 0;font-size:.88rem;line-height:1.55}
+    #topic-map .tm-side a{color:#9addff}
+    #topic-map .tm-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px}
+    #topic-map .tm-chip{font:inherit;font-size:.75rem;color:#dbe9f8;background:#1c2b40;border:1px solid #455d79;border-radius:999px;padding:3px 8px;cursor:pointer}
+    #topic-map .tm-chip[aria-pressed=true]{background:#264464;border-color:#88bbf0}
+    #topic-map .tm-note{font-size:.82rem;color:#9fb3c8}
+    @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
+  </style>
+  <h2>🧭 主题景观 <span style="font-size:.7em;font-weight:400;color:#9fb3c8">LDA + t-SNE</span></h2>
+  <p class="tm-note">X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。</p>
+  <div class="tm-legend" aria-label="主题筛选"></div>
+  <div class="tm-layout">
+    <div>
+      <canvas class="tm-canvas" width="1100" height="620" aria-label="LDA t-SNE topic landscape"></canvas>
+    </div>
+    <aside class="tm-side" aria-live="polite">
+      <h3>选择圆点</h3>
+      <p class="tm-note">颜色表示 LDA 主导主题；位置越近表示主题分布越相似。</p>
+    </aside>
+  </div>
+  <script type="application/json" id="nd-topic-data">{{ topics|tojson }}</script>
+  <script>
+  (() => {
+    const root = document.getElementById('topic-map');
+    const data = JSON.parse(document.getElementById('nd-topic-data').textContent);
+    if (!data || !data.enabled || !Array.isArray(data.points) || !data.points.length) {
+      root.hidden = true;
+      return;
+    }
+    document.querySelectorAll('a[href="#topic-map"]').forEach(link => {link.hidden = false;});
+    const canvas = root.querySelector('.tm-canvas');
+    const side = root.querySelector('.tm-side');
+    const legend = root.querySelector('.tm-legend');
+    const ctx = canvas.getContext('2d');
+    let selectedTopic = 'all';
+    let selectedPoint = null;
+    const hue = id => (Number(id) * 47 + 190) % 360;
+    const color = id => `hsl(${hue(id)} 72% 62%)`;
+    const esc = value => String(value == null ? '' : value);
+    const kindLabel = kind => ({paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业'}[kind] || kind);
+    const topics = (data.topics || []).slice().sort((a,b) => b.size - a.size);
+    const shown = () => data.points.filter(p => selectedTopic === 'all' || p.topic === selectedTopic);
+    const scale = () => {
+      const pts = data.points;
+      const maxX = Math.max(1e-6, ...pts.map(p => Math.abs(p.x)));
+      const maxY = Math.max(1e-6, ...pts.map(p => Math.abs(p.y)));
+      return {sx: (canvas.width * .44) / maxX, sy: (canvas.height * .44) / maxY};
+    };
+    const position = (p, sc) => ({
+      x: canvas.width / 2 + p.x * sc.sx,
+      y: canvas.height / 2 - p.y * sc.sy,
+    });
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0b172a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = '#223a57'; ctx.lineWidth = 1;
+      for (let i=1;i<5;i++) {
+        ctx.beginPath(); ctx.moveTo(0,canvas.height*i/5); ctx.lineTo(canvas.width,canvas.height*i/5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(canvas.width*i/5,0); ctx.lineTo(canvas.width*i/5,canvas.height); ctx.stroke();
+      }
+      const sc = scale();
+      const visible = shown();
+      for (const p of visible) {
+        const q = position(p, sc);
+        ctx.beginPath(); ctx.arc(q.x, q.y, p === selectedPoint ? 8 : 5, 0, Math.PI*2);
+        ctx.fillStyle = color(p.topic); ctx.fill();
+        ctx.lineWidth = p === selectedPoint ? 3 : 1.2; ctx.strokeStyle = p === selectedPoint ? '#fff' : '#0b172a'; ctx.stroke();
+      }
+      ctx.fillStyle = '#9fb3c8'; ctx.font = '18px -apple-system,Segoe UI,sans-serif';
+      ctx.fillText(visible.length + ' 个条目 · ' + topics.length + ' 个主题', 18, 28);
+    }
+    function detail(p) {
+      side.replaceChildren();
+      const h = document.createElement('h3'); h.textContent = p.label || ('主题 ' + p.topic); side.append(h);
+      const title = document.createElement('p'); title.textContent = p.title || ''; title.style.fontWeight = '700'; side.append(title);
+      const meta = document.createElement('p'); meta.textContent = [kindLabel(p.kind), p.venue, p.date].filter(Boolean).join(' · '); side.append(meta);
+      if (p.summary) { const summary = document.createElement('p'); summary.textContent = p.summary; side.append(summary); }
+      if (/^https?:/i.test(p.url || '')) {
+        const a = document.createElement('a'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '阅读原文 ↗'; side.append(a);
+      }
+      const hint = document.createElement('p'); hint.className = 'tm-note'; hint.textContent = '主题置信度：' + (p.confidence != null ? Math.round(p.confidence*100) + '%' : '—'); side.append(hint);
+    }
+    function pick(event) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = (event.clientX - rect.left) * canvas.width / rect.width;
+      const my = (event.clientY - rect.top) * canvas.height / rect.height;
+      const sc = scale();
+      let best = null, bestD = 18 * 18;
+      for (const p of shown()) {
+        const q = position(p, sc); const d = (q.x-mx)**2 + (q.y-my)**2;
+        if (d < bestD) { bestD = d; best = p; }
+      }
+      if (best) { selectedPoint = best; detail(best); draw(); }
+    }
+    function chip(label, id) {
+      const b = document.createElement('button'); b.type='button'; b.className='tm-chip'; b.textContent=label;
+      b.setAttribute('aria-pressed', String(selectedTopic === id));
+      b.onclick = () => { selectedTopic = id; selectedPoint = null; legend.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); draw(); };
+      return b;
+    }
+    legend.append(chip('全部', 'all'));
+    for (const t of topics.slice(0, 14)) legend.append(chip((t.label || ('主题 '+t.id)) + ' · ' + t.size, t.id));
+    canvas.addEventListener('click', pick);
+    draw();
+  })();
+  </script>
+</section>

@@ -249,6 +249,30 @@ Profile 是**单个可迁移 JSON**（`format: neurodaily.profile`），不含�
 
 ---
 
+## 主题景观（可选，LDA + t-SNE）
+
+在 `world map` 之后可生成一个交互式主题景观：
+
+- 中英文混合分词
+- LDA 文档-主题分布
+- t-SNE 二维投影
+- LLM 为每个主题生成短标签
+- 每个点可点开查看标题、来源、日期、主题和原文链接
+
+本地启用：
+
+```bash
+.venv/bin/pip install -e ".[topics]"
+```
+
+Tauri sidecar 构建脚本会安装 `scikit-learn` 并将其打包；若不需要主题图，可保持轻量基础包。关闭：
+
+```json
+"output": {"topic_map": false}
+```
+
+`topic_map.py` 不把完整摘要塞进报告 JSON，只保留投影、主题和短摘要，避免报告体积失控。
+
 ## 邮件与 Webhook
 
 邮件（`config/email.json`）：

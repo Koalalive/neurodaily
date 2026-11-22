@@ -82,6 +82,9 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             Thread(target=run_schedule, args=(stop, lambda: Config.load(config_path),
                                                 _start_scheduled_search),
                    name="neurodaily-schedule", daemon=True).start()
+        from .delivery import run_email_queue_loop
+        Thread(target=run_email_queue_loop, args=(stop,),
+               name="neurodaily-email-queue", daemon=True).start()
         try:
             yield
         finally:
@@ -282,6 +285,16 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 stage("geolocation", "skipped", "未启用或缺少大模型 API。")
         except Exception:
             stage("geolocation", "failed", "AI 地理定位未完成。")
+
+        stage("topics", "running")
+        try:
+            from .topic_map import enrich_topics
+            if enrich_topics(result):
+                stage("topics", "completed")
+            else:
+                stage("topics", "skipped", "LDA/scikit-learn 未启用或语料不足。")
+        except Exception:
+            stage("topics", "failed", "主题图生成失败。")
 
         # Render the whole HTML once, atomically. The UI waits for the task to
         # finish before opening it, so a complete file is shown exactly once.
@@ -580,9 +593,9 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         from .mailer import load_cfg as _mail_cfg, _password as _mail_pw
         from .webhooks import load_cfg as _hook_cfg
         e, w = _mail_cfg(), _hook_cfg()
-        keys = ("enabled", "to", "smtp_host", "smtp_port", "use_ssl", "username",
-                "from", "from_name", "subject_template", "attach_report",
-                "attach_max_mb", "summary_papers", "summary_chars")
+        keys = ("enabled", "to", "recipients", "language", "smtp_host", "smtp_port",
+                "use_ssl", "username", "from", "from_name", "subject_template",
+                "attach_report", "attach_max_mb", "summary_papers", "summary_chars")
         return JSONResponse({
             "email": {k: e.get(k) for k in keys},
             "webhooks": {"feishu": w.get("feishu", ""), "wecom": w.get("wecom", ""),
@@ -601,6 +614,23 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             return JSONResponse({"ok": False, "error": f"invalid json: {exc}"}, status_code=400)
         email = data.get("email") or {}
         hooks = data.get("webhooks") or {}
+        if isinstance(email.get("recipients"), list):
+            cleaned = []
+            for row in email["recipients"]:
+                if not isinstance(row, dict):
+                    continue
+                address = str(row.get("address") or "").strip()
+                if not address:
+                    continue
+                time = str(row.get("time") or "").strip()
+                if time and not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", time):
+                    return JSONResponse({"ok": False, "error": "推送时间必须为 HH:MM"}, status_code=400)
+                language = str(row.get("language") or "zh")
+                if language not in UI_LANGUAGES:
+                    return JSONResponse({"ok": False, "error": "不支持的邮件语言"}, status_code=400)
+                cleaned.append({"address": address, "time": time, "language": language})
+            email["recipients"] = cleaned
+            email["to"] = [row["address"] for row in cleaned]
         if email.get("to") is not None:
             if isinstance(email["to"], str):
                 email["to"] = [x.strip() for x in email["to"].replace("\n", ",").split(",") if x.strip()]

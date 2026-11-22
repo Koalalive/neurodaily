@@ -876,6 +876,8 @@ class WebSearchOutcomeTests(unittest.TestCase):
         # geolocation. Keep them deterministic and fast.
         self.geo = stack.enter_context(mock.patch(
             "neurodaily.research_activity.enrich_geography", return_value=False))
+        self.topics = stack.enter_context(mock.patch(
+            "neurodaily.topic_map.enrich_topics", return_value=False))
         stack.enter_context(mock.patch("neurodaily.mailer.load_cfg", return_value={"enabled": False}))
         stack.enter_context(mock.patch("neurodaily.mailer.render_email", return_value=("", "", "")))
         self.mail = stack.enter_context(mock.patch("neurodaily.mailer.save_last"))

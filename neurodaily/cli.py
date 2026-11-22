@@ -68,6 +68,12 @@ def cmd_run(args) -> int:
             enrich_geography(result)
         except Exception:
             print("[neurodaily] ⚠ AI geography unavailable; the research map is disabled.")
+        try:
+            from .topic_map import enrich_topics
+            if enrich_topics(result):
+                print("[neurodaily] 🧭 LDA+t-SNE topic map generated")
+        except Exception as e:
+            print(f"[neurodaily] ⚠ topic map skipped: {e}")
     # default filename from config
     from datetime import datetime
     fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d.html"

@@ -79,6 +79,7 @@ def _checkpoint(result: DigestResult) -> str:
         "ai_summary_refs": result.ai_summary_refs,
         "report_locale": result.report_locale,
         "geography": result.geography,
+        "topics": result.topics,
     })
 
 

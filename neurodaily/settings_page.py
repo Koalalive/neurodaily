@@ -33,6 +33,7 @@ input:focus{outline:none;border-color:var(--accent)}
 .row.j .j-aliases{grid-column:1 / 5}
 .row.j .j-issns{grid-column:5 / -1}
 .row.feed{display:grid;grid-template-columns:minmax(10ch,1fr) auto auto}
+.row.recipient{display:grid;grid-template-columns:minmax(180px,1.5fr) 110px 120px auto;gap:6px;margin-bottom:6px}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inline input[type=number]{width:80px}
 button{background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:.82rem;cursor:pointer}
@@ -283,8 +284,10 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
     <p class="desc">Save these settings before starting a search. Delivery is optional.</p>
     <div class="inline"><label><input type="checkbox" id="push_email_enabled"> Enable email</label>
       <label><input type="checkbox" id="push_attach" checked> Attach full HTML</label></div>
-    <div style="margin-top:8px"><label>Recipients (comma or newline separated)</label>
-      <textarea id="push_to" rows="3" style="width:100%;background:#161616;border:1px solid #262626;color:#e8e8e8;border-radius:8px;padding:8px"></textarea></div>
+    <div style="margin-top:8px"><label>Recipients</label>
+      <div id="push_recipients"></div>
+      <button type="button" onclick="addRecipient()">+ Add recipient</button>
+      <p class="hint">Push time is local time (HH:MM); leave blank to send immediately. Language controls the email body labels.</p></div>
     <div class="grid2" style="margin-top:8px">
       <div><label>SMTP host</label><input id="push_host"></div>
       <div><label>Port</label><input type="number" id="push_port"></div>
@@ -1014,9 +1017,26 @@ async function launchd(action){
   }catch(e){}
 }
 
+function recipientRow(x){
+  x=x||{}; var d=document.createElement('div'); d.className='row recipient';
+  d.innerHTML='<input class="r-address" type="email" placeholder="name@example.com" value="'+esc(x.address)+'">'+
+    '<input class="r-time" type="time" value="'+esc(x.time)+'" title="本地推送时间">'+
+    '<select class="r-lang"><option value="zh">中文</option><option value="en">English</option><option value="ru">Русский</option></select>'+
+    '<button type="button" class="del" onclick="this.closest(\'.row\').remove()">✕</button>';
+  d.querySelector('.r-lang').value=x.language||'zh';
+  return d;
+}
+function addRecipient(){el('push_recipients').appendChild(recipientRow({language:'zh'}));}
+
 function pushPayload(){
+  var recipients=Array.from(el('push_recipients').querySelectorAll('.row.recipient')).map(function(row){
+    return {address:row.querySelector('.r-address').value.trim(),
+            time:row.querySelector('.r-time').value,
+            language:row.querySelector('.r-lang').value};
+  }).filter(function(x){return x.address;});
   return {email:{enabled:el('push_email_enabled').checked,
-      to:el('push_to').value,
+      recipients:recipients,
+      to:recipients.map(function(x){return x.address;}),
       smtp_host:el('push_host').value.trim(),
       smtp_port:parseInt(el('push_port').value||'587',10),
       use_ssl:el('push_security').value==='ssl',
@@ -1035,7 +1055,10 @@ async function loadPush(){
     var d=await r.json();
     var e=d.email||{};
     el('push_email_enabled').checked=e.enabled!==false;
-    el('push_to').value=(e.to||[]).join('\n');
+    var pbox=el('push_recipients'); pbox.innerHTML='';
+    var recips=e.recipients||[];
+    if(!recips.length) recips=(e.to||[]).map(function(a){return {address:a,time:'',language:e.language||'zh'};});
+    recips.forEach(function(r){pbox.appendChild(recipientRow(r));});
     el('push_host').value=e.smtp_host||'';
     el('push_port').value=e.smtp_port||587;
     el('push_security').value=e.use_ssl?'ssl':'starttls';

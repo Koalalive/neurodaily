@@ -113,6 +113,10 @@ def render_html(result: DigestResult, config: Config | None = None, *, locale: s
                 html = _place_research_map(html, env, report_activity(result, _external_url), language)
             except Exception:
                 logging.getLogger(__name__).exception("Could not render research map")
+            try:
+                html = _place_topic_map(html, env, getattr(result, "topics", None), language)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not render topic map")
         return localize_document(_inject_graph_links(html), language)
     except Exception:
         return localize_document(_fallback_plain(result), language)
@@ -130,6 +134,16 @@ def _place_research_map(html: str, env, activity: dict, language: str) -> str:
         offset += summary.end()
     section = env.get_template("research_activity.html.j2").render(activity=activity, language=language)
     return html[:offset] + "\n" + section + html[offset:]
+
+
+def _place_topic_map(html: str, env, topics: dict | None, language: str) -> str:
+    if not topics or not topics.get("enabled") or not topics.get("points"):
+        return html
+    section = re.search(r'<section id="research-activity"(?=[\s>])[^>]*>.*?</section>', html, re.S)
+    if section is None:
+        return html
+    block = env.get_template("topic_map.html.j2").render(topics=topics, language=language)
+    return html[:section.end()] + "\n" + block + html[section.end():]
 
 
 def refresh_saved_research_map(html: str, language: str) -> str:
