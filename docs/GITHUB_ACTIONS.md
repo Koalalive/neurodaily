@@ -130,3 +130,27 @@ Releases 包含 Windows NSIS 和 MSI、Linux DEB 和 AppImage，共 4 个安装�
 | Release 无新资产 | 查看标签对应运行，查找第一个失败的构建、实装或验签步骤。`gh run view RUN_ID --log-failed` 可下载失败日志。短暂网络故障可用 `gh run rerun RUN_ID --failed` 重跑对应作业 |
 
 [项目主页](https://koalalive.github.io/neurodaily/)由默认分支的 `docs/` 发布。
+
+## 只发布 CLI / Homebrew
+
+桌面全平台发布与 CLI/Homebrew 发布分开：
+
+- 全平台：`vX.Y.Z` tag → `release-tauri.yml`，产出 Windows/Linux/macOS 桌面安装包。
+- CLI/Homebrew：`cli-vX.Y.Z` tag → `release-cli.yml`，只构建并发布 Python wheel，同时验证 Homebrew 公式；不会触发桌面安装包，也不会抢占 `latest`。
+
+```bash
+# Formula/neurodaily.rb 的 tag 与 version 对齐后
+git tag -a cli-v1.0.8 -m "NeuroDaily 1.0.8 CLI + Homebrew"
+git push origin cli-v1.0.8
+```
+
+用户升级：
+
+```bash
+python -m pip install neurodaily-1.0.8-py3-none-any.whl
+# 或
+brew update && brew upgrade koalalive/neurodaily/neurodaily
+```
+
+等需要全平台时，再打 `v1.0.8` tag（与 `cli-v1.0.8` 可以是同一提交）。
+

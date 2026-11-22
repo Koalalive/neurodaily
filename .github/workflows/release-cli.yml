@@ -1,0 +1,75 @@
+name: Release CLI / Homebrew
+
+on:
+  push:
+    tags:
+      - "cli-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing cli-vX.Y.Z tag"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  wheel:
+    name: Build and publish CLI wheel
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify release metadata
+        run: python scripts/verify_release_version.py package --tag "$RELEASE_TAG"
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build --wheel --outdir cli-dist
+
+      - name: Verify wheel
+        run: python scripts/verify_release_version.py package --tag "$RELEASE_TAG" --wheels cli-dist
+
+      - name: Smoke test wheel
+        run: |
+          wheel=$(find "$PWD/cli-dist" -name '*.whl' -type f)
+          python -m venv "$RUNNER_TEMP/wheel-venv"
+          "$RUNNER_TEMP/wheel-venv/bin/python" -m pip install "$wheel"
+          "$RUNNER_TEMP/wheel-venv/bin/python" -m pip check
+          cd "$RUNNER_TEMP"
+          export NEURODAILY_HOME="$RUNNER_TEMP/neurodaily-home"
+          "$RUNNER_TEMP/wheel-venv/bin/neurodaily" demo --no-open
+          compgen -G "$NEURODAILY_HOME/output/*.html" >/dev/null
+
+      - name: Publish CLI release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "NeuroDaily CLI / Homebrew ${{ env.RELEASE_TAG }}"
+          make_latest: false
+          generate_release_notes: true
+          files: cli-dist/*.whl
+
+  homebrew:
+    name: Verify Homebrew formula
+    needs: wheel
+    runs-on: macos-15
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+      - name: Install formula from the tagged checkout
+        run: bash scripts/test_homebrew.sh
