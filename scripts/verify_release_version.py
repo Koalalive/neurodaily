@@ -30,7 +30,9 @@ def _toml(path):
 
 def check_versions(root: Path, tag: str | None) -> str:
     version = _toml(root / "pyproject.toml")["project"]["version"]
-    if not _VERSION.fullmatch(version) or tag is not None and tag != f"v{version}":
+    if not _VERSION.fullmatch(version):
+        raise ValueError(f"Invalid package version {version}")
+    if tag is not None and tag not in (f"v{version}", f"cli-v{version}"):
         raise ValueError(f"Release tag does not match package version {version}")
 
     module = ast.parse((root / "neurodaily/__init__.py").read_text(encoding="utf-8"))
@@ -50,7 +52,7 @@ def check_versions(root: Path, tag: str | None) -> str:
         "package-lock.json": desktop_lock["version"],
         "package-lock.json root package": desktop_lock["packages"][""]["version"],
         "Homebrew formula": next(iter(re.findall(r'^  version "([^"]+)"$', formula, re.M)), None),
-        "Homebrew source tag": next(iter(re.findall(r'\btag: "v([^"\n]+)"', formula)), None),
+        "Homebrew source tag": next(iter(re.findall(r'\btag: "(?:cli-)?v([^"\n]+)"', formula)), None),
     }
     for component, declared in versions.items():
         if declared != version:

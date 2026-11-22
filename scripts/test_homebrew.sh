@@ -8,9 +8,10 @@ fi
 
 repo=$(git rev-parse --show-toplevel)
 source_formula="$repo/Formula/neurodaily.rb"
-release=$(sed -nE 's/.*tag: "(v[0-9.]+)".*/\1/p' "$source_formula")
-[[ "$release" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-version=${release#v}
+release=$(sed -nE 's/.*tag: "((cli-)?v[0-9.]+)".*/\1/p' "$source_formula")
+[[ "$release" =~ ^(cli-)?v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+version=${release#cli-}
+version=${version#v}
 tap=koalalive/neurodaily
 formula="$tap/neurodaily"
 legacy_home="$HOME/Library/Application Support/NeuroDaily"
