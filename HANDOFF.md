@@ -41,6 +41,11 @@ curl -fsSL https://koalalive.github.io/neurodaily/demo/latest-report.zh.html | \
 
 Expected: a successful `daily-demo` run and a non-zero trial count when ClinicalTrials.gov has fresh registry updates. A genuinely empty result is allowed, but verify the source health and the 168h config first.
 
+The `daily-demo` workflow receives `NEURODAILY_LLM_API_KEY`; AI summaries and
+the research-activity map run on the GitHub runner, and the workflow fails loudly
+if either section disappears from the generated public demo. The public snapshot
+removes the private focus-prompt section.
+
 Important: GitHub disables scheduled workflows after 60 days without repository activity. If the 08:00 run stops, trigger `daily-demo` manually and make a normal commit; then verify the schedule is re-enabled in Actions.
 
 ## Release state
@@ -55,12 +60,17 @@ Baseline for upgrade verification: **v1.0.7**. Do not delete `v1.0.7` until the 
 
 Historical releases older than `v1.0.7` were intentionally removed. `cli-v1.0.8` remains published.
 
-Latest full-release attempt: run **45065540288** (`v1.0.8`, commit `0127c06`) failed only at
-`Verify Linux package upgrade and native dialogs` → `native_ui_smoke.py`, with
-`AssertionError: The configured schedule did not contact the feed`. The earlier
-upgrade-report failure was fixed separately by using `/history/{id}/report`
-instead of `/history/{id}`. **v1.0.8 is not published yet.** Do not report it as
-published until `gh release view v1.0.8` returns a non-draft release with assets.
+**v1.0.8 is published** from run **45067766511** (commit `c24a47c`), tag `v1.0.8`.
+The release is non-draft and contains the Windows NSIS/MSI, Linux DEB/AppImage,
+their signatures, and the Python wheel.
+
+Release history:
+- Upgrade smoke now reads `/history/{id}/report` instead of the `/history/{id}` summary page.
+- Linux native-UI smoke now sets `NEURODAILY_ALLOW_PRIVATE_SOURCES=1` for its loopback fixture feed.
+- Baseline is `v1.0.7`; do not delete it.
+- Main is ahead of the release tag after the latest report/demo changes. If a new
+  desktop build is required, bump to the next patch version and run
+  `release-tauri.yml` again; do not overwrite a published release.
 
 Release workflow: `.github/workflows/release-tauri.yml`
 
