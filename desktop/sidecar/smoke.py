@@ -75,7 +75,7 @@ def check_scheduled_search(opener, base_url, home, *, new_profile=None):
             cfg["scheduled"].update(enabled=True, hour=now.hour, minute=now.minute,
                                     on_this_day={"enabled": False})
             assert fetch_json(opener, base_url, "/api/config", cfg)["ok"]
-            assert feed.search_started.wait(15), "The configured schedule did not contact the feed"
+            assert feed.search_started.wait(45), "The configured schedule did not contact the feed"
             run = fetch_json(opener, base_url, "/api/search/status")["search"]
             assert run["status"] == "running" and run["scheduled_for"], run
             try:

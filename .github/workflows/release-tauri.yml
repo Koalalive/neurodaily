@@ -156,7 +156,7 @@ jobs:
       matrix:
         scenario: [clean, upgrade]
     env:
-      BASELINE_TAG: v1.0.4
+      BASELINE_TAG: v1.0.7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -221,7 +221,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
-      BASELINE_TAG: v1.0.4
+      BASELINE_TAG: v1.0.7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
