@@ -1,0 +1,46 @@
+name: daily-demo
+
+on:
+  schedule:
+    # 08:00 Asia/Shanghai (UTC+8)
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -e ".[topics]"
+
+      - name: Build 36h public demo
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.NEURODAILY_LLM_API_KEY }}
+          NEURODAILY_NO_OPEN: "1"
+        run: .venv/bin/python scripts/build_demo_snapshot.py
+
+      - name: Commit updated demo
+        run: |
+          git config user.name "neurodaily-bot"
+          git config user.email "neurodaily-bot@users.noreply.github.com"
+          git add docs/demo/latest-report.zh.html docs/demo/latest-report.en.html docs/demo/latest-report.ru.html
+          if git diff --cached --quiet; then
+            echo "No demo changes"
+            exit 0
+          fi
+          git commit -m "chore: update daily demo snapshot [skip ci]"
+          git push
