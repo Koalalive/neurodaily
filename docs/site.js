@@ -61,7 +61,7 @@
       ref_config: "配置参考",
       ref_actions: "GitHub Actions 手册",
       ref_en: "English documentation",
-      ref_ru: "Документация на русском",
+      ref_ru: "俄语文档",
       footer_feedback: "反馈问题"
     },    en: {
       meta_title: "NeuroDaily · Traceable research digest",
@@ -122,7 +122,7 @@
       ref_config: "Configuration reference",
       ref_actions: "GitHub Actions guide",
       ref_en: "English documentation",
-      ref_ru: "Документация на русском",
+      ref_ru: "Russian documentation",
       footer_feedback: "Report an issue"
     },    ru: {
       meta_title: "NeuroDaily · Ежедневный научный дайджест",
