@@ -26,6 +26,57 @@ def _abstract(value) -> str:
     return strip_html(" ".join(words[index] for index in sorted(words)))[:24_000]
 
 
+def _last_affiliations(row: dict) -> list[dict]:
+    byline = row.get("authorships")
+    if not isinstance(byline, list) or not byline or row.get("is_authors_truncated") is True:
+        return []
+    count = row.get("authors_count")
+    last = mapping(byline[-1])
+    author = mapping(last.get("author"))
+    name = text(author.get("display_name"))
+    byline_name = text(last.get("raw_author_name")) or name
+    position = text(last.get("author_position"))
+    if ((type(count) is int and count > len(byline)) or not name
+            or re.search(r"\b(?:collaboration|consortium|working group)\b", byline_name, re.I)):
+        return []
+    if position and position != "last" and not (position == "first" and len(byline) == 1):
+        return []
+    if not position and len(byline) >= 100:
+        return []
+
+    institutions = records(last.get("institutions"))
+    institutions_by_id = {text(inst.get("id")): inst for inst in institutions if text(inst.get("id"))}
+    ids_by_address = {}
+    for entry in records(last.get("affiliations")):
+        if address := text(entry.get("raw_affiliation_string")):
+            ids_by_address.setdefault(address, set()).update(strings(entry.get("institution_ids")))
+    raw = strings([*strings(last.get("raw_affiliation_strings")), *ids_by_address])
+    result = []
+    for address in raw:
+        identifiers = ids_by_address.get(address, set())
+        matches = [institutions_by_id[identifier] for identifier in identifiers if identifier in institutions_by_id]
+        if not identifiers:
+            matches = [inst for inst in institutions if text(inst.get("display_name")).casefold() == address.casefold()]
+        result.append(_affiliation(address, matches[0] if len(matches) == 1 and len(identifiers) <= 1 else {}))
+    if not raw:
+        for institution in institutions:
+            if address := text(institution.get("display_name")):
+                affiliation = _affiliation(address, institution)
+                if affiliation not in result:
+                    result.append(affiliation)
+    return result
+
+
+def _affiliation(address: str, institution: dict) -> dict:
+    row = {"address": address}
+    country = text(institution.get("country_code")).upper()
+    if re.fullmatch(r"[A-Z]{2}", country):
+        row["country"] = country
+    if ror := text(institution.get("ror")):
+        row["institution_id"] = ror
+    return row
+
+
 def _paper(row: dict) -> Item | None:
     title = strip_html(text(row.get("display_name")) or text(row.get("title")))
     identifiers = mapping(row.get("ids"))
@@ -68,6 +119,7 @@ def _paper(row: dict) -> Item | None:
         "mesh_terms": strings([entry.get("descriptor_name") for entry in records(row.get("mesh"))]),
         "abstract": abstract,
         "institution_countries": strings(country_codes),
+        "last_author_affiliations": _last_affiliations(row),
     }
     citation_count = row.get("cited_by_count")
     oa = mapping(row.get("open_access")).get("is_oa")

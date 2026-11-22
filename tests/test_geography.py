@@ -90,12 +90,53 @@ class GeographyTests(unittest.TestCase):
         chat.assert_called_once()
         self.assertEqual(result["unknown"], ["byline", "ambiguous", "patient"])
         points = {(row["id"], row["role"]): row for row in result["places"]}
-        self.assertEqual(len(points), 3)
-        self.assertEqual(points["paper", "institution"]["country"], "FR")
+        self.assertEqual(len(points), 2)
+        self.assertNotIn(("paper", "institution"), points)
         self.assertEqual(points["paper", "study_site"]["evidence"], study)
         self.assertEqual((points["paper", "study_site"]["lat"], points["paper", "study_site"]["lon"]),
                          (51, 10))
         self.assertEqual(points["event", "event"]["method"], "model")
+
+    def test_last_author_location_precedes_other_author_affiliations_and_removes_email(self, _):
+        paper = Item("Fixture", authors=["First", "Last"],
+                     affiliations=["First institution, France", "Last institute, Beijing, China"],
+                     extra={"last_author_affiliations": [
+                         {"address": "Last institute, Beijing, China. Electronic address: person@example.test"}
+                     ]})
+        point, = locate_items({"paper": paper})["places"]
+        self.assertEqual((point["role"], point["precision"], point["country"], point["name"]),
+                         ("last_author_institution", "city", "CN", "Beijing"))
+        self.assertNotIn("person@example.test", point["evidence"])
+
+    def test_model_maps_city_only_quotes_and_rejects_country_conflicts(self, _):
+        quote = "The research society held its congress in Beijing."
+        item = Item("Congress update", kind="news", summary=quote)
+        chat = Mock(return_value=message([
+            {"id": "0", "country": "CN", "city": "Beijing", "role": "event", "evidence": quote}
+        ]))
+        point, = locate_items({"event": item}, chat=chat)["places"]
+        self.assertEqual((point["name"], point["country"], point["precision"], point["method"]),
+                         ("Beijing", "CN", "city", "model"))
+        chat.return_value = message([{"id": "0", "country": "FR", "city": "Beijing",
+                                      "role": "event", "evidence": quote}])
+        self.assertEqual(locate_items({"event": item}, chat=chat)["unknown"], ["event"])
+
+    def test_address_backfill_uses_only_exact_doi_metadata(self, _):
+        from neurodaily.sources import europe_pmc
+        response = Mock()
+        response.json.return_value = {"resultList": {"result": [
+            {"doi": "10.1234/fixture", "title": "Matching paper", "authorList": {"author": [
+                {"lastName": "First", "affiliation": "First lab, France"},
+                {"lastName": "Last", "affiliation": "Last laboratory, Beijing, China"}
+            ]}},
+            {"doi": "10.1234/other", "title": "Unrelated paper", "authorList": {"author": [
+                {"lastName": "Other", "affiliation": "Other laboratory, Germany"}
+            ]}}
+        ]}}
+        with patch.object(europe_pmc, "get", return_value=response) as request:
+            lookup = europe_pmc.last_author_metadata(["10.1234/fixture"])
+        self.assertEqual(lookup, {"10.1234/fixture": [{"address": "Last laboratory, Beijing, China"}]})
+        self.assertIn('DOI:"10.1234/fixture"', request.call_args.kwargs["params"]["query"])
 
     def test_model_rejects_wrong_country_roles_and_fabricated_quotes(self, _):
         supplied = "The study recruited participants in Germany."

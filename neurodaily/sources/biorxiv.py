@@ -126,6 +126,22 @@ def fetch(config, logger=None) -> list[Item]:
     return list(items.values())
 
 
+def _name_key(value: str) -> tuple[str, ...]:
+    display = unicodedata.normalize("NFKC", value).casefold()
+    if "," in display:
+        last, first = display.split(",", 1)
+        display = f"{first} {last}"
+    return tuple(re.findall(r"[^\W_]+", display))
+
+
+def _matches_contact(author: tuple[str, ...], contact: tuple[str, ...]) -> bool:
+    if len(author) != len(contact) or author[-1] != contact[-1]:
+        return False
+    # Preprint bylines may use given-name initials while the contact has the full name.
+    return all(part == full or (len(part) == 1 and full.startswith(part))
+               for part, full in zip(author, contact))
+
+
 def _item(server: str, record: dict, title: str, abstract: str, doi: str, category: str) -> Item:
     authors = [a.strip() for a in (record.get("authors") or "").split(";") if a.strip()]
     institution = record.get("author_corresponding_institution") or ""
@@ -133,6 +149,12 @@ def _item(server: str, record: dict, title: str, abstract: str, doi: str, catego
     published = (record.get("published") or "").strip()
     version = record.get("version")
     extra = {"version": version, "license": record.get("license")}
+    if authors and isinstance(institution, str) and institution.strip() and contact:
+        key = _name_key(contact)
+        if len(key) >= 2 and key[-1] not in {"collaboration", "consortium", "group"}:
+            matches = [_matches_contact(_name_key(author), key) for author in authors]
+            if matches[-1] and matches.count(True) == 1:
+                extra["last_author_affiliations"] = [{"address": institution.strip()}]
     if abstract:
         extra["abstract"] = abstract
     if category:

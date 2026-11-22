@@ -1,5 +1,6 @@
 """Optional Europe PMC literature metadata through its public REST search."""
 
+import re
 from urllib.parse import quote
 
 from ._discovery import date_value, mapping, paper_bounds, records, request_scope, strings, text
@@ -11,6 +12,21 @@ from ..records import normalize_doi
 BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 _PAGE_SIZE = 50
 _MAX_PAGES = 4
+
+
+def _last_affiliations(author: dict, details: list[dict]) -> list[dict]:
+    if not text(author.get("lastName")) or text(author.get("collectiveName")):
+        return []
+    affiliations = {}
+    for entry in [author, *details]:
+        address = text(entry.get("affiliation"))
+        if not address:
+            continue
+        row = affiliations.setdefault(address, {"address": address})
+        identifier = text(entry.get("affiliationOrgId"))
+        if re.fullmatch(r"(?:https?://)?ror\.org/(0[a-z0-9]{6}[0-9]{2})/?", identifier, re.I):
+            row["institution_id"] = identifier
+    return list(affiliations.values())
 
 
 def _paper(row: dict) -> Item | None:
@@ -26,7 +42,12 @@ def _paper(row: dict) -> Item | None:
         return None
 
     authors, affiliations = [], []
-    for author in records(mapping(row.get("authorList")).get("author")):
+    last_affiliations = []
+    author_rows = mapping(row.get("authorList")).get("author")
+    if not isinstance(author_rows, list):
+        author_rows = []
+    for index, entry in enumerate(author_rows):
+        author = mapping(entry)
         name = text(author.get("fullName"))
         if name:
             authors.append(name)
@@ -36,6 +57,8 @@ def _paper(row: dict) -> Item | None:
         details = mapping(author.get("authorAffiliationDetailsList")).get("authorAffiliation")
         raw_affiliations = records(details)
         affiliations.extend(text(record.get("affiliation")) for record in raw_affiliations)
+        if index == len(author_rows) - 1:
+            last_affiliations = _last_affiliations(author, raw_affiliations)
     if not authors:
         authors = strings(text(row.get("authorString")).split(","))
     affiliations = strings(affiliations)
@@ -65,12 +88,35 @@ def _paper(row: dict) -> Item | None:
         "published_online": online,
         "published_print": printed,
         "indexed_date": date_value(row.get("firstIndexDate")),
+        "last_author_affiliations": last_affiliations,
     }
     if row.get("isOpenAccess") in ("Y", "N"):
         extra["is_open_access"] = row["isOpenAccess"] == "Y"
     return Item(title=title, url=url, doi=doi, authors=authors, affiliations=affiliations,
                 summary=abstract[:1200], source="europe_pmc", kind="paper", date=first,
                 extra={key: value for key, value in extra.items() if value or value is False})
+
+
+def last_author_metadata(dois: list[str]) -> dict[str, list[dict]]:
+    """Look up missing affiliations by DOI independently of the discovery window."""
+    eligible = {doi for doi in dois[:24] if re.fullmatch(r"10\.\d{4,9}/[\w./:()-]{1,100}", doi)}
+    ordered = sorted(eligible)
+    found = {}
+    for offset in range(0, len(ordered), 8):
+        query = " OR ".join(f'DOI:"{doi}"' for doi in ordered[offset:offset + 8])
+        response = get(BASE, params={"query": query, "pageSize": 32, "format": "json", "resultType": "core"},
+                       timeout=8, retries=0)
+        if response is None:
+            continue
+        try:
+            rows = response.json()["resultList"]["result"]
+        except (KeyError, TypeError, ValueError):
+            continue
+        for row in records(rows):
+            item = _paper(row)
+            if item and item.doi in eligible and (addresses := item.extra.get("last_author_affiliations")):
+                found.setdefault(item.doi, addresses)
+    return found
 
 
 def fetch(config, logger=None) -> list[Item]:

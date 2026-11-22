@@ -114,9 +114,11 @@ def _parse_article(pubmed_article) -> Item | None:
 
     authors: list[str] = []
     affiliations: list[str] = []
+    last_author_affiliations = []
     alist = medline.find("AuthorList")
     if alist is not None:
-        for a in alist.findall("Author"):
+        author_rows = alist.findall("Author")
+        for index, a in enumerate(author_rows):
             last = _text(a, "LastName")
             fore = _text(a, "ForeName")
             coll = _text(a, "CollectiveName")
@@ -126,10 +128,21 @@ def _parse_article(pubmed_article) -> Item | None:
                 authors.append(f"{fore} {last}")
             elif last:
                 authors.append(last)
-            for aff in a.findall("AffiliationInfo/Affiliation"):
-                v = (aff.text or "").strip()
-                if v:
-                    affiliations.append(v)
+            is_last = (index == len(author_rows) - 1 and last and not coll
+                       and a.get("ValidYN") != "N" and alist.get("CompleteYN") != "N")
+            for info in a.findall("AffiliationInfo"):
+                address = _text(info, "Affiliation")
+                if not address:
+                    continue
+                affiliations.append(address)
+                if is_last:
+                    affiliation = {"address": address}
+                    for identifier in info.findall("Identifier"):
+                        if identifier.get("Source", "").casefold() == "ror" and (ror := _text(identifier, ".")):
+                            affiliation["institution_id"] = ror
+                            break
+                    if affiliation not in last_author_affiliations:
+                        last_author_affiliations.append(affiliation)
 
     pmid = _text(citation, "PMID")
     history = pubmed_article.find("PubmedData/History")
@@ -143,6 +156,8 @@ def _parse_article(pubmed_article) -> Item | None:
     indexed = _date(history.find("PubMedPubDate[@PubStatus='pubmed']")) if history is not None else ""
     discovered = next((value for value in (created, indexed) if len(value) == 10), "")
     extra = {"pmid": pmid, "journal": journal}
+    if last_author_affiliations:
+        extra["last_author_affiliations"] = last_author_affiliations
     if abstract:
         extra["abstract"] = abstract
     for name, values in (

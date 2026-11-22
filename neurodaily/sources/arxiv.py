@@ -68,9 +68,18 @@ def _parse_entry(entry) -> Item | None:
     categories = [cat.get("term") for cat in entry.findall("atom:category", NS) if cat.get("term")]
     if categories:
         extra["categories"] = categories
-    authors = [a.findtext("atom:name", "", NS) for a in entry.findall("atom:author", NS)]
+    author_rows = entry.findall("atom:author", NS)
+    authors = [author.findtext("atom:name", "", NS) for author in author_rows]
+    byline_affiliations = [list(dict.fromkeys(aff.text.strip() for aff in author.findall("arxiv:affiliation", NS)
+                                            if aff.text and aff.text.strip())) for author in author_rows]
+    affiliations = list(dict.fromkeys(address for addresses in byline_affiliations for address in addresses))
+    last_author = authors[-1].strip() if authors else ""
+    collective = re.search(r"\b(?:collaboration|consortium|working group)\b", last_author, re.I)
+    if last_author and not collective and byline_affiliations[-1]:
+        extra["last_author_affiliations"] = [{"address": address} for address in byline_affiliations[-1]]
     return Item(
         title=title, url=idurl, summary=summary[:1200], authors=[a for a in authors if a],
+        affiliations=affiliations,
         source="arxiv", kind="paper", date=parse_date_any(published), doi=doi,
         tags=[category] if category else [], extra=extra,
     )

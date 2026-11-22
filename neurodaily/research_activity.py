@@ -10,7 +10,7 @@ from pathlib import Path
 from .config import DEFAULT_DIRS
 from .digest import DigestResult
 from .models import Item
-from .records import record_ids
+from .records import normalize_doi, record_ids
 
 _MAP_KINDS = {"paper", "trial", "news", "policy"}
 
@@ -52,6 +52,16 @@ def enrich_geography(result: DigestResult) -> bool:
     model = cfg["model"]
     cache_key = hashlib.sha256(json.dumps([base, model]).encode()).hexdigest()
     cache_dir = Path(DEFAULT_DIRS["output"], "geography_cache", cache_key)
+    if result.config and result.config.source_opts("europe_pmc").get("enabled"):
+        from .sources.europe_pmc import last_author_metadata
+
+        missing = [item for item in result.items if item.kind == "paper"
+                   and not item.extra.get("last_author_affiliations") and item.doi]
+        dois = list(dict.fromkeys(normalize_doi(item.doi) for item in missing if normalize_doi(item.doi)))
+        found = last_author_metadata(dois)
+        for item in missing:
+            if addresses := found.get(normalize_doi(item.doi)):
+                item.extra["last_author_affiliations"] = [{**address, "source": "Europe PMC"} for address in addresses]
 
     def chat(messages, max_tokens):
         return ai_summary._chat_request(base, model, key, messages, max_tokens, 35,

@@ -3,9 +3,9 @@
 ## 使用方式
 
 - **研究动态地图**显示在日报的 AI 摘要之后。未生成摘要时，地图显示在正文列表之前。地图可按论文、临床试验、新闻与政策筛选。点击点位可查看来源、定位依据和原文链接。
-- 试验注册库提供坐标时，显示登记站点。其余可确认的地区显示国家或地区级示意点。作者机构、研究地点、试验站点和新闻事件发生地分别标注。未定位的条目可从地图下方查看。
+- 试验注册库提供坐标时，显示登记站点。文章明确报告研究地点时，优先展示该地点。缺少研究地点时，使用来源明确绑定到末位作者的单位地址，再回退到可识别的其他作者单位。地图把单位和研究地点分别标注。可唯一核对的城市使用城市中心示意，只有国家依据时显示国家级点位。未定位条目可从地图下方查看。
 - 进入 **设置 → API 账单与地图设置**，按 API 基础地址和模型填写每百万 token 的费率和币种。账单按真实 HTTP 调用记录，包括摘要、连通性检查、定位和重试。缺少用量或适用费率的请求显示未知。历史费用保留请求发生时的费率，实际扣费以服务商账单为准。
-- AI 定位默认关闭。开启后，已启用的摘要模型可尝试补充定位，使用公开的来源文字片段并保留证据。每次运行最多处理 24 个需要调用模型的候选条目。已验证的定位可从本机缓存复用。设置、账单和缓存保存在应用数据目录，账单与密钥不会写进分享的 HTML。可用 `neurodaily demo --no-open` 进行无网络演示。
+- AI 定位默认关闭。开启后，已启用的摘要模型可使用来源中的具体句子或单位地址补充定位。程序核对原文引句、地点角色和离线地名数据。同名地点有歧义时保留国家级点位或未定位。每次运行最多处理 24 个模型候选，优先处理未定位条目，已验证结果可从本机缓存复用。同时启用 Europe PMC 时，可按 DOI 补查缺失的末位作者单位。设置、账单和缓存保存在本机，分享的 HTML 不包含账单或密钥。 [Europe PMC 接口](https://dev.europepmc.org/RestfulWebService)
 
 ## 商用许可
 
@@ -19,12 +19,13 @@
 
 ### 底图来源
 
-两个输入文件均固定到 Natural Earth Vector v5.1.2。
+底图、国家标签和城市名录均固定到 Natural Earth Vector v5.1.2。
 
 | 打包文件 | 上游及处理方法 | 上游 SHA-256 |
 | --- | --- | --- |
 | `natural_earth_land.json` | [1:110m 陆地](https://github.com/nvkelso/natural-earth-vector/blob/v5.1.2/geojson/ne_110m_land.geojson)。提取多边形轮廓与内环，坐标保留两位小数。 | `9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9` |
 | `natural_earth_countries.json` | [1:10m Admin 0 数据](https://github.com/nvkelso/natural-earth-vector/blob/v5.1.2/geojson/ne_10m_admin_0_countries.geojson)。提取地区代码、名称及标签坐标，坐标保留三位小数。 | `239eec57ac17f100a11e2536cffc56752c318b50ae765b0918ff7aab4ce8f255` |
+| `natural_earth_cities.json` | [1:10m Populated Places](https://github.com/nvkelso/natural-earth-vector/blob/v5.1.2/geojson/ne_10m_populated_places.geojson)。提取与内置地区匹配的城市名、多语别名和点坐标，坐标保留三位小数。 | `9b8e3de09048ef00dfc70357dbb9fa324493f214b5e0ae4daf1aa79a8d10116b` |
 
 背景只包含陆地轮廓。地点索引只用于示意标记，未打包或绘制行政边界。
 
