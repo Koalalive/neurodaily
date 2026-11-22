@@ -28,7 +28,7 @@ jobs:
           .venv/bin/pip install -q -e ".[topics]" "scikit-learn>=1.4"
           .venv/bin/python -c "import sklearn; print('sklearn', sklearn.__version__)"
 
-      - name: Build 36h public demo
+      - name: Build 168h public demo
         env:
           DEEPSEEK_API_KEY: ${{ secrets.NEURODAILY_LLM_API_KEY }}
           NEURODAILY_NO_OPEN: "1"

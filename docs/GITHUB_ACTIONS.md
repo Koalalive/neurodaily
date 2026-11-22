@@ -7,13 +7,13 @@ GitHub Actions 可以每天生成一份日报，也可以检查 macOS Homebrew �
 | 文件 | 用途 | 触发条件 | 产物 |
 |---|---|---|---|
 | [daily.yml](../.github/workflows/daily.yml) | 在 Linux runner 检索，按配置发送邮件 | 默认分支日程，或 **Run workflow** | 离线演示或私有仓库的 `neurodaily-report`，保留 14 天 |
-| [daily-demo.yml](../.github/workflows/daily-demo.yml) | 每天 08:00（Asia/Shanghai）跑 36h 公开检索 | 日程或 **Run workflow** | 自动更新 `docs/demo/latest-report.{zh,en,ru}.html` |
+| [daily-demo.yml](../.github/workflows/daily-demo.yml) | 每天 08:00（Asia/Shanghai）跑 168h 公开检索 | 日程或 **Run workflow** | 自动更新 `docs/demo/latest-report.{zh,en,ru}.html` |
 | [ci.yml](../.github/workflows/ci.yml) | 在 Python 3.12 和 3.13 上做离线测试 | Pull Request，或推送 `main` | 测试日志 |
 | [release-tauri.yml](../.github/workflows/release-tauri.yml) | 验证 macOS Homebrew 安装和 Python CLI，构建并验证 Windows、Linux 安装包，发布 Docker 镜像 | 手动运行、`release/**`、`verify/**` 或 `v*` 标签 | 预览或带安装包、更新签名、CLI wheel 和 Docker 镜像的正式发布 |
 
 ## 0. 每天自动更新 GitHub Pages 演示
 
-`daily-demo.yml` 使用公开的 `config/demo.json`，在 GitHub 云端每天北京时间 08:00 跑一次 36 小时窗口检索，生成中英俄三语快照并提交到 `docs/demo/`。不需要邮件、SMTP 或本机常开。
+`daily-demo.yml` 使用公开的 `config/demo.json`，在 GitHub 云端每天北京时间 08:00 跑一次 168 小时窗口检索，生成中英俄三语快照并提交到 `docs/demo/`。不需要邮件、SMTP 或本机常开。
 
 可以在 **Actions → daily-demo → Run workflow** 手动触发。仓库需要允许 GitHub Actions 对 `contents` 写入。
 

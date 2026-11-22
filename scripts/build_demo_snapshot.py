@@ -36,7 +36,7 @@ def clean(html: str) -> str:
 
 def main() -> int:
     cfg = Config.load(str(CONFIG))
-    cfg.windows["daily_paper_hours"] = 36
+    cfg.windows["daily_paper_hours"] = 168
     result = run(cfg, check_duplicate=False, record=False, force=True, mode="daily")
     ai_summary.generate_all(result)
     enrich_geography(result)
