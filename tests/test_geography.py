@@ -99,6 +99,14 @@ class GeographyTests(unittest.TestCase):
                          (51, 10))
         self.assertEqual(points["event", "event"]["method"], "model")
 
+    def test_news_without_event_location_falls_back_to_publisher(self, _):
+        item = Item("Science news", kind="news", url="https://www.science.org/content/article/example",
+                    summary="A headline without a country or city.")
+        point, = locate_items({"news": item})["places"]
+        self.assertEqual((point["role"], point["method"], point["country"], point["name"]),
+                         ("media_outlet", "publisher", "US", "Washington, D.C."))
+        self.assertIn("Science/AAAS", point["evidence"])
+
     def test_parenthetical_country_and_institution_inference(self, _):
         trial = Item("Trial", kind="trial", extra={"trial_sites": [{
             "facility": "Fixture University", "city": "Zonguldak",

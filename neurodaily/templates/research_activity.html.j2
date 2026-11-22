@@ -42,15 +42,15 @@
       zh: {map:'研究动态地图', mapNote:'点击地点查看定位依据。研究地点、试验站点与末位作者单位分别标注，城市级点位使用城市中心示意。',
         all:'全部', paper:'论文', trial:'临床试验', news:'新闻与政策', unknown:'未定位', empty:'当前筛选没有定位结果。',
         original:'原文', site:'登记坐标', city:'城市级示意', country:'国家级示意', journal_unknown:'期刊待补', disabled:'研究动态地图需要配置大模型 API；未启用时不会生成地图。',
-        institution:'作者机构', last_author_institution:'末位作者单位', study_site:'研究地点', trial_site:'试验站点', event:'事件发生地', model:'AI 判定', metadata:'来源元数据'},
+        institution:'作者机构', last_author_institution:'末位作者单位', study_site:'研究地点', trial_site:'试验站点', event:'事件发生地', media_outlet:'媒体机构所在地', publisher:'媒体登记', model:'AI 判定', metadata:'来源元数据'},
       en: {map:'Research activity map', mapNote:'Select a location to see its evidence. Study sites, trial sites and last-author affiliations are labelled separately. City markers are approximate.',
         all:'All',paper:'Papers',trial:'Clinical trials',news:'News and policy',unknown:'Unlocated',empty:'No mapped records match this filter.',
         original:'Source',site:'Registry coordinates',city:'City-level marker',country:'Country-level marker',journal_unknown:'Journal unavailable',disabled:'The research map requires an LLM API. It is disabled when no model is configured.',
-        institution:'Author affiliation',last_author_institution:'Last-author affiliation',study_site:'Study site',trial_site:'Trial site',event:'Event location',model:'AI inference',metadata:'Source metadata'},
+        institution:'Author affiliation',last_author_institution:'Last-author affiliation',study_site:'Study site',trial_site:'Trial site',event:'Event location',media_outlet:'Media outlet location',publisher:'Publisher registry',model:'AI inference',metadata:'Source metadata'},
       ru: {map:'Карта исследований',mapNote:'Выберите точку, чтобы увидеть источник геоданных. Места исследований, центры испытаний и организации последних авторов подписаны отдельно. Точки городов приблизительны.',
         all:'Все',paper:'Публикации',trial:'Клинические исследования',news:'Новости и политика',unknown:'Без геоданных',empty:'Для этого фильтра нет точек на карте.',
         original:'Источник',site:'Координаты из реестра',city:'Приблизительная точка города',country:'Приблизительная точка страны',journal_unknown:'Журнал не указан',disabled:'Карта исследований требует API языковой модели; без неё карта не строится.',
-        institution:'Организация авторов',last_author_institution:'Организация последнего автора',study_site:'Место исследования',trial_site:'Центр испытания',event:'Место события',model:'Вывод ИИ',metadata:'Метаданные источника'}
+        institution:'Организация авторов',last_author_institution:'Организация последнего автора',study_site:'Место исследования',trial_site:'Центр испытания',event:'Место события',media_outlet:'Местоположение медиа',publisher:'Реестр издателя',model:'Вывод ИИ',metadata:'Метаданные источника'}
     };
     const c = copies[document.documentElement.lang] || copies[{{ language|tojson }}] || copies.zh;
     if (!data.enabled) {

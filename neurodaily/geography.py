@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 from tempfile import NamedTemporaryFile
 import unicodedata
+from urllib.parse import urlsplit
 
 from .models import Item
 from .geo_places import city_candidates
@@ -227,6 +228,53 @@ def _affiliation_places(item_id, addresses, role, names):
                 row["source"] = source
             places.append(_place(names.countries, row, method="metadata", city=city))
     return places
+
+
+# Approximate publisher/media locations. Used only when the article text does
+# not establish an event location; the UI labels this as a media outlet, never
+# as an event site.
+_PUBLISHER_LOCATIONS = (
+    ("science.org", "Science/AAAS", "US", "Washington, D.C.", 38.892, -77.030),
+    ("nature.com", "Springer Nature", "GB", "London", 51.507, -0.128),
+    ("psychiatryonline.org", "American Psychiatric Association", "US", "Washington, D.C.", 38.906, -77.036),
+    ("thelancet.com", "The Lancet / Elsevier", "GB", "London", 51.507, -0.128),
+    ("fda.gov", "U.S. Food and Drug Administration", "US", "Silver Spring", 39.046, -77.026),
+    ("nih.gov", "U.S. National Institutes of Health", "US", "Bethesda", 38.980, -77.100),
+    ("sfn.org", "Society for Neuroscience", "US", "Washington, D.C.", 38.906, -77.036),
+    ("cell.com", "Cell Press", "US", "Cambridge, Massachusetts", 42.373, -71.110),
+    ("elsevier.com", "Elsevier", "NL", "Amsterdam", 52.370, 4.900),
+    ("wiley.com", "Wiley", "US", "Hoboken", 40.744, -74.032),
+    ("springer.com", "Springer", "DE", "Berlin", 52.520, 13.405),
+    ("biorxiv.org", "bioRxiv / Cold Spring Harbor Laboratory", "US", "Cold Spring Harbor", 40.862, -73.452),
+    ("medrxiv.org", "medRxiv / Cold Spring Harbor Laboratory", "US", "Cold Spring Harbor", 40.862, -73.452),
+    ("arxiv.org", "arXiv / Cornell University", "US", "Ithaca", 42.444, -76.502),
+    ("who.int", "World Health Organization", "CH", "Geneva", 46.232, 6.140),
+    ("europa.eu", "European Union", "BE", "Brussels", 50.850, 4.352),
+    ("gov.uk", "UK Government", "GB", "London", 51.507, -0.128),
+)
+
+
+def _publisher_place(item_id: str, item: Item):
+    """Return an approximate outlet location for a news/policy record."""
+    candidates = [item.url, item.extra.get("publisher_domain"), item.extra.get("source_url")]
+    host = ""
+    for value in candidates:
+        if not isinstance(value, str) or not value:
+            continue
+        host = urlsplit(value if "://" in value else "https://" + value).hostname or ""
+        if host:
+            break
+    if not host:
+        return None
+    host = host.casefold().removeprefix("www.")
+    for suffix, label, country, city, lat, lon in _PUBLISHER_LOCATIONS:
+        if host == suffix or host.endswith("." + suffix):
+            return {"id": item_id, "country": country, "role": "media_outlet",
+                    "evidence": f"Publisher location: {label}, {city}",
+                    "name": city, "lat": lat, "lon": lon,
+                    "precision": "city", "method": "publisher",
+                    "source": "publisher registry"}
+    return None
 
 
 def _metadata(item_id: str, item: Item, names: _CountryNames) -> list[dict]:
@@ -496,6 +544,14 @@ def locate_items(items: dict[str, Item], *, chat=None, cache_dir=None,
             add_model(item_id, rows.get(item_id, []))
             if item_id not in malformed:
                 _save_cache(_cache_path(cache_dir, candidate), rows.get(item_id, []))
+    # News/policy fallback: if the text did not establish an event location,
+    # use the outlet's public headquarters/city and label it as media_outlet.
+    for item_id, item in items.items():
+        if item_id not in mapped and item.kind in {"news", "policy"}:
+            fallback = _publisher_place(item_id, item)
+            if fallback:
+                add([fallback])
+    deferred.difference_update(mapped)
     study_sites = {place["id"] for place in places if place["role"] == "study_site"}
     places = [place for place in places
               if place["role"] not in _AFFILIATION_ROLES.values() or place["id"] not in study_sites]
