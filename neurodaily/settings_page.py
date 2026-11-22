@@ -104,6 +104,13 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
     </div>
     <p class="desc">分享学科、检索规则、期刊和数据源设置。邮件、Webhook 和本机路径由各自设备管理。</p>
     <p id="profile_import_status" role="status" aria-live="polite"></p>
+    <div class="inline" style="margin-top:10px">
+      <a href="/api/app-settings/export" download>导出应用设置</a>
+      <button type="button" onclick="document.getElementById('app_settings_file').click()">导入应用设置</button>
+      <input id="app_settings_file" type="file" accept=".json,application/json" hidden onchange="importAppSettings(this)">
+    </div>
+    <p class="desc">应用设置只包含输出、计划、邮件、Webhook、AI 连接和界面语言；不包含检索 profile。密钥默认不导出。</p>
+    <p id="app_settings_status" role="status" aria-live="polite"></p>
   </section>
   <section>
     <h2>Research presets</h2>
@@ -837,6 +844,21 @@ async function sendProfileFile(text, apply){
   var result = await response.json();
   if (!response.ok) throw new Error(t(result.error || '无法读取配置文件'));
   return result.summary;
+}
+
+async function importAppSettings(input){
+  var file=input.files[0], status=el('app_settings_status');
+  input.value='';
+  if(!file) return;
+  status.textContent='正在导入…';
+  try{
+    var text=await file.text();
+    var response=await fetch('/api/app-settings/import',{method:'POST',headers:{'Content-Type':'application/json'},body:text});
+    var result=await response.json();
+    if(!response.ok||!result.ok) throw new Error(result.error||'导入失败');
+    status.textContent='✅ 已导入应用设置';
+    await load();
+  }catch(e){status.textContent='❌ '+e.message;}
 }
 
 async function previewProfileFile(input){

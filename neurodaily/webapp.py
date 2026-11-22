@@ -519,6 +519,26 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             "Cache-Control": "no-store",
         })
 
+    @app.get("/api/app-settings/export")
+    def api_app_settings_export(include_secrets: bool = False):
+        from .app_settings import export_settings
+        payload = export_settings(config_path, include_secrets=include_secrets)
+        suffix = "-with-secrets" if include_secrets else ""
+        return JSONResponse(payload, headers={
+            "Content-Disposition": f'attachment; filename="neurodaily-app-settings{suffix}.json"',
+            "Cache-Control": "no-store",
+        })
+
+    @app.post("/api/app-settings/import")
+    async def api_app_settings_import(request: Request):
+        from .app_settings import import_settings
+        try:
+            data = await request.json()
+            result = import_settings(data, config_path)
+        except (ValueError, TypeError, OSError) as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        return JSONResponse(result)
+
     @app.post("/api/config/import")
     async def api_config_import(request: Request, apply: bool = False):
         from .profile_exchange import MAX_BYTES, import_profile
