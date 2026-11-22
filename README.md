@@ -227,6 +227,26 @@ cp config/ai_summary.example.json config/ai_summary.json
 补丁语义：**对象递归合并、数组整体替换、`null` 删除**。
 非技术用户可以让 Agent 按 [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) 的协议完成换学科。
 
+### Profile 导出 / 导入 / 体检
+
+Profile 是**单个可迁移 JSON**（`format: neurodaily.profile`），不含邮件/AI 密钥和本机输出设置：
+
+```bash
+# 导出当前 profile（或指定 profile）
+.venv/bin/python -m neurodaily profile export neuro -o neuro.profile.json
+
+# 先校验，再导入为独立 profile
+.venv/bin/python -m neurodaily profile validate neuro.profile.json
+.venv/bin/python -m neurodaily profile import neuro.profile.json --name neuro-copy
+
+# 离线体检：schema、source type/url、期刊、检索表达式
+.venv/bin/python -m neurodaily profile doctor neuro-copy
+```
+
+- `import` 默认 `--mode merge`，保留本机 `output/scheduled` 等私有设置；`--mode replace` 只保留共享检索配置
+- `--dry-run` 只校验/预览，不写文件
+- 设置页的“导出已保存的配置 / 导入配置文件”使用同一套 `profile_exchange` 逻辑
+
 ---
 
 ## 邮件与 Webhook
@@ -386,7 +406,7 @@ neurodaily run --no-open        # 或网页里点 Run now
 | `neurodaily mail --test\|--send\|--send-latest\|--tui\|--list\|--add\|--remove` | 邮件 |
 | `neurodaily webhook --test [--demo]` | 飞书/企微 |
 | `neurodaily config show\|init\|validate\|schema\|describe\|apply` | 配置 |
-| `neurodaily profile new\|list\|path\|show` | 学科 profile |
+| `neurodaily profile new\|list\|path\|show\|export\|import\|validate\|doctor` | 学科 profile / 单 JSON 迁移 / 体检 |
 | `neurodaily deepen --status\|--backend llm\|template` | 长文批量扩写 |
 | `neurodaily launchd install\|uninstall\|show` | 定时任务 |
 | `neurodaily history [--limit N]` | 运行历史 |

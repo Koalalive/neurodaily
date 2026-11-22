@@ -530,6 +530,8 @@ def cmd_demo(args) -> int:
 def cmd_profile(args) -> int:
     import json as _json
     from .config_ops import list_profiles, new_profile, profile_path
+    from .config import Config, DEFAULT_CONFIG
+    from .profile_exchange import export_profile, import_profile
     act = args.profile_action
     if act == "list":
         names = list_profiles()
@@ -555,6 +557,133 @@ def cmd_profile(args) -> int:
             print(f"[neurodaily] profile not found: {args.name}")
             return 1
         return 0
+    def _read_doc(path):
+        import os as _os
+        if not _os.path.exists(path):
+            raise FileNotFoundError(path)
+        with open(path, encoding="utf-8") as f:
+            return _json.load(f)
+
+    def _load_cfg(path):
+        doc = _read_doc(path)
+        if isinstance(doc, dict) and doc.get("format"):
+            cfg, _ = import_profile(doc, DEFAULT_CONFIG())
+            return cfg
+        return Config.load(path)
+
+    if act == "export":
+        import os as _os
+        if args.name and _os.path.exists(args.name):
+            src = args.name
+        elif args.name:
+            src = profile_path(args.name)
+        else:
+            src = Config.default_path()
+        try:
+            cfg = _load_cfg(src)
+            if args.profile_id:
+                cfg.profile = args.profile_id
+            text = _json.dumps(export_profile(cfg), ensure_ascii=False, indent=2)
+        except Exception as exc:
+            print(f"[neurodaily] export failed: {exc}", file=sys.stderr)
+            return 1
+        if args.output:
+            import os as _os2
+            _os2.makedirs(_os2.path.dirname(args.output) or ".", exist_ok=True)
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(text + "\n")
+            print(args.output)
+        else:
+            print(text)
+        return 0
+
+    if act == "import":
+        import os as _os
+        try:
+            doc = _read_doc(args.path)
+            name = args.name
+            target = profile_path(name or (doc.get("config", {}) or {}).get("profile") or "profile")
+            current = Config.load(target) if (_os.path.exists(target) and args.mode == "merge") else DEFAULT_CONFIG()
+            cfg, summary = import_profile(doc, current)
+            if name:
+                cfg.profile = name
+            target = profile_path(cfg.profile)
+            summary = {**summary, "target": target, "mode": args.mode, "dry_run": args.dry_run}
+            if not args.dry_run:
+                cfg.save(target)
+        except Exception as exc:
+            print(f"[neurodaily] import failed: {exc}", file=sys.stderr)
+            return 1
+        if args.json:
+            print(_json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            print(f"[neurodaily] imported {summary.get('profile', cfg.profile)} → {target}"
+                  + (" (dry-run)" if args.dry_run else ""))
+        return 0
+
+    if act == "validate":
+        try:
+            doc = _read_doc(args.path)
+            cfg, summary = import_profile(doc, DEFAULT_CONFIG())
+            result = {"ok": True, "profile": cfg.profile, **summary}
+        except Exception as exc:
+            result = {"ok": False, "error": str(exc)}
+        if args.json:
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+        elif result["ok"]:
+            print(f"[neurodaily] profile OK: {result['profile']}")
+        else:
+            print(f"[neurodaily] profile invalid: {result['error']}", file=sys.stderr)
+        return 0 if result["ok"] else 1
+
+    if act == "doctor":
+        import os as _os
+        path = args.name if _os.path.exists(args.name) else profile_path(args.name)
+        try:
+            cfg = _load_cfg(path)
+        except Exception as exc:
+            print(f"[neurodaily] doctor failed: {exc}", file=sys.stderr)
+            return 1
+        checks = []
+        try:
+            from .schema import validate
+            errs = validate(cfg.to_dict())
+            checks.append({"name": "schema", "ok": not errs, "detail": errs or "ok"})
+        except Exception as exc:
+            checks.append({"name": "schema", "ok": False, "detail": str(exc)})
+        from .sources import BUILTIN
+        bad = []
+        for name, opts in (cfg.sources or {}).items():
+            if not isinstance(opts, dict):
+                bad.append(f"{name}: not an object")
+                continue
+            t = opts.get("type")
+            if name not in BUILTIN and not t:
+                bad.append(f"{name}: custom source requires type (rss/json_api)")
+            if t in ("rss", "json_api", "json") and not opts.get("url"):
+                bad.append(f"{name}: type={t} requires url")
+        checks.append({"name": "sources", "ok": not bad, "detail": bad or "ok"})
+        checks.append({"name": "journals", "ok": bool(cfg.journals),
+                       "detail": f"{len(cfg.journals)} journals"})
+        try:
+            from .search import compile_search, compile_scoped_search
+            compile_search(cfg.search, cfg.journals)
+            compile_scoped_search(cfg.search)
+            checks.append({"name": "search", "ok": True, "detail": "ok"})
+        except Exception as exc:
+            checks.append({"name": "search", "ok": False, "detail": str(exc)})
+        result = {"ok": all(c["ok"] for c in checks), "profile": cfg.profile, "checks": checks}
+        if args.json:
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"[neurodaily] profile doctor: {cfg.profile} — {'OK' if result['ok'] else 'ISSUES'}")
+            for c in checks:
+                mark = "✓" if c["ok"] else "✗"
+                detail = c["detail"]
+                if isinstance(detail, list):
+                    detail = "; ".join(detail) if detail else "ok"
+                print(f"  {mark} {c['name']}: {detail}")
+        return 0 if result["ok"] else 1
     return 0
 
 
@@ -702,6 +831,22 @@ def build_parser() -> argparse.ArgumentParser:
     for act in ("path", "show"):
         sp = prof_sub.add_parser(act)
         sp.add_argument("name")
+    exp_p = prof_sub.add_parser("export", help="export a profile as one portable JSON")
+    exp_p.add_argument("name", nargs="?")
+    exp_p.add_argument("-o", "--output", default=None)
+    exp_p.add_argument("--id", dest="profile_id", default=None)
+    imp_p = prof_sub.add_parser("import", help="import a single-JSON profile")
+    imp_p.add_argument("path")
+    imp_p.add_argument("--name", default=None)
+    imp_p.add_argument("--mode", choices=("merge", "replace"), default="merge")
+    imp_p.add_argument("--dry-run", action="store_true")
+    imp_p.add_argument("--json", action="store_true")
+    val_p = prof_sub.add_parser("validate", help="validate a profile JSON")
+    val_p.add_argument("path")
+    val_p.add_argument("--json", action="store_true")
+    doc_p = prof_sub.add_parser("doctor", help="offline profile health check")
+    doc_p.add_argument("name")
+    doc_p.add_argument("--json", action="store_true")
     prof_p.set_defaults(func=cmd_profile)
 
     mail_p = sub.add_parser("mail", help="send / preview today's digest as email")

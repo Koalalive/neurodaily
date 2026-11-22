@@ -47,6 +47,15 @@
 
 在 **导入配置文件** 里选择共享文件或旧版 `config.json`，核对预览后应用。导入会替换当前检索设置并保留本机的定时和输出设置。
 
+命令行等价操作：
+
+```bash
+neurodaily profile export neuro -o neuro.profile.json
+neurodaily profile validate neuro.profile.json
+neurodaily profile import neuro.profile.json --name neuro-copy
+neurodaily profile doctor neuro-copy
+```
+
 ### 2.1 `disciplines[]`
 
 | 字段 | 类型 | 说明 |
