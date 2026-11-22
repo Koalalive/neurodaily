@@ -229,3 +229,7 @@ code { font: .91em ui-monospace, "SFMono-Regular", Consolas, monospace; overflow
 .skill-card p { margin: 0 0 14px; color: var(--muted); }
 .skill-card a { font-weight: 600; }
 @media (max-width: 760px) { .skill-grid { grid-template-columns: 1fr; } }
+
+.demo-live { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 14px; }
+.demo-live .mini { color: var(--muted); font-size: .82rem; }
+.demo-frame { width: 100%; height: min(78vh, 820px); border: 1px solid var(--rule); border-radius: 14px; background: #0b172a; margin-bottom: 20px; }
