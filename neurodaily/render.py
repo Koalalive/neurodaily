@@ -103,6 +103,7 @@ def render_html(result: DigestResult, config: Config | None = None, *, locale: s
                              "oncology": "oncology digest",
                              "critical-care": "critical care digest"}.get(profile, "research digest"),
             "today": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "language": language,
             "sort_label": {"relevance": "相关性", "latest": "最新发布", "journal": "重点期刊"}.get(sort),
         }
         html = template.render(**ctx)

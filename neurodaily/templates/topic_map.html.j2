@@ -15,16 +15,18 @@
     #topic-map .tm-note{font-size:.82rem;color:#9fb3c8}
     @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
   </style>
-  <h2 data-tm="title">🧭 主题景观 <span style="font-size:.7em;font-weight:400;color:#9fb3c8">LDA + t-SNE</span></h2>
-  <p class="tm-note" data-tm="note">X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。</p>
+  {% set tm_title = {'zh':'🧭 主题景观','en':'🧭 Topic landscape','ru':'🧭 Тематический ландшафт'}.get(language, '🧭 主题景观') %}
+  {% set tm_note = {'zh':'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。','en':'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.','ru':'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.'}.get(language, 'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。') %}
+  <h2 data-tm="title">{{ tm_title }} <span style="font-size:.7em;font-weight:400;color:#9fb3c8">LDA + t-SNE</span></h2>
+  <p class="tm-note" data-tm="note">{{ tm_note }}</p>
   <div class="tm-legend" aria-label="主题筛选"></div>
   <div class="tm-layout">
     <div>
       <canvas class="tm-canvas" width="1100" height="620" aria-label="LDA t-SNE topic landscape"></canvas>
     </div>
     <aside class="tm-side" aria-live="polite">
-      <h3>选择圆点</h3>
-      <p class="tm-note">颜色表示 LDA 主导主题；位置越近表示主题分布越相似。</p>
+      <h3 data-tm="select">{{ {'zh':'选择圆点','en':'Select a point','ru':'Выберите точку'}.get(language, '选择圆点') }}</h3>
+      <p class="tm-note" data-tm="hint">{{ {'zh':'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。','en':'Color is the dominant LDA topic; closer points have more similar topic distributions.','ru':'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.'}.get(language, '颜色表示 LDA 主导主题；位置越近表示主题分布越相似。') }}</p>
     </aside>
   </div>
   <script type="application/json" id="nd-topic-data">{{ topics|tojson }}</script>
@@ -57,6 +59,7 @@
     const hue = id => (Number(id) * 47 + 190) % 360;
     const color = id => `hsl(${hue(id)} 72% 62%)`;
     const esc = value => String(value == null ? '' : value);
+    const lang = {{ language|tojson }};
     const kindLabel = kind => (tm?.kinds?.[kind] || ({paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}[kind] || kind));
     const topics = (data.topics || []).slice().sort((a,b) => b.size - a.size);
     const shown = () => data.points.filter(p => selectedTopic === 'all' || p.topic === selectedTopic);
@@ -91,7 +94,7 @@
     }
     function detail(p) {
       side.replaceChildren();
-      const h = document.createElement('h3'); h.textContent = p.label || ((tm?.topic || '主题') + ' ' + p.topic); side.append(h);
+      const h = document.createElement('h3'); h.textContent = (p.labels && p.labels[lang]) || p.label || ((tm?.topic || '主题') + ' ' + p.topic); side.append(h);
       const title = document.createElement('p'); title.textContent = p.title || ''; title.style.fontWeight = '700'; side.append(title);
       const meta = document.createElement('p'); meta.textContent = [kindLabel(p.kind), p.venue, p.date].filter(Boolean).join(' · '); side.append(meta);
       if (p.summary) { const summary = document.createElement('p'); summary.textContent = p.summary; side.append(summary); }
@@ -119,7 +122,7 @@
       return b;
     }
     legend.append(chip(tm?.all || '全部', 'all'));
-    for (const t of topics.slice(0, 14)) legend.append(chip((t.label || ('主题 '+t.id)) + ' · ' + t.size, t.id));
+    for (const t of topics.slice(0, 14)) { const label=(t.labels&&t.labels[lang])||t.label||('主题 '+t.id); legend.append(chip(label + ' · ' + t.size, t.id)); }
     canvas.addEventListener('click', pick);
     draw();
   })();

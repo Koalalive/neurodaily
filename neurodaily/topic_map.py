@@ -97,15 +97,16 @@ def _documents(result: DigestResult) -> list[dict]:
     return docs
 
 
-def _labels(topics: list[dict], chat=None) -> None:
+def _labels(topics: list[dict], chat=None, language: str = "zh") -> None:
     """Fill topic labels from the existing OpenAI-compatible chat helper."""
     if chat is not None:
         try:
+            language_name = {"zh": "Chinese", "en": "English", "ru": "Russian"}.get(language, "Chinese")
             payload = [{"id": t["id"], "terms": t["terms"][:10],
                         "examples": t["examples"]} for t in topics]
             message = chat([
                 {"role": "system", "content": "Label research topics. Return a JSON array only, "
-                 "objects with id (integer) and label (short Chinese label, max 18 chars). "
+                 f"objects with id (integer) and label (short {language_name} label, max 18 chars). "
                  "Use only the supplied terms/examples; do not invent facts."},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
             ], 1600)
@@ -172,8 +173,11 @@ def build_topics(result: DigestResult, *, chat=None, force: bool = False) -> dic
         topic_rows.append({"id": index, "terms": top, "examples": examples,
                            "size": len(members),
                            "label": "、".join(top[:3]) or f"主题 {index}"})
-    _labels(topic_rows, chat)
-    labels = {row["id"]: row["label"] for row in topic_rows}
+    for language in ("zh", "en", "ru"):
+        _labels(topic_rows, chat, language)
+        for topic in topic_rows:
+            topic.setdefault("labels", {})[language] = topic["label"]
+    labels = {row["id"]: row.get("labels", {}).get("zh") or row["label"] for row in topic_rows}
     xs = [float(p[0]) for p in coords]
     ys = [float(p[1]) for p in coords]
     xmid, ymid = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
@@ -185,6 +189,7 @@ def build_topics(result: DigestResult, *, chat=None, force: bool = False) -> dic
         points.append({**point_doc, "x": round(float(coords[index][0]) - xmid, 5),
                        "y": round(float(coords[index][1]) - ymid, 5),
                        "topic": topic, "label": labels.get(topic, f"主题 {topic}"),
+                       "labels": next((row.get("labels", {}) for row in topic_rows if row["id"] == topic), {}),
                        "confidence": round(float(doc_topic[index][topic]), 4)})
     result_data = {"enabled": True, "method": "lda_tsne", "topics": topic_rows,
                    "points": points, "unknown": [], "n_topics": n_topics}
@@ -198,7 +203,7 @@ def build_topics(result: DigestResult, *, chat=None, force: bool = False) -> dic
     return result_data
 
 
-def enrich_topics(result: DigestResult) -> bool:
+def enrich_topics(result: DigestResult, *, force: bool = False) -> bool:
     if result.skipped or not result.items:
         return False
     cfg = getattr(result, "config", None)
@@ -220,5 +225,5 @@ def enrich_topics(result: DigestResult) -> bool:
                                                 profile=result.config_profile, temperature=0)
     except Exception:
         chat = None
-    result.topics = build_topics(result, chat=chat)
+    result.topics = build_topics(result, chat=chat, force=force)
     return result.topics is not None

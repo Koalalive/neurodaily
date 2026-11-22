@@ -357,6 +357,8 @@ RSS（可选）|RSS (optional)|RSS (необязательно)
 🏛️ 政策与新闻|🏛️ Policy and news|🏛️ Политика и новости
 📚 期刊|📚 Journals|📚 Журналы
 📡 来源状态|📡 Source Health|📡 Состояние источников
+🧪 Clinical Trials|🧪 Clinical Trials|🧪 Клинические испытания
+🗓️ Academic Conferences|🗓️ Academic Conferences|🗓️ Академические конференции
 检索时间窗|Search window|Окно поиска
 Trials|Trials|Испытания
 Conferences|Conferences|Конференции

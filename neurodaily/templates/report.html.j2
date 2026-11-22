@@ -241,6 +241,11 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 </style>
 </head>
 <body>
+{% set ui_labels = {
+  'zh': {'window':'检索时间窗','trials':'🧪 临床试验','trials_desc':'新增或更新的临床研究。','conferences':'🗓️ 学术会议','conferences_desc':'即将召开的会议、截止日期与官网链接。','trials_stat':'试验','conf_stat':'会议'},
+  'en': {'window':'Search window','trials':'🧪 Clinical Trials','trials_desc':'New or updated clinical studies.','conferences':'🗓️ Academic Conferences','conferences_desc':'Upcoming conferences, deadlines and official links.','trials_stat':'Trials','conf_stat':'Conferences'},
+  'ru': {'window':'Окно поиска','trials':'🧪 Клинические испытания','trials_desc':'Новые или обновлённые клинические исследования.','conferences':'🗓️ Академические конференции','conferences_desc':'Ближайшие конференции, дедлайны и официальные ссылки.','trials_stat':'Испытания','conf_stat':'Конференции'}
+}.get(language, {}) %}
 <div id="top"></div>
 <nav class="toc" aria-label="目录">
   <div class="toc-title">目录</div>
@@ -262,7 +267,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     <h1><span class="logo">NeuroDaily</span> — <span>{{ digest_title }}</span></h1>
     <div class="sub"><span>Auto-aggregated</span> {{ today }} · <span>Profile</span>: <span data-no-i18n>{{ result.config_profile }}</span></div>
     {% if result.search_window %}
-    <div class="window"><span>检索时间窗</span> {{ result.search_window.start }} → {{ result.search_window.end }} · {{ result.search_window.hours }}h · {{ result.search_window.mode }}</div>
+    <div class="window"><span>{{ ui_labels.get('window', '检索时间窗') }}</span> {{ result.search_window.start }} → {{ result.search_window.end }} · {{ result.search_window.hours }}h · {{ result.search_window.mode }}</div>
     {% endif %}
     {% if result.config %}
     <div class="chips">
@@ -273,8 +278,8 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
       <div class="stat"><b>{{ result.items|length }}</b><span>Items</span></div>
       <div class="stat"><b>{{ result.sections.get('papers', [])|length }}</b><span>Papers</span></div>
       <div class="stat"><b>{{ result.sections.get('industry', [])|length }}</b><span>Industry</span></div>
-      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'trial')|list|length }}</b><span>Trials</span></div>
-      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'conference')|list|length }}</b><span>Conferences</span></div>
+      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'trial')|list|length }}</b><span>{{ ui_labels.get('trials_stat', 'Trials') }}</span></div>
+      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'conference')|list|length }}</b><span>{{ ui_labels.get('conf_stat', 'Conferences') }}</span></div>
       <div class="stat"><b>{{ result.sections.get('policy', [])|length }}</b><span>Policy / News</span></div>
     </div>
     <div class="toolbar">
@@ -295,8 +300,8 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
   {{ block_section('industry', '💊 Commercial & Regulatory Progress', 'Recent FDA drug approvals and 510(k) device clearances.', 'b-drug') }}
   {% set trial_items = result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'trial')|list %}
   {% set conference_items = result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'conference')|list %}
-  {{ block_section('trials', '🧪 Clinical Trials', 'New + updated clinical studies.', 'b-trial', trial_items) }}
-  {{ block_section('conferences', '🗓️ Academic Conferences', 'Upcoming conferences, deadlines and official links.', 'b-conference', conference_items) }}
+  {{ block_section('trials', ui_labels.get('trials', '🧪 Clinical Trials'), ui_labels.get('trials_desc', 'New + updated clinical studies.'), 'b-trial', trial_items) }}
+  {{ block_section('conferences', ui_labels.get('conferences', '🗓️ Academic Conferences'), ui_labels.get('conferences_desc', 'Upcoming conferences, deadlines and official links.'), 'b-conference', conference_items) }}
   {{ block_section('policy', '🏛️ Policy, Funding & News', 'Institutional press, agency announcements, and news.', 'b-policy') }}
 
   {% if result.config and result.config.journals %}

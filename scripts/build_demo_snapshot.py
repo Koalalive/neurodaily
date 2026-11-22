@@ -38,7 +38,7 @@ def main() -> int:
     result = run(cfg, check_duplicate=False, record=False, force=True, mode="daily")
     ai_summary.generate_all(result)
     enrich_geography(result)
-    enrich_topics(result)
+    enrich_topics(result, force=True)
     OUT.mkdir(parents=True, exist_ok=True)
     for lang in ("zh", "en", "ru"):
         (OUT / f"latest-report.{lang}.html").write_text(
