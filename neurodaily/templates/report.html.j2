@@ -26,18 +26,18 @@
 {%- endmacro %}
 
 {% macro block_section(key, title, desc, badge_class, entries=None) -%}
+{% set items = entries if entries is not none else result.sections.get(key, []) %}
 <section id="{{ key }}">
   <div class="sec-head">
     <div>
       <h2 class="sec-title"><span class="dot"></span>{{ title }}
-        <span class="count">({{ result.sections.get(key, [])|length }})</span></h2>
+        <span class="count">({{ items|length }})</span></h2>
       <p class="sec-desc">{{ desc }}</p>
       {% if key == 'papers' and sort_label %}<p class="sec-desc">排序 · {{ sort_label }}</p>{% endif %}
     </div>
   </div>
-  {% set entries = entries if entries is not none else result.sections.get(key, []) %}
-  {% if entries %}
-    {% for it in entries %}
+  {% if items %}
+    {% for it in items %}
     <details class="card">
       <summary>
         <span class="chevron"></span>
