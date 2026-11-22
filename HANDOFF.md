@@ -164,9 +164,12 @@ The website language switch is in `docs/site.js`; current expected document link
 ## Security controls
 
 - The LLM key is stored in the GitHub Environment `automation`, not as a repository secret.
-- `daily-demo` and `daily-digest` declare `environment: automation`; other workflows cannot read that environment secret.
+- `daily-demo` and `daily-digest` declare `environment: automation`; the repository-level LLM secret was deleted.
+- The `automation` environment is restricted to the `main` deployment branch.
 - `.github/CODEOWNERS` assigns workflow/security files to `@Koalalive`.
-- `main` is protected by a ruleset requiring a pull request and code-owner review; the GitHub Actions integration has a bypass for the demo snapshot push.
+- Only `Koalalive` has repository write/admin access (verified collaborator list).
+- `.github/CODEOWNERS` assigns workflow/security files to `@Koalalive`.
+- A main ruleset requiring PR/code-owner review was tested but reverted: GitHub Actions could not bypass it for the scheduled snapshot push, which would break the 08:00 update. Branch protection is therefore not active; daily automation relies on the sole-owner permission boundary.
 - `secret-scan.yml` runs `scripts/check_secrets.py` on push and pull requests.
 - Local pre-commit: `git config core.hooksPath .githooks` (the hook scans staged files).
 - GitHub Secret Scanning and push protection are enabled on the public repository.
