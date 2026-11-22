@@ -10,7 +10,7 @@ import os
 import re
 from pathlib import Path
 
-from neurodaily import ai_summary
+from neurodaily import ai_summary, api_billing
 from neurodaily.config import Config
 from neurodaily.digest import run
 from neurodaily.render import render_html
@@ -42,6 +42,9 @@ def main() -> int:
     cfg.windows["daily_paper_hours"] = 168
     result = run(cfg, check_duplicate=False, record=False, force=True, mode="daily")
     ai_summary.generate_all(result)
+    # The public demo explicitly opts into the AI geography map. On a fresh
+    # GitHub runner the local billing database starts with geo_enabled=false.
+    api_billing.save_settings({"geo_enabled": True})
     enrich_geography(result)
     print(f"topic sklearn={available()} items={len(result.items)}", flush=True)
     try:
