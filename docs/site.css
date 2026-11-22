@@ -123,15 +123,6 @@ h3 { font-size: 1.04rem; line-height: 1.5; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px 28px; flex-wrap: wrap; }
 .section-heading p { color: var(--lavender); }
 figure { margin: 27px 0 0; }
-.demo-image {
-  display: block;
-  overflow: hidden;
-  border: 1px solid #78719d;
-  border-radius: 9px;
-  background: #090909;
-}
-.demo-image:hover { border-color: var(--gold); }
-.demo-image img { width: 100%; }
 figcaption { margin-top: 11px; color: var(--lavender); font-size: .87rem; }
 
 .install-grid a {
@@ -230,6 +221,32 @@ code { font: .91em ui-monospace, "SFMono-Regular", Consolas, monospace; overflow
 .skill-card a { font-weight: 600; }
 @media (max-width: 760px) { .skill-grid { grid-template-columns: 1fr; } }
 
-.demo-live { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 14px; }
-.demo-live .mini { color: var(--muted); font-size: .82rem; }
 .demo-frame { width: 100%; height: min(78vh, 820px); border: 1px solid var(--rule); border-radius: 14px; background: #0b172a; margin-bottom: 20px; }
+
+/* Unified dark site theme */
+:root {
+  color-scheme: dark;
+  --navy: #08080f;
+  --night: #0b0b14;
+  --cream: #0b0b12;
+  --white: #f4f1e8;
+  --gold: #f5d782;
+  --lavender: #b9b3d5;
+  --ink: #e8e6f0;
+  --muted: #a9a6b8;
+  --rule: #2c2a3b;
+}
+body { background: var(--cream); color: var(--ink); }
+.section { background: transparent; }
+.feature-grid > div, .install-grid article { border-top-color: var(--rule); }
+.feature-grid dd, .install-grid p, .section-intro { color: var(--muted); }
+.reference-band { background: #11111b; border-block-color: var(--rule); }
+.reference-links a { color: var(--lavender); }
+.skill-card { background: #12121d; border-color: var(--rule); }
+.skill-card p { color: var(--muted); }
+.demo-frame { border-color: var(--rule); background: #080d18; }
+.install-grid a { color: #a9a1ff; }
+footer { background: #08080f; color: var(--lavender); border-top: 1px solid var(--rule); }
+footer a { color: var(--lavender); }
+code { color: #e7d9a3; }
+::selection { color: #111; background: var(--gold); }

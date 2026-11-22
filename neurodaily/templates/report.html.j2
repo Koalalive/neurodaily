@@ -238,15 +238,15 @@
   <div class="toc-title">目录</div>
   <a href="#top">↑ 顶部</a>
   {% if result.ai_summary %}<a href="#ai-summary">🧠 AI 摘要</a>{% endif %}
-  <a href="#research-activity" hidden data-no-i18n>研究动态地图</a>
-  <a href="#topic-map" hidden data-no-i18n>主题景观</a>
+  <a href="#research-activity" hidden data-no-i18n>🗺️ 研究动态地图</a>
+  <a href="#topic-map" hidden data-no-i18n>🧭 主题景观</a>
   {% if result.on_this_day %}<a href="#on-this-day">📅 历史上的今天</a>{% endif %}
   <a href="#papers">📄 最新论文</a>
   <a href="#industry">💊 产业与融资</a>
   <a href="#trials_conferences">🧪 临床试验</a>
   <a href="#policy">🏛️ 政策与新闻</a>
   {% if result.config and result.config.journals %}<a href="#journals">📚 期刊</a>{% endif %}
-  {% if result.health %}<a href="#source-health">来源状态</a>{% endif %}
+  {% if result.health %}<a href="#source-health">📡 来源状态</a>{% endif %}
 </nav>
 <header>
   <div class="wrap">
@@ -310,7 +310,7 @@
 
   {% if result.health %}
   <section id="source-health">
-    <h2 class="sec-title"><span class="dot"></span>Source Health</h2>
+    <h2 class="sec-title"><span class="dot"></span>📡 Source Health</h2>
     {% set state_labels = {'ok': '正常', 'empty': '无命中', 'partial': '部分覆盖', 'timeout': '超时', 'limited': '限流', 'failed': '抓取失败', 'disabled': '已停用'} %}
     {% set coverage_labels = {'full': '已按设置完成抓取', 'sampled': '样本范围内的结果', 'partial': '仅覆盖部分请求'} %}
     <div class="health" role="region" aria-label="各来源检索状态" tabindex="0">

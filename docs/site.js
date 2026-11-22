@@ -33,9 +33,6 @@
       feature4_body: "LDA + t-SNE 主题景观，支持中英文语料、LLM 主题标签和逐点查看原文。",
       demo_title: "日报演示",
       demo_desc: "按版块浏览检索结果，从论文条目回到期刊或数据库。",
-      demo_caption: "本地离线演示 · 神经科学预设",
-      demo_live: "打开完整最新日报（交互式地图 + 主题景观）",
-      demo_privacy: "公开演示快照：已隐藏邮箱与本地路径",
       install_title: "安装与运行",
       win_title: "Windows / Linux",
       win_body: "Windows 可用 EXE 或 MSI 安装。Linux 可用 AppImage 或 DEB。",
@@ -88,9 +85,6 @@
       feature4_body: "LDA + t-SNE topic landscape with bilingual text, LLM labels and point-level source links.",
       demo_title: "Digest demo",
       demo_desc: "Browse by section and follow each paper back to its journal or database.",
-      demo_caption: "Offline local demo · Neuroscience preset",
-      demo_live: "Open the complete latest digest (interactive map + topic landscape)",
-      demo_privacy: "Public demo snapshot: emails and local paths redacted",
       install_title: "Install and run",
       win_title: "Windows / Linux",
       win_body: "Windows: EXE or MSI. Linux: AppImage or DEB.",
@@ -143,9 +137,6 @@
       feature4_body: "Тематический ландшафт LDA + t-SNE: двуязычный корпус, метки LLM и ссылки на источники.",
       demo_title: "Демо дайджеста",
       demo_desc: "Просматривайте по разделам и переходите от статьи к журналу или базе данных.",
-      demo_caption: "Локальное офлайн-демо · пресет Neuroscience",
-      demo_live: "Открыть полный свежий дайджест (интерактивная карта + темы)",
-      demo_privacy: "Публичный снимок: почта и локальные пути скрыты",
       install_title: "Установка и запуск",
       win_title: "Windows / Linux",
       win_body: "Windows: EXE или MSI. Linux: AppImage или DEB.",
@@ -184,6 +175,11 @@
     document.querySelectorAll("[data-lang]").forEach(function (btn) {
       btn.setAttribute("aria-pressed", btn.getAttribute("data-lang") === lang ? "true" : "false");
     });
+    var demo = document.getElementById("demo-frame");
+    if (demo) {
+      var src = demo.getAttribute("data-report-" + lang);
+      if (src && demo.getAttribute("src") !== src) demo.setAttribute("src", src);
+    }
     if (persist) {
       try { localStorage.setItem("neurodaily-site-lang", lang); } catch (e) {}
     }

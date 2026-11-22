@@ -77,20 +77,11 @@
           <h2 id="demo-title" data-i18n="demo_title">日报演示</h2>
           <p data-i18n="demo_desc">按版块浏览检索结果，从论文条目回到期刊或数据库。</p>
         </div>
-        <div class="demo-live">
-          <a class="button button-primary" href="./demo/latest-report.html" target="_blank" rel="noopener">
-            <span data-i18n="demo_live">打开完整最新日报（交互式地图 + 主题景观）</span> <span aria-hidden="true">↗</span>
-          </a>
-          <span class="mini" data-i18n="demo_privacy">公开演示快照：已隐藏邮箱与本地路径</span>
-        </div>
-        <iframe class="demo-frame" src="./demo/latest-report.html" loading="lazy"
+        <iframe id="demo-frame" class="demo-frame" src="./demo/latest-report.zh.html" loading="lazy"
+                data-report-zh="./demo/latest-report.zh.html"
+                data-report-en="./demo/latest-report.en.html"
+                data-report-ru="./demo/latest-report.ru.html"
                 title="NeuroDaily 最新日报演示：最新论文、世界地图和主题景观"></iframe>
-        <figure>
-          <a class="demo-image" href="./assets/digest-demo.png" aria-label="查看完整日报演示截图">
-            <img src="./assets/digest-demo.png" width="1440" height="930" loading="lazy" decoding="async" alt="神经科学日报的来源统计、操作栏和最新论文列表">
-          </a>
-          <figcaption data-i18n="demo_caption">本地离线演示 · 神经科学预设</figcaption>
-        </figure>
       </div>
     </section>
 

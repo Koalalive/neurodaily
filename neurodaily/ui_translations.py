@@ -356,7 +356,7 @@ RSS（可选）|RSS (optional)|RSS (необязательно)
 🧪 临床试验|🧪 Clinical trials|🧪 Клинические исследования
 🏛️ 政策与新闻|🏛️ Policy and news|🏛️ Политика и новости
 📚 期刊|📚 Journals|📚 Журналы
-来源状态|Source Health|Состояние источников
+📡 来源状态|📡 Source Health|📡 Состояние источников
 神经科学与精神病学日报|neuroscience & psychiatry digest|сводка по нейронаукам и психиатрии
 肿瘤学日报|oncology digest|сводка по онкологии
 科研日报|research digest|научная сводка

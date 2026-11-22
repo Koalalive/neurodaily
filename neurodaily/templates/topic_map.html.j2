@@ -15,8 +15,8 @@
     #topic-map .tm-note{font-size:.82rem;color:#9fb3c8}
     @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
   </style>
-  <h2>🧭 主题景观 <span style="font-size:.7em;font-weight:400;color:#9fb3c8">LDA + t-SNE</span></h2>
-  <p class="tm-note">X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。</p>
+  <h2 data-tm="title">🧭 主题景观 <span style="font-size:.7em;font-weight:400;color:#9fb3c8">LDA + t-SNE</span></h2>
+  <p class="tm-note" data-tm="note">X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。</p>
   <div class="tm-legend" aria-label="主题筛选"></div>
   <div class="tm-layout">
     <div>
@@ -32,6 +32,17 @@
   (() => {
     const root = document.getElementById('topic-map');
     const data = JSON.parse(document.getElementById('nd-topic-data').textContent);
+    const tm = {
+      zh: {title:'🧭 主题景观 LDA + t-SNE', note:'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。', select:'选择圆点', hint:'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。'},
+      en: {title:'🧭 Topic landscape LDA + t-SNE', note:'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.', select:'Select a point', hint:'Color is the dominant LDA topic; closer points have more similar topic distributions.'},
+      ru: {title:'🧭 Тематический ландшафт LDA + t-SNE', note:'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.', select:'Выберите точку', hint:'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.'}
+    }[{{ language|tojson }}] || null;
+    if (tm) {
+      const title = root.querySelector('[data-tm="title"]'); if (title) title.textContent = tm.title;
+      const note = root.querySelector('[data-tm="note"]'); if (note) note.textContent = tm.note;
+      const sideTitle = root.querySelector('.tm-side h3'); if (sideTitle) sideTitle.textContent = tm.select;
+      const hint = root.querySelector('.tm-side .tm-note'); if (hint) hint.textContent = tm.hint;
+    }
     if (!data || !data.enabled || !Array.isArray(data.points) || !data.points.length) {
       root.hidden = true;
       return;
