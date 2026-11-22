@@ -84,7 +84,7 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
         if(response.ok) run=(await response.json()).task;
       }
       if(run && run.id===id){
-        if(run.report_ready && announcedReport!==id){
+        if(run.report_ready && run.status!=='running' && announcedReport!==id){
           announcedReport=id;
           if(window.parent===window){
             set(t('已生成日报（{count} 条），正在打开…',{count:run.item_count}),true);

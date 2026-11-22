@@ -283,8 +283,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         except Exception:
             stage("geolocation", "failed", "AI 地理定位未完成。")
 
-        # Publish the report only after all optional sections are ready, so tabs
-        # never show a half-finished report that is rewritten a few seconds later.
+        # Render the whole HTML once, atomically. The UI waits for the task to
+        # finish before opening it, so a complete file is shown exactly once.
         stage("report", "running")
         result.report_revision = 1
         save_report(result, str(path))

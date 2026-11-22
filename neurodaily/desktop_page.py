@@ -224,13 +224,13 @@ html,body{height:100%;overflow:hidden}
 
   function updateReport(task) {
     if (!task?.report_ready) return;
-    showReport(task.id);
+    // Wait for the task to finish, so the report tab opens once, fully rendered.
     if (task.status === 'running') {
       unfinished.add(task.id);
-    } else if (unfinished.delete(task.id)) {
-      tabs.filter(tab => tab.path === `/history/${task.id}/report`).forEach(refresh);
-      tabs.filter(tab => tab.path === '/' && tab.iframe.hasAttribute('src')).forEach(refresh);
+      return;
     }
+    unfinished.delete(task.id);
+    showReport(task.id);
   }
 
   async function checkTasks() {
