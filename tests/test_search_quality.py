@@ -62,8 +62,10 @@ class SearchQualityTests(unittest.TestCase):
               patch("neurodaily.onthisday.is_enabled", return_value=False)):
             digest = run(config, check_duplicate=False, record=False)
         replay = evaluate_corpus(corpus, config)["cases"][0]["candidate"]
-        self.assertEqual([paper["ids"] for paper in replay["top_results"]],
-                         [item.extra["record_ids"] for item in digest.sections["papers"]])
+        # Candidate identity is the contract here; the report now orders each
+        # section by publication time rather than relevance rank.
+        self.assertEqual({tuple(paper["ids"]) for paper in replay["top_results"]},
+                         {tuple(item.extra["record_ids"]) for item in digest.sections["papers"]})
 
     def test_candidate_and_baseline_compare_against_the_same_labels(self):
         baseline = replace(DEFAULT_CONFIG(), profile="broad-title", search={

@@ -321,6 +321,18 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         if sec in sections:
             sections[sec].append(it)
 
+    # User-facing order: newest first for papers/news/industry; nearest upcoming
+    # first for the conference calendar. Undated records go last.
+    for key, group in sections.items():
+        if key == "trials_conferences":
+            trials = [item for item in group if item.kind != "conference"]
+            conferences = [item for item in group if item.kind == "conference"]
+            trials.sort(key=lambda item: (item.date or "", item.title.casefold()), reverse=True)
+            conferences.sort(key=lambda item: (item.date or "9999-12-31", item.title.casefold()))
+            sections[key] = trials + conferences
+        else:
+            group.sort(key=lambda item: (item.date or "", item.title.casefold()), reverse=True)
+
     _lang = "zh"
     try:
         _lang = (config.scheduled.get("on_this_day") or {}).get("lang", "zh")

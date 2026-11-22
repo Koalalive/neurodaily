@@ -28,6 +28,8 @@ def clean(html: str) -> str:
     html = LOCAL.sub("[local path hidden]", html)
     html = re.sub(r'<meta name="nd-base" content="[^"]*">',
                   '<meta name="nd-base" content="">', html)
+    # The public snapshot must not show non-functional workspace controls.
+    html = re.sub(r'<div class="toolbar">[\s\S]*?</div>\s*</div>', '</div>', html, count=1)
     html = html.replace("http://127.0.0.1:8031", "")
     return re.sub(r'href="/history/\d+"', 'href="#"', html)
 
