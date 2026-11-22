@@ -357,6 +357,11 @@ RSS（可选）|RSS (optional)|RSS (необязательно)
 🏛️ 政策与新闻|🏛️ Policy and news|🏛️ Политика и новости
 📚 期刊|📚 Journals|📚 Журналы
 📡 来源状态|📡 Source Health|📡 Состояние источников
+检索时间窗|Search window|Окно поиска
+Trials|Trials|Испытания
+Conferences|Conferences|Конференции
+Clinical Trials|Clinical Trials|Клинические испытания
+Academic Conferences|Academic Conferences|Академические конференции
 神经科学与精神病学日报|neuroscience & psychiatry digest|сводка по нейронаукам и психиатрии
 肿瘤学日报|oncology digest|сводка по онкологии
 科研日报|research digest|научная сводка
