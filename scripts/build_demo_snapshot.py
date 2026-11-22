@@ -30,6 +30,9 @@ def clean(html: str) -> str:
                   '<meta name="nd-base" content="">', html)
     # The public snapshot must not show non-functional workspace controls.
     html = re.sub(r'<div class="toolbar">[\s\S]*?</div>\s*</div>', '</div>', html, count=1)
+    # The focus prompt belongs in the private daily report, not the public site.
+    html = re.sub(r'<section id="prompt">[\s\S]*?</section>', '', html, count=1)
+    html = re.sub(r'<a class="btn ghost" id="promptLink"[\s\S]*?</a>', '', html, count=1)
     html = html.replace("http://127.0.0.1:8031", "")
     return re.sub(r'href="/history/\d+"', 'href="#"', html)
 

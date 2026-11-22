@@ -357,8 +357,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
               {% if h.get('unknown') %}<p data-i18n="{count} 条因字段不足待确认。" data-i18n-count="{{ h.unknown }}">{{ h.unknown }} 条因字段不足待确认。</p>{% endif %}
               {% if h.get('lookback_days') %}<p data-i18n="请求回溯 · {count} 天" data-i18n-count="{{ h.lookback_days }}">请求回溯 · {{ h.lookback_days }} 天</p>{% endif %}
               {% if h.get('error') %}<p>{{ h.error }}</p>{% endif %}
-              {% if queries %}<details><summary>实际查询</summary>{% for query in queries %}<code>{{ query }}</code>{% endfor %}</details>{% endif %}
-            </td></tr>
+                </td></tr>
           {% endif %}
         {% endfor %}
         </tbody>

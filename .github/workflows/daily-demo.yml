@@ -57,7 +57,10 @@ jobs:
               page = Path(f"docs/demo/latest-report.{lang}.html").read_text(encoding="utf-8")
               assert 'id="trials"' in page and 'id="conferences"' in page
               assert 'data-no-i18n>🗓️ 学术会议' not in page
-          print("demo pages contain trials, conferences and translatable navigation")
+              assert 'id="ai-summary"' in page, "AI summary missing (check NEURODAILY_LLM_API_KEY)"
+              assert 'id="research-activity"' in page, "research activity map missing"
+              assert 'id="prompt"' not in page, "private focus prompt leaked to public demo"
+          print("demo pages contain trials, conferences, AI summary, map and no private prompt")
           PY
 
       - name: Commit updated demo
