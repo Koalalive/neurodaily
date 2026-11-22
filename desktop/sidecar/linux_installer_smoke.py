@@ -7,7 +7,10 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 
-from smoke import check_scheduled_search, check_settings, check_version, fetch_json, running_service, smoke
+from smoke import (
+    check_preserved_sources, check_scheduled_search, check_settings, check_version, fetch_json,
+    running_service, smoke,
+)
 
 
 def deb_field(path, field):
@@ -69,8 +72,9 @@ def check_deb_upgrade(baseline, baseline_version, candidate, candidate_version, 
         check_version(opener, base_url, candidate_version)
         check_settings(opener, base_url, home)
         loaded_config = fetch_json(opener, base_url, "/api/config")
-        for field in ("profile", "search", "sources", "scheduled"):
+        for field in ("profile", "search", "scheduled"):
             assert loaded_config[field] == config[field], f"The upgrade changed config field {field}"
+        check_preserved_sources(config["sources"], loaded_config["sources"])
         loaded_history = fetch_json(opener, base_url, f"/api/history/{run['id']}")
         for field in ("id", "profile", "status", "item_count", "report_path"):
             assert loaded_history[field] == run[field], f"The upgrade changed history field {field}"

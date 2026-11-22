@@ -8,7 +8,10 @@ import subprocess
 import sys
 import tempfile
 
-from smoke import check_scheduled_search, check_settings, check_version, fetch_json, running_service
+from smoke import (
+    check_preserved_sources, check_scheduled_search, check_settings, check_version, fetch_json,
+    running_service,
+)
 
 
 def windows_install_registration():
@@ -94,8 +97,9 @@ def check_upgrade(baseline, baseline_version, candidate, candidate_version, dest
         check_version(opener, base_url, candidate_version)
         check_settings(opener, base_url, home)
         config = fetch_json(opener, base_url, "/api/config")
-        for field in ("profile", "search", "scheduled", "sources"):
+        for field in ("profile", "search", "scheduled"):
             assert config[field] == saved_config[field], f"Upgrade changed {field}"
+        check_preserved_sources(saved_config["sources"], config["sources"])
         history = fetch_json(opener, base_url, f"/api/history/{run_id}")
         original_run = saved_history["runs"][0]
         for field in ("id", "profile", "status", "item_count", "report_path"):

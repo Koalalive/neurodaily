@@ -45,6 +45,13 @@ def check_version(opener, base_url, expected):
     assert version == expected, f"Expected packaged version {expected}, got {version}"
 
 
+def check_preserved_sources(previous, current):
+    for name, options in previous.items():
+        assert current.get(name) == options, f"The upgrade changed source {name}"
+    for name in current.keys() - previous.keys():
+        assert current[name].get("enabled") is False, f"The upgrade enabled new source {name}"
+
+
 def check_scheduled_search(opener, base_url, home, *, new_profile=None):
     status = fetch_json(opener, base_url, "/api/launchd/status")
     assert status["backend"] == "desktop", status
@@ -189,6 +196,20 @@ def running_service(executable: Path, home: Path, *, desktop=False, use_windows_
             time.sleep(0.25)
         else:
             raise AssertionError("The desktop sidecar continued listening after its parent stopped")
+        if os.name == "nt":
+            # Port closure can precede the release of Windows process handles.
+            deadline = time.monotonic() + 10
+            stopped_log = log.with_suffix(".stopped.log")
+            while True:
+                try:
+                    log.replace(stopped_log)
+                except PermissionError as exc:
+                    if exc.winerror not in (32, 33) or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.25)
+                else:
+                    stopped_log.replace(log)
+                    break
 
 
 def smoke(executable: Path, *, desktop=False, expected_version=None) -> None:
