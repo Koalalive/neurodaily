@@ -1,8 +1,8 @@
 class Neurodaily < Formula
   desc "Research digest and scheduled literature tracking in your browser"
   homepage "https://github.com/Koalalive/neurodaily"
-  url "https://github.com/Koalalive/neurodaily.git", using: :git, tag: "v1.0.7"
-  version "1.0.7"
+  url "https://github.com/Koalalive/neurodaily.git", using: :git, tag: "v1.0.8"
+  version "1.0.8"
   license "Apache-2.0"
 
   depends_on :macos

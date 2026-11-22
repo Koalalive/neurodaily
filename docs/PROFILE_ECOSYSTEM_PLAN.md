@@ -10,7 +10,7 @@
 - 已完成：单 JSON `profile export/import/validate/doctor` CLI；复用设置页同一套 `profile_exchange`（URL 去敏、私密字段隔离）；设置页保存保留未知 source 字段；`search` 已接入检索。
 - 已补回归：profile 导出/导入/校验/doctor、URL 密钥去除、doctor 发现缺失 `type` 的自定义源。
 - 仍待：`plan/apply`、`extends/overrides`、`.ndprofile` bundle 迁移、registry/lock、feedback/change-only、MCP。
-- 发布前门禁：`bash scripts/test_all.sh` 全绿；release 分支 CI 通过后再打 `v1.0.7` tag。
+- 发布前门禁：`bash scripts/test_all.sh` 全绿；release 分支 CI 通过后再打 `v1.0.8` tag。
 
 ---
 
