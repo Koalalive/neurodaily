@@ -169,3 +169,11 @@ def reports_since(after: int) -> list[dict]:
                             "AND task IS NOT NULL ORDER BY id LIMIT 100", (after,)).fetchall()
     return [{key: task[key] for key in ("id", "status", "report_ready")}
             for row in rows if (task := json.loads(row[0]))["report_ready"]]
+
+
+def archived_run_ids(profile: str) -> list[int]:
+    history.init_db()
+    with history._LOCK, closing(history._connect()) as conn:
+        rows = conn.execute("SELECT id FROM search_history WHERE profile=? AND checkpoint IS NOT NULL "
+                            "AND finished_at IS NOT NULL ORDER BY id", (profile,))
+        return [row[0] for row in rows]

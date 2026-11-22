@@ -40,6 +40,12 @@ def record_ids(item: Item) -> tuple[str, ...]:
         pmid = found_pmid[1] if found_pmid else ""
     if pmid.isdigit():
         ids.append(f"pmid:{pmid}")
+    pmcid = str(item.extra.get("pmcid") or "").upper()
+    if not pmcid:
+        matched = re.search(r"/(?:pmc/)?articles/(PMC\d+)(?:[/?#]|$)", item.url, re.I)
+        pmcid = matched[1].upper() if matched else ""
+    if re.fullmatch(r"PMC\d+", pmcid):
+        ids.append(f"pmcid:{pmcid}")
     if item.source == "arxiv":
         arxiv = re.search(r"arxiv\.org/(?:abs|pdf)/([^?#]+)", item.url)
         if arxiv:
@@ -80,9 +86,10 @@ def _priority(item: Item) -> tuple[bool, bool, int, int, str]:
 def merge_records(items: list[Item]) -> list[Item]:
     """Merge records sharing an identifier, deterministically retaining the richer record."""
     groups: dict[int, list[Item]] = {}
-    seen: dict[str, int] = {}
+    seen: dict[tuple[str, str], int] = {}
     for index, item in enumerate(items):
-        ids = record_ids(item)
+        family = "coverage" if item.kind in {"news", "policy"} else item.kind
+        ids = [(family, key) for key in record_ids(item)]
         other = sorted({seen[key] for key in ids if key in seen})
         group = other[0] if other else index
         members = groups.setdefault(group, [])
@@ -90,7 +97,7 @@ def merge_records(items: list[Item]) -> list[Item]:
             for previous in groups.pop(duplicate):
                 members.append(previous)
                 for key in record_ids(previous):
-                    seen[key] = group
+                    seen[(family, key)] = group
         members.append(item)
         seen.update({key: group for key in ids})
 

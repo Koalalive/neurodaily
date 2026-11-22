@@ -107,13 +107,15 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
     def _report(path, ui):
         if ui:
+            from .render import refresh_saved_research_map
+
             path = Path(path)
             html = path.read_text(encoding="utf-8", errors="replace")
             if 'name="nd-report-date"' not in html:
                 date = _saved_report_date(path, html)
                 html = html.replace("</head>", f'<meta name="nd-report-date" content="{date}"></head>', 1)
             html = re.sub(r'<details id="bibliometrics"\b[^>]*>[\s\S]*?</details>', "", html, count=1)
-            return _page(html)
+            return _page(refresh_saved_research_map(html, _language()))
         return FileResponse(path, media_type="text/html")
 
     def _cfg() -> Config:
@@ -212,7 +214,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             return attempt, guard
 
     def _search_and_deliver(cfg: Config, attempt: dict, force: bool, mode: str):
-        from .digest import save_report, snapshot
+        from .digest import index_saved_report, save_report, snapshot
 
         def sources(changes):
             attempt["sources"].update(changes)
@@ -254,6 +256,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         attempt.update(report_ready=True, report_file=str(path), report_revision=1)
         task_runs.stage(attempt, "report", "completed")
         task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
+        index_saved_report(result)
         app.state.last_run = result
 
         refreshed = False
@@ -406,6 +409,48 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     def settings_page():
         return _page(SETTINGS_HTML)
 
+    @app.get("/archive", response_class=HTMLResponse)
+    def archive_page():
+        from .archive_search import opensearch_configured
+        from .render import _stdlib_loader
+
+        language = _language()
+        template = _stdlib_loader().get_template("archive.html.j2")
+        return _page(template.render(language=language, hybrid=opensearch_configured()))
+
+    @app.get("/api/archive/search")
+    def api_archive_search(q: str = Query(min_length=1, max_length=250), kind: str | None = None,
+                           limit: int = Query(30, ge=1, le=100), backend: str = "local"):
+        from .archive_search import ArchiveSearchError, search_archive
+
+        try:
+            result = search_archive(q, profile=_cfg().profile, kind=kind, limit=limit, backend=backend)
+        except ValueError as error:
+            return JSONResponse({"message": str(error)}, status_code=400)
+        except ArchiveSearchError as error:
+            return JSONResponse({"message": str(error)}, status_code=503)
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/archive/import")
+    async def api_archive_import(request: Request):
+        from .archive_search import ArchiveSearchError, index_report
+
+        if await _service_draft(request) is None:
+            return JSONResponse({"message": "Invalid archive request."}, status_code=400)
+
+        def import_reports(profile):
+            imported = 0
+            for run_id in task_runs.archived_run_ids(profile):
+                if result := task_runs.load_result(run_id):
+                    index_report(result)
+                    imported += 1
+            return imported
+
+        try:
+            return {"reports": await run_in_threadpool(import_reports, _cfg().profile)}
+        except ArchiveSearchError as error:
+            return JSONResponse({"message": str(error)}, status_code=503)
+
     @app.get("/billing", response_class=HTMLResponse)
     def billing_page():
         from .render import _stdlib_loader
@@ -450,7 +495,12 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
     @app.get("/api/config")
     def api_config_get():
-        return JSONResponse(_cfg().to_dict())
+        from .config import OPTIONAL_SOURCES
+
+        config = _cfg()
+        data = config.to_dict()
+        data["sources"] = {**config.sources, **{name: config.source_opts(name) for name in OPTIONAL_SOURCES}}
+        return JSONResponse(data)
 
     @app.get("/api/config/presets")
     def api_config_presets():
@@ -782,7 +832,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 f"<td class='hist-src'>{src_summary}</td>"
                 f"<td><a href='{detail}'>view</a> · "
                 f"<a href='#' class='del' data-id='{r['id']}'>delete</a></td></tr>")
-        body = "<div class='wrap'><h2>Search History</h2>"
+        body = "<div class='wrap'><h2>Search History</h2><p><a href='/archive'>历史条目检索</a></p>"
         snapshots = [r for r in runs if r["has_snapshot"]]
         if len(snapshots) >= 2:
             before, after = snapshots[1]["id"], snapshots[0]["id"]
@@ -878,6 +928,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         task = row and row["task"]
         if task and task["report_ready"] and Path(task["report_file"]).is_file():
             return _report(task["report_file"], ui)
+        if row and not task and row.get("report_path"):
+            path = Path(_cfg().output_dir(), os.path.basename(row["report_path"]))
+            if path.is_file():
+                return _report(path, ui)
         response = _page("<h3>日报未生成或已清理。</h3>")
         response.status_code = 404
         return response

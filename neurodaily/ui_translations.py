@@ -413,6 +413,36 @@ IF、JCR 和中科院分区来自导入的官方表。|IF, JCR and CAS rankings 
 结构化聚焦提示词|Structured Focus Prompt|Структурированный промпт по теме
 API 账单与地图设置|API billing and map settings|Расходы API и настройки карты
 AI 地理定位|AI geography|Геолокация ИИ
+新闻、政策与试验检索规则|News, policy and trial rules|Правила поиска новостей, политики и испытаний
+各类型独立匹配，可以使用同一组编号集合。留空时使用来源默认检索。|Each type can reuse the numbered sets. Leave blank to use the source defaults.|Каждый тип может использовать общие наборы. Пустое правило использует настройки источника.
+新闻检索式|News query|Запрос новостей
+政策检索式|Policy query|Запрос политики
+试验检索式|Trial query|Запрос испытаний
+来源专用查询（可选）|Optional source query|Запрос к источнику (необязательно)
+订阅源内容类型|Feed content type|Тип содержимого ленты
+自动识别|Detect automatically|Определить автоматически
+未满足本类型的检索规则。|Did not match this content type’s rule.|Не соответствует правилу для этого типа.
+{count} 条已排除|{count} excluded|Исключено {count}
+历史条目检索|Research archive|Поиск по архиву
+检索历史条目|Search archived records|Поиск архивных записей
+标题、摘要或文献编号|Title, abstract or identifier|Заголовок, аннотация или идентификатор
+条目类型|Record type|Тип записи
+全部类型|All types|Все типы
+检索后端|Search backend|Система поиска
+本机索引|Local index|Локальный индекс
+导入已有任务日报|Index existing task reports|Индексировать готовые отчёты
+已索引 {count} 份任务日报|Indexed {count} task reports|Индексировано отчётов: {count}
+显示 {count} 条结果|Showing {count} results|Показано результатов: {count}
+历史检索失败。|Could not search the archive.|Ошибка поиска в архиве.
+历史导入失败。|Could not index the reports.|Ошибка индексации отчётов.
+相关来源|Related source|Связанный источник
+原文引用编号|Identifier cited by the source|Идентификатор из источника
+涉及论文|Affected paper|Затронутая публикация
+待确认关联|Unconfirmed connection|Неподтверждённая связь
+首次登记|First registered|Первая регистрация
+登记更新|Registry update|Обновление реестра
+结果发布|Results posted|Результаты опубликованы
+状态变更|Status changed|Статус изменился
 提示|Warnings|Предупреждения
 由神通寰宇自动生成|Generated automatically by NeuroDaily|Сформировано автоматически в NeuroDaily
 展开|Expand|Развернуть

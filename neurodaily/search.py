@@ -214,9 +214,12 @@ def _as_values(value) -> list[str]:
 
 def _fields(item, field: str) -> dict[str, list[str]]:
     extra = item.extra
+    keywords = _as_values(extra.get("keywords"))
+    if item.kind == "trial":
+        keywords = [*keywords, *_as_values(extra.get("conditions")), *_as_values(extra.get("interventions"))]
     values = {
         "TI": item.title, "AB": extra.get("abstract") or item.summary,
-        "AK": extra.get("keywords"), "AU": item.authors,
+        "AK": keywords, "AU": item.authors,
         "SO": [*_as_values(extra.get("journal")), *_as_values(extra.get("journal_aliases"))],
         "ISSN": [*_as_values(extra.get("issn")), *_as_values(extra.get("issns")),
                  *_as_values(extra.get("issn_l"))],
@@ -225,7 +228,7 @@ def _fields(item, field: str) -> dict[str, list[str]]:
         "PY": item.date, "PD": item.date,
     }
     if field in ("TS", "TIAB"):
-        keys = ("TI", "AB", "AK") if field == "TS" else ("TI", "AB")
+        keys = ("TI", "AB", "AK") if field == "TS" and item.kind in {"paper", "trial"} else ("TI", "AB")
         return {key: _as_values(values[key]) for key in keys}
     return {field: _as_values(values[field])}
 
@@ -393,7 +396,18 @@ def _remote(node: Node | None, source: str) -> str:
             return "(" + " AND ".join(
                 "(" + " OR ".join(f'{f}:"{word}"' for f in field) + ")" for word in words
             ) + ")"
+    if source == "trials" and node.field in {"TS", "TIAB", "TI", "AB", "AK"}:
+        return "(" + " AND ".join(f'"{word}"' for word in words) + ")"
     return ""
+
+
+SCOPED_KINDS = ("news", "policy", "trial")
+
+
+def compile_scoped_search(search: dict | None) -> dict[str, SearchPlan]:
+    search = search or {}
+    return {kind: compile_search({"query": query, "sets": search.get("sets", {})})
+            for kind, query in (search.get("rules") or {}).items() if query.strip()}
 
 
 def compile_search(search: dict | None, journal_catalog=()) -> SearchPlan:

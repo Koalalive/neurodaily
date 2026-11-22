@@ -58,6 +58,8 @@ class SourceModel(BaseModel):
     items_path: str | None = None
     kind: str | None = None
     map: dict[str, str] | None = None
+    query: str = Field("", max_length=1800)
+    feed_kinds: dict[str, Literal["paper", "news", "policy", "funding", "conference"]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _generic_needs_url(self):
@@ -75,14 +77,17 @@ class SearchModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field("", max_length=1800)
     sets: dict[str, str] = Field(default_factory=dict)
+    rules: dict[Literal["news", "policy", "trial"], str] = Field(default_factory=dict)
     journal_mode: Literal["any", "only", "prefer"] = "any"
     journals: list[str] = Field(default_factory=list, max_length=100)
     sort: Literal["default", "latest", "relevance", "journal"] = "default"
 
     @model_validator(mode="after")
     def _validate_rules(self):
-        from .search import compile_search
-        compile_search(self.model_dump())
+        from .search import compile_scoped_search, compile_search
+        data = self.model_dump()
+        compile_search(data)
+        compile_scoped_search(data)
         return self
 
 

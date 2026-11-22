@@ -32,7 +32,7 @@ input:focus{outline:none;border-color:var(--accent)}
 .row.j{display:grid;grid-template-columns:1fr 1.4fr 1.4fr .8fr .7fr .6fr .7fr auto;gap:6px}
 .row.j .j-aliases{grid-column:1 / 5}
 .row.j .j-issns{grid-column:5 / -1}
-.row.feed{display:flex}
+.row.feed{display:grid;grid-template-columns:minmax(10ch,1fr) auto auto}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inline input[type=number]{width:80px}
 button{background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:.82rem;cursor:pointer}
@@ -161,6 +161,14 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
         <div id="search_sets"></div>
         <button type="button" id="search_add_set">+ Add search set</button>
         <p class="hint"><span>Reuse sets in the expression, for example</span> <code>(#1 AND #2) NOT #3</code>.</p>
+      </details>
+
+      <details class="search-tools">
+        <summary>新闻、政策与试验检索规则</summary>
+        <p class="hint">各类型独立匹配，可以使用同一组编号集合。留空时使用来源默认检索。</p>
+        <label for="rule_news">新闻检索式</label><input id="rule_news" placeholder='TS="brain-computer interface"'>
+        <label for="rule_policy">政策检索式</label><input id="rule_policy" placeholder='TS="neurotechnology"'>
+        <label for="rule_trial">试验检索式</label><input id="rule_trial" placeholder='TS="deep brain stimulation"'>
       </details>
 
       <div class="grid2">
@@ -504,6 +512,7 @@ function renderSearch(search){
   el('search_builder_status').textContent='';
   search=search||{};
   el('search_query').value=search.query||'';
+  for(var kind of ['news','policy','trial']) el('rule_'+kind).value=(search.rules||{})[kind]||'';
   el('search_journal_mode').value=search.journal_mode||'any';
   el('search_journals').value=csv(search.journals);
   el('search_sort').value=search.sort||'default';
@@ -523,13 +532,21 @@ function collectSearch(previous){
   var journal_mode=el('search_journal_mode').value;
   var journals=split(el('search_journals').value);
   var sort=el('search_sort').value;
+  var rules={};
+  for(var kind of ['news','policy','trial']){
+    var expression=el('rule_'+kind).value.trim();
+    if(expression) rules[kind]=expression;
+  }
   var sets={};
   el('search_sets').querySelectorAll('.search-set').forEach(function(row){
     var expression=row.querySelector('input').value.trim();
     if(expression) sets[row.dataset.number]=expression;
   });
-  if(!previous&&!query&&journal_mode==='any'&&!journals.length&&sort==='default'&&!Object.keys(sets).length) return;
-  return Object.assign({},previous,{query:query,sets:sets,journal_mode:journal_mode,journals:journals,sort:sort});
+  if(!previous&&!query&&journal_mode==='any'&&!journals.length&&sort==='default'&&!Object.keys(sets).length&&!Object.keys(rules).length) return;
+  var result=Object.assign({},previous,{query:query,sets:sets,journal_mode:journal_mode,journals:journals,sort:sort});
+  if(Object.keys(rules).length) result.rules=rules;
+  else delete result.rules;
+  return result;
 }
 
 function searchText(parent,tag,value){
@@ -555,6 +572,7 @@ function previewExample(list,example){
   if(example.search_match==='unknown'){
     searchText(item,'p','Needs more metadata to confirm a match.').className='mini';
   }
+  if(example.search_match==='miss') searchText(item,'p','未满足本类型的检索规则。').className='mini';
   if(example.matched_rules&&example.matched_rules.length){
     searchText(item,'p',t('Matched · {rules}',{rules:example.matched_rules.join(' · ')})).className='mini';
   }
@@ -579,10 +597,11 @@ function showSearchPreview(sources){
     var candidates=(!unavailable||source.candidates>0)&&Number.isFinite(source.candidates)
       ?' · '+t('{count} candidates',{count:source.candidates}):'';
     var unknown=source.unknown?' · '+t('{count} unconfirmed',{count:source.unknown}):'';
+    var excluded=source.excluded?' · '+t('{count} 条已排除',{count:source.excluded}):'';
     var coverage=t(coverageLabels[source.coverage]||'');
     var status=t(source.status==='empty'&&source.coverage==='sampled'?'No sample matches':
       labels[source.status]||source.status||'Unknown');
-    var summary=[source.source,status+matched+candidates+unknown];
+    var summary=[source.source,status+matched+candidates+unknown+excluded];
     if(coverage&&coverage!==status) summary.push(coverage);
     if(source.truncated) summary.push(t('Candidate cap reached'));
     searchText(details,'summary',summary.join(' · '));
@@ -681,12 +700,22 @@ function sourceRow(k,o){
     '<label><input type="checkbox" class="s-en" '+(o.enabled!==false?'checked':'')+'> On</label>'+
     '<input type="number" class="s-max" title="max_results" value="'+(o.max_results!=null?o.max_results:20)+'">'+
     '<input type="number" class="s-look" title="lookback_days" value="'+(o.lookback_days!=null?o.lookback_days:1)+'">';
+  if(['trials','europe_pmc','openalex','gdelt','nih_brain'].includes(k)){
+    var query=document.createElement('input');
+    query.className='s-query';
+    query.style.gridColumn='1 / -1';
+    query.value=o.query||'';
+    query.placeholder='来源专用查询（可选）';
+    d.append(query);
+  }
   return d;
 }
-function feedRow(u){
+function feedRow(u, kind){
   var d=document.createElement('div'); d.className='row feed';
   d.innerHTML='<input class="feed" value="'+esc(u)+'">'+
+    '<select class="feed-kind" aria-label="订阅源内容类型"><option value="">自动识别</option><option value="paper">论文</option><option value="news">新闻</option><option value="policy">政策</option><option value="funding">资助</option><option value="conference">会议</option></select>'+
     '<button class="del" onclick="this.closest(\'.row\').remove()">✕</button>';
+  d.querySelector('.feed-kind').value=kind||'';
   return d;
 }
 function addFeed(){el('policy_feeds').appendChild(feedRow(''));}
@@ -730,7 +759,8 @@ function render(){
   el('win_funding').value = (w.funding_hours != null ? w.funding_hours : 36);
   el('win_news').value = (w.news_hours != null ? w.news_hours : 36);
   var pbox=el('policy_feeds'); pbox.innerHTML='';
-  (BASE.policy_feeds||[]).forEach(function(u){pbox.appendChild(feedRow(u));});
+  var feedKinds=((BASE.sources||{}).policy||{}).feed_kinds||{};
+  (BASE.policy_feeds||[]).forEach(function(u){pbox.appendChild(feedRow(u,feedKinds[u]));});
   var jbox=el('journals'); jbox.innerHTML='';
   (BASE.journals||[]).forEach(function(x){jbox.appendChild(journalRow(x));});
 }
@@ -863,6 +893,8 @@ function collect(){
       enabled:r.querySelector('.s-en').checked,
       max_results:parseInt(r.querySelector('.s-max').value||'0',10),
       lookback_days:parseInt(r.querySelector('.s-look').value||'1',10)});
+    var query=r.querySelector('.s-query');
+    if(query) data.sources[key].query=query.value.trim();
   });
   data.output=Object.assign({},data.output||{});
   data.output.dir=el('out_dir').value.trim();
@@ -880,7 +912,15 @@ function collect(){
   data.windows.trials_hours=parseInt(el('win_trials').value||'36',10);
   data.windows.funding_hours=parseInt(el('win_funding').value||'36',10);
   data.windows.news_hours=parseInt(el('win_news').value||'36',10);
-  data.policy_feeds=[].slice.call(el('policy_feeds').querySelectorAll('input.feed')).map(function(i){return i.value.trim();}).filter(Boolean);
+  var feedKinds={};
+  data.policy_feeds=Array.from(el('policy_feeds').querySelectorAll('input.feed')).map(function(input){
+    var url=input.value.trim();
+    var kind=input.closest('.row').querySelector('.feed-kind').value;
+    if(url&&kind) feedKinds[url]=kind;
+    return url;
+  }).filter(Boolean);
+  if(Object.keys(feedKinds).length) (data.sources.policy||={}).feed_kinds=feedKinds;
+  else if(data.sources.policy) delete data.sources.policy.feed_kinds;
   data.journals=[].slice.call(el('journals').querySelectorAll('.row')).map(function(r){
     var iv=r.querySelector('.j-if').value.trim();
     return {name:r.querySelector('.j-name').value.trim(),

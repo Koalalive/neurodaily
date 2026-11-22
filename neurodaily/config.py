@@ -20,6 +20,13 @@ DEFAULT_DIRS = {
     "config": os.path.join(_HOME, "config") if _HOME else os.path.join(os.path.expanduser("~"), "neurodaily", "config"),
     "output": os.path.join(_HOME, "output") if _HOME else os.path.join(os.path.expanduser("~"), "neurodaily", "output"),
 }
+OPTIONAL_SOURCES = {
+    "europe_pmc": {"enabled": False, "max_results": 40, "lookback_days": 2},
+    "openalex": {"enabled": False, "max_results": 40, "lookback_days": 2},
+    "gdelt": {"enabled": False, "max_results": 30, "lookback_days": 2},
+    "nih_brain": {"enabled": False, "max_results": 25, "lookback_days": 7},
+    "crossref": {"enabled": False, "max_results": 20, "lookback_days": 2},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +242,7 @@ class Config:
         return out
 
     def source_opts(self, name: str) -> dict:
-        return dict(self.sources.get(name, {}))
+        return {**OPTIONAL_SOURCES.get(name, {}), **self.sources.get(name, {})}
 
     # ------------------------------------------------------ structured prompt
     def to_prompt(self) -> str:

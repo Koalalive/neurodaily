@@ -114,16 +114,21 @@ def describe() -> dict:
         ],
         "patch_semantics": "dicts merge, lists replace, null deletes",
         "required": ["disciplines (>=1, each needs keywords/mesh/arxiv/bio when enabled)"],
-        "optional": ["global_keywords", "sources", "journals", "policy_feeds",
+        "optional": ["global_keywords", "search", "sources", "journals", "policy_feeds",
                      "output", "scheduled", "profile"],
+        "search": {"query": "paper expression", "sets": "shared numbered sets",
+                   "rules": {"news": "expression", "policy": "expression", "trial": "expression"}},
         "sources": {
             "builtin": ["journal", "arxiv", "pubmed", "biorxiv",
                         "fda_drugs", "fda_devices", "trials", "policy"],
+            "opt_in": ["europe_pmc", "openalex", "gdelt", "nih_brain", "crossref"],
+            "source_query": ["trials", "europe_pmc", "openalex", "gdelt", "nih_brain"],
+            "policy_feed_kinds": "sources.policy.feed_kinds maps policy feed URLs to content kinds",
             "generic": {
                 "type": "rss | json_api",
                 "rss_keys": ["url", "kind", "max_results", "lookback_days"],
                 "json_keys": ["url", "items_path", "map", "kind"],
             },
         },
-        "kinds": ["paper", "drug", "device", "trial", "news", "policy", "conference"],
+        "kinds": ["paper", "drug", "device", "trial", "news", "policy", "conference", "funding"],
     }

@@ -42,3 +42,32 @@ NeuroDaily 目前已经能解析字段化布尔表达式、引用命名集合、
 4. 词扩展先作为人工审阅建议。临床问题可以用 PICO 帮助组织概念，同时让研究者决定哪些概念进入检索式。对于前沿动态，先用布尔和受控词表控制候选范围，再把语义评分用于排序。
 
 这份设计可分版上线。优先落地概念词表、编译预览和运行快照，兼容测试覆盖后再启用新格式写入。
+
+## 已落地的分类型规则
+
+当前 profile 保留原有 `search.query`、`search.sets` 和期刊设置。新增的 `search.rules` 存放 `news`、`policy` 和 `trial` 三种表达式。每种规则可引用同一组编号集合，留空时沿用相应适配器的默认范围。设置中的检索预览按来源显示匹配、排除和缺字段待确认的样例。来源专用查询放在 `sources.<来源>.query`，原式及来源的实际取样范围可在预览中检查。
+
+```json
+{
+  "search": {
+    "query": "#1 AND TIAB=decoding",
+    "sets": {"1": "TS=(\"brain-computer interface\" OR \"brain-machine interface\")"},
+    "rules": {
+      "news": "#1 OR TI=\"脑机接口\"",
+      "policy": "TS=neurotechnology",
+      "trial": "TS=\"deep brain stimulation\""
+    }
+  }
+}
+```
+
+## 配置文件进一步拆分
+
+| 参考实现 | 适合借鉴的部分 |
+| --- | --- |
+| OpenSearch Query DSL | 用结构化布尔节点表达必须匹配、任一匹配、排除和筛选。对 OR 确定最少命中数，避免同一条件在有无额外筛选时语义改变。 [Boolean query](https://docs.opensearch.org/latest/query-dsl/compound/bool/) |
+| Polyglot Search Translator | 将来源语法的转换放进独立适配层。给每个字段标明远端执行、本地验证或当前不可验证。 [源代码](https://github.com/IEBH/sra-polyglot) |
+| Haddaway 等人的标准化搜索记录和 searchRxiv | 将可复现的执行记录作为独立产物，记录平台、执行日期、原始和最终检索式、限制及结果量。 [结构论文](https://doi.org/10.1002/cl2.1288) · [searchRxiv](https://searchrxiv.org/about/index.html) |
+| JSON Schema | 用 `$defs` 复用概念及来源定义，用独立版本号管理交换格式，导入时先验证再应用。 [组件与引用](https://json-schema.org/understanding-json-schema/structuring) |
+
+下一阶段可将可分享的**策略**、平台专用的**来源设置**、本机的**运行设置**和只读的**执行记录**分开。策略保存概念词表、布尔树、规则修订号和人工验证样本。来源设置保存支持的字段、查询覆盖和数据许可。运行设置保存日程、密钥引用和费用上限。执行记录保存策略指纹、实际查询和覆盖警告。这样同一个脑科学策略可以在不同机器共用，收件人、运行日程和 API 凭据由各自本机管理。策略格式迁移保留旧字符串的读入能力，再用固定样本逐项比较命中结果。

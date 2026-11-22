@@ -1,7 +1,7 @@
 """Source registry: maps config key -> fetch function."""
 from __future__ import annotations
 
-from . import arxiv, pubmed, biorxiv, fda, trials, rss, journalpapers, generic
+from . import arxiv, biorxiv, europe_pmc, fda, gdelt, generic, journalpapers, nih_brain, openalex, pubmed, rss, trials
 
 BUILTIN = {
     "journal": journalpapers.fetch,
@@ -12,6 +12,10 @@ BUILTIN = {
     "fda_devices": fda.fetch_devices,
     "trials": trials.fetch,
     "policy": rss.fetch,
+    "europe_pmc": europe_pmc.fetch,
+    "openalex": openalex.fetch,
+    "gdelt": gdelt.fetch,
+    "nih_brain": nih_brain.fetch,
 }
 
 REGISTRY = BUILTIN
@@ -37,7 +41,7 @@ def registry_for(config) -> dict:
 
 def fetch_source(name: str, config, logger=None):
     fn = REGISTRY.get(name)
-    if fn is None:
+    if fn is None or config.source_opts(name).get("enabled", True) is False:
         return []
     try:
         return fn(config, logger=logger)

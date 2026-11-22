@@ -14,7 +14,7 @@ MAX_BYTES = 256 * 1024
 _FIELDS = ("profile", "disciplines", "global_keywords", "search", "sources",
            "windows", "policy_feeds", "journals")
 _SOURCE_FIELDS = {"enabled", "max_results", "lookback_days", "type", "url", "kind",
-                  "items_path", "map", "filter_keywords"}
+                  "items_path", "map", "filter_keywords", "query", "feed_kinds"}
 _SECRET_QUERY_NAMES = {"key", "apikey", "accesstoken", "authtoken", "token", "auth",
                        "secret", "signature", "sig", "password", "credential", "jwt"}
 _PORTABLE_WINDOWS = set(DEFAULT_CONFIG().windows)
@@ -47,6 +47,10 @@ def _portable(data: dict) -> dict:
             fields["sources"][name] = {key: val for key, val in source.items() if key in _SOURCE_FIELDS}
             if "url" in source:
                 fields["sources"][name]["url"] = _url(source["url"])
+            if isinstance(source.get("feed_kinds"), dict):
+                fields["sources"][name]["feed_kinds"] = {
+                    _url(url): kind for url, kind in source["feed_kinds"].items()
+                }
     if isinstance(fields.get("journals"), list):
         for item in fields["journals"]:
             if not isinstance(item, dict):
@@ -98,5 +102,5 @@ def import_profile(document, current: Config) -> tuple[Config, dict]:
     cfg = Config.from_dict(merged)
     return cfg, {"profile": cfg.profile, "disciplines": len(cfg.disciplines),
                  "sources": len(cfg.sources), "journals": len(cfg.journals),
-                 "has_query": bool(cfg.search.get("query")),
+                 "has_query": bool(cfg.search.get("query") or cfg.search.get("rules")),
                  "removed_private_fields": any(key not in _FIELDS and key != "version" for key in data)}

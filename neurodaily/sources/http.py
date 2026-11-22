@@ -99,7 +99,8 @@ def mark_sampled(*, truncated: bool = False) -> None:
 def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
         retries: int = 2, backoff: float = 1.2, connect_close: bool = False,
         user_agent: str | None = None,
-        accepted_statuses: tuple[int, ...] = ()) -> httpx.Response | None:
+        accepted_statuses: tuple[int, ...] = (),
+        headers: dict | None = None) -> httpx.Response | None:
     """Perform a GET with retry/backoff. Return None on final failure (never raises).
 
     ``connect_close=True`` forces a fresh one-shot connection (no connection pool)
@@ -110,21 +111,20 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
     if stats is not None:
         with stats._lock:
             stats.request_count += 1
+    request_headers = dict(headers or {})
+    if user_agent:
+        request_headers["User-Agent"] = user_agent
     kind, message = "failed", "HTTP request failed"
     for attempt in range(retries + 1):
         try:
             if connect_close:
-                # one-shot client: avoid pooled keep-alive connections entirely
-                headers = dict(DEFAULT_HEADERS)
-                headers["Connection"] = "close"
-                if user_agent:
-                    headers["User-Agent"] = user_agent
-                with httpx.Client(timeout=timeout, headers=headers,
+                fresh_headers = {**DEFAULT_HEADERS, **request_headers, "Connection": "close"}
+                with httpx.Client(timeout=timeout, headers=fresh_headers,
                                   follow_redirects=True) as fresh:
                     resp = fresh.get(url, params=params, timeout=timeout)
-            elif user_agent:
+            elif request_headers:
                 resp = _client.get(url, params=params, timeout=timeout,
-                                   headers={"User-Agent": user_agent})
+                                   headers=request_headers)
             else:
                 resp = _client.get(url, params=params, timeout=timeout)
             if resp.status_code < 400 or resp.status_code in accepted_statuses:

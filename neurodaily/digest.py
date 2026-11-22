@@ -5,6 +5,7 @@ Used by both the CLI (standalone script) and the web app.
 from __future__ import annotations
 
 import math
+import logging
 import os
 import tempfile
 import time
@@ -17,7 +18,7 @@ from html import escape
 from .config import Config, DEFAULT_CONFIG
 from .models import Item, tag_items
 from .records import merge_records
-from .search import compile_search
+from .search import compile_scoped_search, compile_search
 from .sources import registry_for
 from . import history as hist
 
@@ -66,11 +67,16 @@ _SECTION_BY_KIND = {
     "funding": "industry",
 }
 
-_LITERATURE_SOURCES = {"journal", "pubmed", "arxiv", "biorxiv"}
+_LITERATURE_SOURCES = {"journal", "pubmed", "arxiv", "biorxiv", "europe_pmc", "openalex"}
 
 
 def _literature_source(config: Config, name: str) -> bool:
     return name in _LITERATURE_SOURCES or config.source_opts(name).get("kind") == "paper"
+
+
+def _preview_source(config: Config, name: str) -> bool:
+    return (_literature_source(config, name) or name in {"policy", "trials", "gdelt", "nih_brain"}
+            or config.source_opts(name).get("kind") in {"news", "policy", "trial"})
 
 
 def _windows(config: Config, mode: str) -> tuple[dict, int]:
@@ -114,22 +120,23 @@ def _candidate_config(config, windows, other, *, preview=False, fallback=False, 
     return cfg
 
 
-def _mark_match(item, plan) -> str:
-    if item.kind != "paper" or not plan.active:
+def _mark_match(item, plan, scoped=None) -> str:
+    selected = plan if item.kind == "paper" else (scoped or {}).get(item.kind)
+    if selected is None or not selected.active:
         return "match"
-    matched = plan.match(item)
+    matched = selected.match(item)
     item.extra.update(search_match=matched.status, matched_rules=list(matched.evidence),
                       missing_fields=list(matched.missing_fields))
     return matched.status
 
 
-def _fetch_sources(config, plan, windows, other, *, logger=None, preview=False, progress=None):
+def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, preview=False, progress=None):
     from .sources.http import capture_requests
 
     registry = registry_for(config)
     enabled = [(name, fetch) for name, fetch in registry.items()
                if config.source_opts(name).get("enabled", True) is not False
-               and (not preview or _literature_source(config, name))]
+               and (not preview or _preview_source(config, name))]
     if progress:
         progress({name: {"status": "pending"} for name, _ in enabled})
     if not enabled:
@@ -150,27 +157,29 @@ def _fetch_sources(config, plan, windows, other, *, logger=None, preview=False, 
         if error is not None:
             diagnostics.update(status="failed", ok=False, error=error)
         filtered = _filter_by_windows(items, windows, other, keep_dated_papers=bool(bounds))
-        matches, uncertain = [], []
+        matches, uncertain, excluded = [], [], []
         for item in filtered:
-            status = _mark_match(item, plan)
+            status = _mark_match(item, plan, scoped)
             if status == "match":
                 matches.append(item)
             elif status == "unknown":
                 uncertain.append(item)
+            else:
+                excluded.append(item)
         if diagnostics["status"] == "ok" and not matches:
             diagnostics["status"] = "empty"
         diagnostics.update(source=name, count=len(matches), fetched=len(items),
                            candidates=diagnostics.get("candidate_count") if diagnostics.get("candidate_count") is not None else len(items),
-                           unknown=len(uncertain), ms=int((time.monotonic() - started) * 1000),
+                           unknown=len(uncertain), excluded=len(excluded), ms=int((time.monotonic() - started) * 1000),
                            lookback_days=config.source_opts(name).get("lookback_days"))
         if bounds and literature:
             diagnostics["date_range"] = list(bounds)
         if preview:
             diagnostics["examples"] = [
-                {"title": it.title, "url": it.url, "matched_rules": it.extra.get("matched_rules", []),
+                {"title": it.title, "url": it.url, "kind": it.kind, "matched_rules": it.extra.get("matched_rules", []),
                  "missing_fields": it.extra.get("missing_fields", []),
                  "search_match": it.extra.get("search_match", "match")}
-                for it in matches[:4] + uncertain[:2]
+                for it in matches[:4] + uncertain[:2] + excluded[:2]
             ]
         return filtered, diagnostics
 
@@ -189,16 +198,21 @@ def _fetch_sources(config, plan, windows, other, *, logger=None, preview=False, 
 
 
 def preview_search(config: Config) -> dict:
-    """Fetch bounded literature samples without history, reports, AI or delivery."""
+    """Fetch bounded research samples without history, reports, AI or delivery."""
     plan = compile_search(config.search, config.journals)
+    scoped = compile_scoped_search(config.search)
     windows, other = _windows(config, "manual")
     candidates = _candidate_config(config, windows, other, preview=True, date_range=plan.date_range)
-    items, sources = _fetch_sources(candidates, plan, windows, other, preview=True)
+    items, sources = _fetch_sources(candidates, plan, windows, other, scoped=scoped, preview=True)
     counts = {"match": 0, "unknown": 0, "miss": 0}
+    by_kind = {}
     for item in merge_records(items):
         status = item.extra.get("search_match")
-        counts["match" if status == "match" else _mark_match(item, plan)] += 1
-    return {"profile": config.profile, "sources": sources, "unique_candidates": counts}
+        match = "match" if status == "match" else _mark_match(item, plan, scoped)
+        counts[match] += 1
+        by_kind.setdefault(item.kind, dict.fromkeys(counts, 0))[match] += 1
+    return {"profile": config.profile, "sources": sources, "unique_candidates": counts,
+            "by_kind": by_kind}
 
 
 def _rank(item: Item, plan) -> tuple:
@@ -247,22 +261,39 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
             return final
 
     plan = compile_search(config.search, config.journals)
+    scoped = compile_scoped_search(config.search)
     windows, other = _windows(config, mode)
     candidates = _candidate_config(config, windows, other, date_range=plan.date_range)
-    items, health = _fetch_sources(candidates, plan, windows, other, logger=logger, progress=progress)
+    items, health = _fetch_sources(candidates, plan, windows, other, scoped=scoped, logger=logger, progress=progress)
     if (not items and health and not plan.active
             and all(row["status"] == "empty" for row in health)
             and any(row["lookback_days"] < 7 for row in health)):
         candidates = _candidate_config(config, windows, other, fallback=True)
-        items, health = _fetch_sources(candidates, plan, windows, other, logger=logger, progress=progress)
+        items, health = _fetch_sources(candidates, plan, windows, other, scoped=scoped, logger=logger, progress=progress)
     errors = [
         f'{row["source"]}: {row.get("error") or ", ".join(row.get("request_errors", [])) or row["status"]}'
         for row in health if row["status"] in ("timeout", "limited", "failed", "partial")
     ]
 
     deduped = [item for item in merge_records(tag_items(items, config))
-               if item.extra.get("search_match") == "match" or _mark_match(item, plan) == "match"]
+               if item.extra.get("search_match") == "match" or _mark_match(item, plan, scoped) == "match"]
     deduped.sort(key=lambda item: _rank(item, plan), reverse=True)
+
+    from .research_events import link_records, track_trial_changes
+    from .sources import crossref
+
+    link_records(deduped)
+    try:
+        track_trial_changes(deduped, config.profile)
+    except Exception:
+        logging.getLogger(__name__).exception("Could not record trial status changes")
+    if deduped and config.source_opts("crossref").get("enabled"):
+        from .sources.http import capture_requests
+        started = time.monotonic()
+        with capture_requests() as stats:
+            enriched = crossref.enrich(deduped, config)
+        health.append({"source": "crossref", "count": enriched,
+                       "ms": int((time.monotonic() - started) * 1000), **stats.as_dict(enriched)})
 
     try:
         from .journal_metrics import for_item
@@ -337,21 +368,40 @@ def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int 
         try:
             # date-only sources: treat as end of day so a 36h window still
             # includes yesterday's news/papers instead of dropping them at 00:00.
-            dtv = datetime.fromisoformat(it.date if len(it.date) > 10 else it.date + "T23:59:59")
+            dtv = datetime.fromisoformat(it.date.replace("Z", "+00:00") if len(it.date) > 10
+                                         else it.date + "T23:59:59")
         except Exception:
             out.append(it)
             continue
         if dtv.tzinfo is not None:
             cutoff = cutoff.astimezone()
-        if dtv < cutoff:
-            continue
-        out.append(it)
+        if dtv >= cutoff or _within_window(it.extra.get("source_discovered_at"), cutoff):
+            out.append(it)
     return out
+
+
+def _within_window(value, cutoff: datetime) -> bool:
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00") if len(value) > 10
+                                    else value + "T23:59:59")
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return dt.timestamp() >= cutoff.timestamp()
 
 
 def _filter_papers_by_window(items: list[Item], hours: int) -> list[Item]:
     """Backward-compatible helper: filter papers only, keep every other kind."""
     return _filter_by_windows(items, {"paper": hours}, other_hours=10 ** 6)
+
+
+def index_saved_report(result: DigestResult) -> None:
+    if result.skipped:
+        return
+    try:
+        from .archive_search import index_report
+        index_report(result)
+    except Exception:
+        logging.getLogger(__name__).exception("Could not index the saved report")
 
 
 def save_report(result: DigestResult, output_path: str) -> str:

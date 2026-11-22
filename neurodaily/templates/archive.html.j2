@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>历史条目检索 · NeuroDaily</title>
+<style>
+:root{color-scheme:dark;background:#0b0b0c;color:#ecf1f8;font:16px system-ui,sans-serif}
+*{box-sizing:border-box}main{max-width:940px;margin:auto;padding:clamp(12px,3vw,30px)}
+a{color:#9fddff}main p{color:#c4ccda}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+input,select,button{font:inherit;color:inherit;background:#202838;border:1px solid #546884;border-radius:6px;padding:7px 9px}
+input{flex:1;min-width:240px}button{cursor:pointer}button:disabled{opacity:.55}
+:focus-visible{outline:2px solid #81c9ff;outline-offset:2px}
+ol{padding-inline-start:1.4rem}li{padding:10px 0;border-bottom:1px solid #303a4b}li p{margin:.4rem 0}small{color:#adbcd2}
+</style>
+</head>
+<body>
+<main>
+<a href="/history">运行历史</a>
+<h1>历史条目检索</h1>
+<form id="search" class="toolbar">
+  <input name="q" aria-label="检索历史条目" placeholder="标题、摘要或文献编号" maxlength="250" required>
+  <select name="kind" aria-label="条目类型">
+    <option value="">全部类型</option><option value="paper">论文</option><option value="trial">临床试验</option>
+    <option value="news">新闻</option><option value="policy">政策</option><option value="conference">会议</option>
+    <option value="funding">资助</option><option value="drug">药品</option><option value="device">器械</option>
+  </select>
+  {% if hybrid %}
+  <select name="backend" aria-label="检索后端">
+    <option value="local">本机索引</option><option value="opensearch">OpenSearch</option>
+  </select>
+  {% endif %}
+  <button type="submit">搜索</button>
+</form>
+<p><button id="import" type="button">导入已有任务日报</button></p>
+<p id="status" role="status"></p>
+<ol id="results"></ol>
+</main>
+<script>
+(() => {
+  const t = (label, fields) => window.ndT(label, fields);
+  const form = document.getElementById('search');
+  const output = document.getElementById('results');
+  const status = document.getElementById('status');
+  const loadHistory = document.getElementById('import');
+  let revision = 0;
+  function node(tag, text) {
+    const element = document.createElement(tag);
+    element.textContent = text;
+    return element;
+  }
+  function result(row) {
+    const li = node('li','');
+    const title = node(row.url ? 'a' : 'strong', row.title);
+    title.dataset.noI18n = '';
+    if (row.url) {
+      title.href = row.url;
+      title.target = '_blank';
+      title.rel = 'noopener noreferrer';
+    }
+    li.append(title);
+    li.append(node('p', [row.source, row.stage, row.date].filter(Boolean).join(' · ')));
+    if (row.summary) {
+      const summary = node('p', row.summary);
+      summary.dataset.noI18n = '';
+      li.append(summary);
+    }
+    if (row.run_id) {
+      const report = node('a', t('查看日报'));
+      report.href = '/history/' + row.run_id + '/report';
+      li.append(report);
+    }
+    return li;
+  }
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const searchRevision = ++revision;
+    const criteria = new URLSearchParams(new FormData(form));
+    if (!criteria.get('kind')) criteria.delete('kind');
+    status.textContent = t('正在检索…');
+    output.replaceChildren();
+    try {
+      const response = await fetch('/api/archive/search?' + criteria);
+      const data = await response.json();
+      if (revision !== searchRevision) return;
+      if (!response.ok) throw new Error(data.message || t('历史检索失败。'));
+      status.textContent = t('显示 {count} 条结果', {count:data.results.length});
+      output.replaceChildren(...data.results.map(result));
+    } catch (error) {
+      if (revision === searchRevision) status.textContent = error.message;
+    }
+  });
+  loadHistory.addEventListener('click', async () => {
+    const importRevision = ++revision;
+    loadHistory.disabled = true;
+    status.textContent = t('正在导入…');
+    try {
+      const response = await fetch('/api/archive/import', {
+        method:'POST',headers:{'Content-Type':'application/json'},body:'{}'
+      });
+      const data = await response.json();
+      if (revision !== importRevision) return;
+      if (!response.ok) throw new Error(data.message || t('历史导入失败。'));
+      status.textContent = t('已索引 {count} 份任务日报', {count:data.reports});
+    } catch (error) {
+      if (revision === importRevision) status.textContent = error.message;
+    } finally {
+      loadHistory.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

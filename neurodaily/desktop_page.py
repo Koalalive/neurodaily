@@ -6,11 +6,11 @@ import json
 
 _COPY = {
     "zh": {"settings": "设置", "dashboard": "最新日报", "history": "运行历史", "run": "开始检索",
-           "report": "日报", "task": "任务", "billing": "API 账单", "close": "关闭", "tabs": "工作区标签页"},
+           "report": "日报", "task": "任务", "billing": "API 账单", "archive": "历史条目检索", "close": "关闭", "tabs": "工作区标签页"},
     "en": {"settings": "Settings", "dashboard": "Latest report", "history": "Run history", "run": "Run search",
-           "report": "Report", "task": "Task", "billing": "API billing", "close": "Close", "tabs": "Workspace tabs"},
+           "report": "Report", "task": "Task", "billing": "API billing", "archive": "Research archive", "close": "Close", "tabs": "Workspace tabs"},
     "ru": {"settings": "Настройки", "dashboard": "Последний отчёт", "history": "История запусков", "run": "Поиск",
-           "report": "Отчёт", "task": "Задача", "billing": "Расходы API", "close": "Закрыть", "tabs": "Вкладки"},
+           "report": "Отчёт", "task": "Задача", "billing": "Расходы API", "archive": "Поиск по архиву", "close": "Закрыть", "tabs": "Вкладки"},
 }
 
 
@@ -51,12 +51,13 @@ button:hover{background:#33333a}button:focus-visible{outline:2px solid #67dafa;o
   const word = key => translations[language][key];
   const localUrl = path => new URL(path, location.origin);
   const route = url => url.origin === location.origin &&
-    /^(\/|\/settings|\/billing|\/run|\/history(?:\/compare|\/\d+(?:\/report)?)?|\/report\/latest|\/reports\/[^/]+)$/.test(url.pathname);
+    /^(\/|\/settings|\/billing|\/archive|\/run|\/history(?:\/compare|\/\d+(?:\/report)?)?|\/report\/latest|\/reports\/[^/]+)$/.test(url.pathname);
 
   function title(path) {
     const pathname = localUrl(path).pathname;
     if (pathname === '/settings') return word('settings');
     if (pathname === '/billing') return word('billing');
+    if (pathname === '/archive') return word('archive');
     if (pathname === '/run') return word('run');
     if (pathname === '/history' || pathname === '/history/compare') return word('history');
     const run = pathname.match(/^\/history\/(\d+)(\/report)?$/);

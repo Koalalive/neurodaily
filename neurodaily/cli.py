@@ -30,7 +30,7 @@ def _ensure_imports():
 # run
 # ---------------------------------------------------------------------------
 def cmd_run(args) -> int:
-    from .digest import run, save_report
+    from .digest import index_saved_report, run, save_report
     from .config import Config as C
     cfg = C.load(args.config)
     print(f"[neurodaily] loading config: profile={cfg.profile}")
@@ -75,6 +75,8 @@ def cmd_run(args) -> int:
     outdir = cfg.output_dir()
     out_path = args.output or os.path.join(outdir, default_name)
     path = save_report(result, out_path)
+    if not getattr(args, "demo", False):
+        index_saved_report(result)
     if result.skipped:
         print(f"[neurodaily] ⏭ skipped (duplicate) — no report overwritten. "
               f"Reason: {result.skipped_reason}")

@@ -1,4 +1,4 @@
-"""Build the daily geography and keyword views from a single set of records."""
+"""Build the daily research map from the report's records."""
 from __future__ import annotations
 
 import hashlib
@@ -19,7 +19,10 @@ def _index(items: list[Item]) -> dict[str, Item]:
     result = {}
     for item in items:
         identifiers = item.extra.get("record_ids") or record_ids(item)
-        result.setdefault(identifiers[0], item)
+        record_id = identifiers[0]
+        if record_id in result and result[record_id].kind != item.kind:
+            record_id = f"{item.kind}:{record_id}"
+        result.setdefault(record_id, item)
     return result
 
 
@@ -59,12 +62,10 @@ def enrich_geography(result: DigestResult) -> bool:
     return True
 
 
-def report_activity(result: DigestResult, config, external_url) -> dict:
+def report_activity(result: DigestResult, external_url) -> dict:
     from .geography import locate_items
-    from .keywords import keyword_cloud
 
-    items = _index(result.items)
-    mapped = _mapped(items)
+    mapped = _mapped(_index(result.items))
     geo = result.geography if result.geography is not None else locate_items(mapped)
     places = [place for place in geo["places"] if place["id"] in mapped]
     covered = {place["id"] for place in places}
@@ -73,12 +74,11 @@ def report_activity(result: DigestResult, config, external_url) -> dict:
         "places": places,
         "unknown": [record_id for record_id in mapped if record_id not in covered],
         "deferred": [record_id for record_id in geo.get("deferred", []) if record_id in mapped],
-        "keywords": keyword_cloud(items, config),
         "records": {
             record_id: {
                 "title": item.title, "source": item.source, "kind": item.kind,
                 "date": item.date_display, "url": external_url(item.url),
                 "summary": " ".join((item.summary or "").split())[:240].strip(),
-            } for record_id, item in items.items()
+            } for record_id, item in mapped.items()
         },
     }

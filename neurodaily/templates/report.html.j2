@@ -63,6 +63,17 @@
         {% if it.affiliation_display %}<div class="byline aff"><b>Affiliations:</b> <span data-no-i18n>{{ it.affiliation_display }}</span></div>{% endif %}
         {% if it.extra.get('provenance')|default([], true)|length > 1 %}<div class="byline"><b>合并来源</b> · {{ record_links(it.extra.get('provenance')) }}</div>{% endif %}
         {% if it.extra.get('related_versions') %}<div class="byline"><b>相关版本</b> · {{ record_links(it.extra.get('related_versions'), versions=true) }}</div>{% endif %}
+        {% for evidence in it.extra.get('related_evidence', []) %}
+          <div class="byline"><b>{{ {'verified': '相关来源', 'reference': '原文引用编号'}.get(evidence.method, '待确认关联') }}</b> · {{ record_links([evidence]) }}</div>
+        {% endfor %}
+        {% set update_labels = {'correction': '更正', 'retraction': '撤稿', 'withdrawal': '撤回', 'expression-of-concern': '关注声明'} %}
+        {% for notice in it.extra.get('publication_updates', []) %}
+          <div class="byline"><b>{{ update_labels.get(notice.kind, notice.kind) }}</b> · {{ record_links([{'url': notice.url, 'title': notice.doi}]) }} {{ notice.date }}{% if notice.direction == 'notice_for' %} · <span>涉及论文</span>{% endif %}</div>
+        {% endfor %}
+        {% set trial_event_labels = {'registered': '首次登记', 'registry_updated': '登记更新', 'results_posted': '结果发布', 'status_changed': '状态变更'} %}
+        {% for event in it.extra.get('trial_events', []) %}
+          <div class="byline"><b>{{ trial_event_labels.get(event.kind, event.kind) }}</b> · {{ event.date }}{% if event.kind == 'status_changed' %} · {{ event['from'] }} → {{ event.to }}{% endif %}</div>
+        {% endfor %}
         <div class="foot">
           {% if it.url %} · <a class="ext" href="{{ it.url }}" target="_blank" rel="noopener">Read ↗</a>{% endif %}
         </div>
@@ -208,6 +219,7 @@
        letter-spacing:.10em;text-transform:uppercase}
   .toc a{display:block;color:#9a9a9a;text-decoration:none;padding:6px 8px;border-radius:7px}
   .toc a:hover{color:#fff;background:#1e1e20}
+  .toc a[hidden]{display:none}
   @media (max-width:1280px){
     .toc{left:12px;right:12px;bottom:12px;top:auto;width:auto;display:flex;gap:2px;
          overflow-x:auto;padding:8px;border-radius:12px}
@@ -226,8 +238,8 @@
   <div class="toc-title">目录</div>
   <a href="#top">↑ 顶部</a>
   {% if result.ai_summary %}<a href="#ai-summary">🧠 AI 摘要</a>{% endif %}
+  <a href="#research-activity" hidden data-no-i18n>研究动态地图</a>
   {% if result.on_this_day %}<a href="#on-this-day">📅 历史上的今天</a>{% endif %}
-  <a href="#research-activity" hidden data-no-i18n>每日研究态势</a>
   <a href="#papers">📄 最新论文</a>
   <a href="#industry">💊 产业与融资</a>
   <a href="#trials_conferences">🧪 临床试验</a>

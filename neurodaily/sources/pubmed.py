@@ -137,7 +137,11 @@ def _parse_article(pubmed_article) -> Item | None:
     if not online and history is not None:
         online = _date(history.find("PubMedPubDate[@PubStatus='epublish']"))
     print_date = _date(medline.find("Journal/JournalIssue/PubDate"))
-    entry_date = _date(history.find("PubMedPubDate[@PubStatus='entrez']")) if history is not None else ""
+    # NLM exposes CRDT in EFetch as the `entrez` history event, separately
+    # from publisher dates and from the legacy EDAT search index.
+    created = _date(history.find("PubMedPubDate[@PubStatus='entrez']")) if history is not None else ""
+    indexed = _date(history.find("PubMedPubDate[@PubStatus='pubmed']")) if history is not None else ""
+    discovered = next((value for value in (created, indexed) if len(value) == 10), "")
     extra = {"pmid": pmid, "journal": journal}
     if abstract:
         extra["abstract"] = abstract
@@ -155,7 +159,10 @@ def _parse_article(pubmed_article) -> Item | None:
         ("journal_abbreviation", _text(journal_el, "ISOAbbreviation")),
         ("published_online", online),
         ("published_print", print_date),
-        ("entry_date", entry_date),
+        ("entry_date", created),
+        ("pubmed_created_at", created),
+        ("pubmed_first_indexed_at", indexed),
+        ("source_discovered_at", discovered),
     ):
         if value:
             extra[name] = value
@@ -213,9 +220,15 @@ def fetch(config, logger=None) -> list[Item]:
     bounds = plan.date_range if plan and plan.active else None
     if bounds:
         start, end = (bound.replace("-", "/") for bound in bounds)
-        daterange = f"({start}[dp]:{end}[dp])"
+        ranges = [f"({start}[dp]:{end}[dp])"]
     else:
-        daterange = f'("last {lookback} days"[dp])'
+        published = f'"last {lookback} days"[dp]'
+        created = f'"last {lookback} days"[crdt]'
+        # ESearch's publication-date ordering can hide newly created citations
+        # for old papers at retmax. Give these their own bounded result set.
+        ranges = [f"({published} OR {created})"] if preview else [
+            f"({published})", f"({created} NOT {published})",
+        ]
     terms = [plan.remote_query("pubmed")] if plan and plan.active else build_terms(config)
     if preview:
         max_results = min(max_results, 30)
@@ -226,9 +239,10 @@ def fetch(config, logger=None) -> list[Item]:
     items: list[Item] = []
     seen: set[str] = set()
 
-    for term in terms:
-        query = f"({term}) AND {daterange}" if term else daterange
-        pmid_list = [pmid for pmid in _esearch(query, max_results, preview=preview) if pmid not in seen]
+    queries = (f"({term}) AND {limits}" if term else limits for term in terms for limits in ranges)
+    for query in queries:
+        pmid_list = list(dict.fromkeys(pmid for pmid in _esearch(query, max_results, preview=preview)
+                                      if pmid not in seen))
         for start in range(0, len(pmid_list), 100):
             batch = pmid_list[start:start + 100]
             xml = _efetch_xml(batch, preview=preview)
@@ -249,8 +263,8 @@ def fetch(config, logger=None) -> list[Item]:
                     seen.add(pmid)
                     items.append(item)
 
-    # Strict same-day filter ("last N days"[dp] can include yesterday's entries).
+    # Relative NLM date expressions can include the preceding calendar day.
     if lookback <= 1 and not bounds:
         today = datetime.now().strftime("%Y-%m-%d")
-        items = [it for it in items if it.date.startswith(today)]
+        items = [it for it in items if today in (it.date[:10], it.extra.get("source_discovered_at"))]
     return items

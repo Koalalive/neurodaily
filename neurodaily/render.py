@@ -1,6 +1,8 @@
 """Render a DigestResult to a self-contained HTML report using Jinja2."""
 from __future__ import annotations
 
+import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -104,21 +106,52 @@ def render_html(result: DigestResult, config: Config | None = None, *, locale: s
             "sort_label": {"relevance": "相关性", "latest": "最新发布", "journal": "重点期刊"}.get(sort),
         }
         html = template.render(**ctx)
-        if result.items:
-            try:
-                section = env.get_template("research_activity.html.j2").render(
-                    activity=report_activity(result, _cfg, _external_url), language=language,
-                )
-                offset = html.index("</main>")
-                html = html[:offset] + section + html[offset:]
-            except Exception:
-                import logging
-                logging.getLogger(__name__).exception("Could not render research activity")
         html = _inject_on_this_day(html, result)
         html = _inject_ai_summary(html, result)
+        if result.items:
+            try:
+                html = _place_research_map(html, env, report_activity(result, _external_url), language)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not render research map")
         return localize_document(_inject_graph_links(html), language)
     except Exception:
         return localize_document(_fallback_plain(result), language)
+
+
+def _place_research_map(html: str, env, activity: dict, language: str) -> str:
+    if not activity["land"]:
+        return html
+    main = re.search(r"<main\b[^>]*>", html)
+    if main is None:
+        return html
+    offset = main.end()
+    summary = re.match(r'\s*<section id="ai-summary">.*?</section>', html[offset:], re.S)
+    if summary:
+        offset += summary.end()
+    section = env.get_template("research_activity.html.j2").render(activity=activity, language=language)
+    return html[:offset] + "\n" + section + html[offset:]
+
+
+def refresh_saved_research_map(html: str, language: str) -> str:
+    """Update the old map-and-cloud layout when an archived report is opened."""
+    if 'class="ra-cloud"' not in html:
+        return html
+    section = re.search(r'<section id="research-activity"(?=[\s>])[^>]*>.*?</section>', html, re.S)
+    if section is None:
+        return html
+    raw = re.search(r'<script type="application/json" id="nd-research-data">(.*?)</script>', section[0], re.S)
+    env = _stdlib_loader()
+    if raw is None or env is None:
+        return html
+    try:
+        activity = json.loads(raw[1])
+        activity.pop("keywords", None)
+        ids = set(activity["unknown"]) | {place["id"] for place in activity["places"]}
+        activity["records"] = {record_id: item for record_id, item in activity["records"].items()
+                               if record_id in ids}
+        return _place_research_map(html[:section.start()] + html[section.end():], env, activity, language)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return html
 
 
 def _inject_ai_summary(html: str, result: DigestResult) -> str:
