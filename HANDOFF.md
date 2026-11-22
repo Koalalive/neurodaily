@@ -13,7 +13,7 @@ This document is for the next supervising agent. It describes the live system, r
 - Russian demo: https://koalalive.github.io/neurodaily/demo/latest-report.ru.html
 - CLI/Homebrew release: https://github.com/Koalalive/neurodaily/releases/tag/cli-v1.0.8
 
-The website is served from `docs/` through GitHub Pages. A push to `main` triggers `pages-build-deployment`; the daily demo workflow pushes generated snapshots to `main`, which triggers Pages separately.
+The website is served from `docs/` through GitHub Pages. Recent website copy changes: `AI Agent Skills助力检索配置构建`, Chinese `检索配置`, macOS inline command styling, and an Agent installation guide link. A push to `main` triggers `pages-build-deployment`; the daily demo workflow pushes generated snapshots to `main`, which triggers Pages separately.
 
 ## Daily homepage update
 
@@ -54,6 +54,13 @@ Current versions in source:
 Baseline for upgrade verification: **v1.0.7**. Do not delete `v1.0.7` until the release workflow baseline is changed and verified.
 
 Historical releases older than `v1.0.7` were intentionally removed. `cli-v1.0.8` remains published.
+
+Latest full-release attempt: run **45065540288** (`v1.0.8`, commit `0127c06`) failed only at
+`Verify Linux package upgrade and native dialogs` → `native_ui_smoke.py`, with
+`AssertionError: The configured schedule did not contact the feed`. The earlier
+upgrade-report failure was fixed separately by using `/history/{id}/report`
+instead of `/history/{id}`. **v1.0.8 is not published yet.** Do not report it as
+published until `gh release view v1.0.8` returns a non-draft release with assets.
 
 Release workflow: `.github/workflows/release-tauri.yml`
 
@@ -132,6 +139,8 @@ The website language switch is in `docs/site.js`; current expected document link
 - `desktop/sidecar/installer_smoke.py`: Windows installer/upgrade checks.
 - `.github/workflows/daily-demo.yml`: 08:00 homepage updater.
 - `.github/workflows/release-tauri.yml`: cross-platform release and publish.
+- `docs/AGENT_INSTALL.md`: detailed agent-facing macOS/CLI/Docker/Actions installation guide.
+- `HANDOFF.md`: this supervisor handoff.
 
 ## Supervisor checklist
 

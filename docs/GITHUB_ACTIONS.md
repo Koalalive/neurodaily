@@ -96,7 +96,7 @@ gh run download RUN_ID --repo "$repo" -n neurodaily-x86_64-pc-windows-msvc --dir
 | `windows-latest` | x64 NSIS `.exe` 和 `.msi` | NSIS 全新安装和覆盖升级，MSI 安装和卸载 |
 | `ubuntu-24.04` | x64 `.deb` 和 `.AppImage` | DEB 安装和升级，AppImage 解包运行，GTK 保存和外链调用 |
 
-Windows 和 Linux 先冻结 Python sidecar，再用 Tauri 构建应用。升级测试用隔离目录保留上一正式版的配置、历史和定时记录。当前回归基线为 v1.0.4。后续发布切换基线时，同步检查工作流中的 `BASELINE_TAG` 和对应安装包文件名。macOS 利用仓库中的 `Formula/neurodaily.rb`，从 Git 版本标签和固定版本的 Python 依赖安装。 [桌面架构](DESKTOP_TAURI.md) · [测试矩阵](TESTING.md)
+Windows 和 Linux 先冻结 Python sidecar，再用 Tauri 构建应用。升级测试用隔离目录保留上一正式版的配置、历史和定时记录。当前回归基线为 v1.0.7。后续发布切换基线时，同步检查工作流中的 `BASELINE_TAG` 和对应安装包文件名。macOS 利用仓库中的 `Formula/neurodaily.rb`，从 Git 版本标签和固定版本的 Python 依赖安装。 [桌面架构](DESKTOP_TAURI.md) · [测试矩阵](TESTING.md)
 
 ### 发布带更新签名的版本
 
