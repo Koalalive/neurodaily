@@ -231,14 +231,8 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
   </section>
 
   <section>
-    <h2>Schedule</h2>
+    <h2>Report content</h2>
     <div class="inline">
-      <label><input type="checkbox" id="sch_enabled"> Enable schedule</label>
-      <span class="mini">Time</span>
-      <input type="number" id="sch_hour" min="0" max="23"> :
-      <input type="number" id="sch_minute" min="0" max="59">
-    </div>
-    <div class="inline" style="margin-top:10px">
       <label><input type="checkbox" id="otd_enabled"> Include "On This Day" (neuroscience history)</label>
       <label><input type="checkbox" id="otd_notify"> Desktop notification daily</label>
     </div>
@@ -249,6 +243,17 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
         <option value="en">English</option>
         <option value="ru">Русский</option>
       </select>
+    </div>
+    <p class="desc">This switch affects both scheduled and manual reports. Disabling it removes the section from the report and email.</p>
+  </section>
+
+  <section>
+    <h2>Schedule</h2>
+    <div class="inline">
+      <label><input type="checkbox" id="sch_enabled"> Enable schedule</label>
+      <span class="mini">Time</span>
+      <input type="number" id="sch_hour" min="0" max="23"> :
+      <input type="number" id="sch_minute" min="0" max="59">
     </div>
     <div class="inline" style="margin-top:12px">
       <span class="pill" id="ldstat">Scheduler: …</span>
@@ -754,7 +759,7 @@ function render(){
   el('otd_lang').value = otd.lang || 'zh';
   var w = BASE.windows || {};
   el('win_daily').value = (w.daily_paper_hours != null ? w.daily_paper_hours : 36);
-  el('win_manual').value = (w.manual_paper_hours != null ? w.manual_paper_hours : 168);
+  el('win_manual').value = (w.manual_paper_hours != null ? w.manual_paper_hours : 240);
   el('win_trials').value = (w.trials_hours != null ? w.trials_hours : 36);
   el('win_funding').value = (w.funding_hours != null ? w.funding_hours : 36);
   el('win_news').value = (w.news_hours != null ? w.news_hours : 36);
@@ -908,7 +913,7 @@ function collect(){
     lang:el('otd_lang').value};
   data.windows=Object.assign({},data.windows||{});
   data.windows.daily_paper_hours=parseInt(el('win_daily').value||'36',10);
-  data.windows.manual_paper_hours=parseInt(el('win_manual').value||'168',10);
+  data.windows.manual_paper_hours=parseInt(el('win_manual').value||'240',10);
   data.windows.trials_hours=parseInt(el('win_trials').value||'36',10);
   data.windows.funding_hours=parseInt(el('win_funding').value||'36',10);
   data.windows.news_hours=parseInt(el('win_news').value||'36',10);

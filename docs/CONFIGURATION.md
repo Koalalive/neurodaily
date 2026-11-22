@@ -331,7 +331,7 @@ neurodaily config describe
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `windows.daily_paper_hours` | `36` | 定时任务只保留最近 36 小时的论文 |
-| `windows.manual_paper_hours` | `168` | 手动 `run --mode manual` 的论文窗口 |
+| `windows.manual_paper_hours` | `240` | 手动 `run --mode manual` / Run now 的默认论文窗口 |
 | `windows.other_lookback_days` | `7` | 非论文（试验/政策/产业）回看天数 |
 | `scheduled.on_this_day.lang` | `zh` | 史论语言：`zh`/`en`/`ru`；CLI 覆盖 `run --lang en` |
 

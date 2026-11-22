@@ -154,6 +154,7 @@ AI 摘要|AI summary|ИИ-резюме
 数据源|Sources|Источники
 选择是否启用，并设置每次抓取上限和回溯天数。|Enable, max results per fetch, lookback days.|Включение, лимит результатов на запрос и глубина поиска в днях.
 输出|Output|Вывод
+报告内容|Report content|Содержание отчёта
 报告目录|Report directory|Папка сводок
 文件名格式|Filename format|Формат имени файла
 完成后打开报告|Open report when finished|Открыть готовую сводку

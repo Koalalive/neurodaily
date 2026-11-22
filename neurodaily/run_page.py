@@ -25,8 +25,8 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
   <h1>本次检索范围</h1>
   <p>日报生成后自动打开。AI 摘要和投递会继续处理。</p>
   <label for="hours">临时覆盖时间范围（小时，可选）</label>
-  <input id="hours" type="number" min="1" max="8760" placeholder="留空使用已保存的设置">
-  <small>例如填 36，把本次论文、试验、融资和新闻的窗口设为最近 36 小时。</small>
+  <input id="hours" type="number" min="1" max="8760" value="240" placeholder="默认 240；留空使用已保存设置">
+  <small>默认 240 小时（10 天）；可改为 36（最近 36 小时）等。</small>
   <div class="row">
     <button id="cancel" type="button">返回设置</button>
     <button id="go" type="button">开始检索</button>

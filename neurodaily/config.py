@@ -477,7 +477,7 @@ def DEFAULT_CONFIG() -> Config:
     ]
     windows = {
         "daily_paper_hours": 36,
-        "manual_paper_hours": 168,
+        "manual_paper_hours": 240,
         "trials_hours": 36,
         "funding_hours": 36,
         "news_hours": 36,
