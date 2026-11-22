@@ -56,7 +56,7 @@ def enrich_geography(result: DigestResult) -> bool:
     try:
         from .sources.http import get as _get, strip_html as _strip_html
         candidates = [item for item in result.items
-                      if item.kind in {"news", "policy"} and item.url
+                      if item.kind in {"news", "policy", "funding", "drug", "device"} and item.url
                       and not item.extra.get("article_text")][:24]
         for item in candidates:
             response = _get(item.url, timeout=8.0, retries=0,

@@ -107,7 +107,7 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
         progress(run);
       }
     }catch(e){}
-    if(tries>=240){failed(t('等待超时，请在运行历史中查看结果'));return;}
+    if(tries>=1800){failed(t('等待超时，请在运行历史中查看结果'));return;}
     setTimeout(function(){poll(id,tries+1);},2000);
   }
   document.getElementById('cancel').onclick=function(){location.href='/settings';};

@@ -459,21 +459,22 @@ def DEFAULT_CONFIG() -> Config:
         },
     }
     policy_feeds = [
-        "https://www.nimh.nih.gov/news/index.rss",
-        "https://nida.nih.gov/rss.xml",
-        "https://www.ninds.nih.gov/news-events/news-releases/rss.xml",
-        "https://www.feinsteininstitutes.org/feed/",
-        "https://www.sfn.org/news",
+        # Verified feeds only. NIH institute RSS endpoints currently return
+        # 403/404/empty HTML; use publisher and agency feeds with working RSS.
         "https://www.nature.com/subjects/neuroscience.rss",
         "https://www.nature.com/subjects/psychiatric-disorders.rss",
         "https://www.nature.com/subjects/addiction.rss",
         "https://www.nature.com/subjects/epilepsy.rss",
-        # Journal RSS feeds verified to work (Nature redirects through auth, so
-        # use the working subject feeds + these verified journals)
         "https://www.nature.com/mp.rss",
         "https://www.nature.com/nm.rss",
         "https://www.nature.com/ncomms.rss",
+        "https://www.nature.com/npjmentalhealth.rss",
+        "https://www.nature.com/natmentalhealth.rss",
         "https://www.cell.com/action/showFeed?type=etoc&feed=rss&jc=neuron",
+        "https://www.science.org/rss/news_current.xml",
+        "https://www.psychiatryonline.org/action/showFeed?type=etoc&feed=rss&jc=ajp",
+        "https://www.thelancet.com/rssfeed/lanpsy_current.xml",
+        "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml",
     ]
     windows = {
         "daily_paper_hours": 36,

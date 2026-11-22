@@ -56,14 +56,15 @@ def _parse_feed(url: str, kind: str, *, preview: bool = False) -> list[Item]:
     # feedparser.parse(url) blocks without timeout and stalls the fetch pool.
     resp = get(url, timeout=8.0 if preview else 15.0, retries=0 if preview else 1, user_agent="python-httpx")
     if resp is None:
+        record_failure(f"Policy RSS unavailable: {url}")
         return []
     try:
         parsed = feedparser.parse(resp.content)
     except Exception:
-        record_failure("A policy RSS feed could not be parsed")
+        record_failure(f"Policy RSS could not be parsed: {url}")
         return []
     if not parsed.entries and (parsed.get("bozo") or not parsed.get("version")):
-        record_failure("A policy RSS endpoint did not return a valid feed")
+        record_failure(f"Policy RSS is not a valid feed: {url}")
         return []
     record_candidates(len(parsed.entries))
     out: list[Item] = []

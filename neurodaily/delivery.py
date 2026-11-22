@@ -5,11 +5,9 @@ import hashlib
 import logging
 import smtplib
 from dataclasses import replace
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from . import delivery_receipts, history, mailer, webhooks
-from .digest import DigestResult, render_html_for
+from .digest import DigestResult
 from .records import delivery_ids
 
 _LOG = logging.getLogger(__name__)
@@ -48,24 +46,19 @@ def _increment(result: DigestResult, destination: str, limits: dict[str, int], t
         identities.add(event_key)
     if len(items) == len(result.items) and events == result.on_this_day:
         return result, identities
-    return replace(result, items=items, sections=sections, on_this_day=events,
-                   ai_summary="", ai_summary_meta={}), identities
+    return replace(result, items=items, sections=sections, on_this_day=events), identities
 
 
 def _send_email(subset: DigestResult, result: DigestResult, report_path: str, email: dict,
                 address: str, *, attempts: int) -> None:
     subject, html, message = mailer.render_email(subset, email)
-    with TemporaryDirectory(prefix="neurodaily-email-", ignore_cleanup_errors=True) as directory:
-        attachments = None
-        if email.get("attach_report", True):
-            if subset is result:
-                attachments = [report_path]
-            else:
-                path = Path(directory) / Path(report_path).name
-                path.write_text(render_html_for(subset), encoding="utf-8")
-                attachments = [str(path)]
-        mailer.send_with_retry(subject, html, message, {**email, "to": [address]}, attachments,
-                               attempts=attempts)
+    attachments = None
+    if email.get("attach_report", True):
+        # Always attach the fully rendered report, including AI summary and
+        # the geography map. A limited email body must not downgrade it.
+        attachments = [report_path]
+    mailer.send_with_retry(subject, html, message, {**email, "to": [address]}, attachments,
+                           attempts=attempts)
 
 
 def _email_error(exc: Exception) -> str:
