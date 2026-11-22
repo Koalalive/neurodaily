@@ -15,6 +15,8 @@ COUNTRIES = {
     "DE": {"name": "Germany", "zh": "德国", "ru": "Германия", "lat": 51, "lon": 10},
     "CN": {"name": "China", "zh": "中国", "ru": "Китай", "lat": 35, "lon": 104},
     "GE": {"name": "Georgia", "zh": "格鲁吉亚", "ru": "Грузия", "lat": 42, "lon": 43.5},
+    "AU": {"name": "Australia", "zh": "澳大利亚", "ru": "Австралия", "lat": -25, "lon": 133},
+    "TR": {"name": "Turkey", "zh": "土耳其", "ru": "Турция", "lat": 39, "lon": 35},
 }
 
 
@@ -96,6 +98,25 @@ class GeographyTests(unittest.TestCase):
         self.assertEqual((points["paper", "study_site"]["lat"], points["paper", "study_site"]["lon"]),
                          (51, 10))
         self.assertEqual(points["event", "event"]["method"], "model")
+
+    def test_parenthetical_country_and_institution_inference(self, _):
+        trial = Item("Trial", kind="trial", extra={"trial_sites": [{
+            "facility": "Fixture University", "city": "Zonguldak",
+            "country": "Turkey (Türkiye)", "geoPoint": {"lat": 41.45, "lon": 31.79},
+        }]})
+        point, = locate_items({"trial": trial})["places"]
+        self.assertEqual((point["country"], point["name"], point["precision"]),
+                         ("TR", "Fixture University, Zonguldak", "site"))
+
+        paper = Item("Paper", affiliations=["University of New South Wales"])
+        quote = "University of New South Wales"
+        chat = Mock(return_value=message([{
+            "id": "0", "country": "AU", "role": "institution",
+            "evidence": quote,
+        }]))
+        point, = locate_items({"paper": paper}, chat=chat)["places"]
+        self.assertEqual((point["country"], point["role"], point["method"]),
+                         ("AU", "institution", "model"))
 
     def test_last_author_location_precedes_other_author_affiliations_and_removes_email(self, _):
         paper = Item("Fixture", authors=["First", "Last"],

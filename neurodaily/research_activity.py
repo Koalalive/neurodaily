@@ -68,11 +68,14 @@ def enrich_geography(result: DigestResult) -> bool:
     except Exception:
         pass
 
-    if result.config and result.config.source_opts("europe_pmc").get("enabled"):
+    if result.config:
+        # Affiliation lookup is metadata enrichment, not a literature source.
+        # Do it even when Europe PMC is not enabled as a feed, otherwise papers
+        # with a DOI but no affiliation remain permanently unlocated.
         from .sources.europe_pmc import last_author_metadata
 
         missing = [item for item in result.items if item.kind == "paper"
-                   and not item.extra.get("last_author_affiliations") and item.doi]
+                   and not item.extra.get("last_author_affiliations") and item.doi][:120]
         dois = list(dict.fromkeys(normalize_doi(item.doi) for item in missing if normalize_doi(item.doi)))
         found = last_author_metadata(dois)
         for item in missing:
@@ -84,7 +87,11 @@ def enrich_geography(result: DigestResult) -> bool:
                                        purpose="geolocation", run_id=result.history_id or None,
                                        profile=result.config_profile, temperature=0)
 
-    result.geography = locate_items(_mapped(_index(result.items)), chat=chat, cache_dir=cache_dir)
+    # Process the full candidate set for a real report. The low-level helper keeps
+    # its small default for callers that want a bounded preview.
+    result.geography = locate_items(_mapped(_index(result.items)), chat=chat,
+                                    cache_dir=cache_dir, max_model_items=400,
+                                    batch_size=6)
     return True
 
 

@@ -35,6 +35,9 @@ _ABBREVIATIONS = {
     "VN": ("Viet Nam",),
 }
 _AMBIGUOUS_TEXT_NAMES = {"congo", "georgia", "korea"}
+# Subnational names that contain a country alias. "New South Wales" must not
+# be read as Wales/GB when parsing an Australian affiliation.
+_SUBNATIONAL_COUNTRIES = {"new south wales": "AU"}
 _SHORT_COUNTRY = re.compile(r"(?<!\w)(U\.?S\.?A\.?|U\.S\.?|US|U\.K\.?|UK|США|КНР|ОАЭ)(?!\w)")
 _SHORT_CODES = {"USA": "US", "US": "US", "UK": "GB", "США": "US", "КНР": "CN", "ОАЭ": "AE"}
 _CJK = re.compile(r"[\u3400-\u9fff]")
@@ -104,12 +107,30 @@ class _CountryNames:
         self.words = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, latin)) + r")(?!\w)") if latin else None
 
     def explicit(self, value: str) -> str | None:
-        code = value.upper()
-        return code if code in self.countries else self.names.get(_normalized(value))
+        raw = _clean(value)
+        if not raw:
+            return None
+        variants = [raw]
+        if "(" in raw:
+            variants.extend((raw.split("(", 1)[0], raw.split("(", 1)[1].rstrip(")")))
+        for variant in variants:
+            code = variant.strip().upper()
+            if code in self.countries:
+                return code
+            code = self.names.get(_normalized(variant))
+            if code:
+                return code
+        return None
 
     def in_evidence(self, value: str) -> set[str]:
         normalized = _normalized(value)
-        found = {self.names[match.group()] for match in self.words.finditer(normalized)} if self.words else set()
+        found = set()
+        for phrase, code in _SUBNATIONAL_COUNTRIES.items():
+            if phrase in normalized and code in self.countries:
+                found.add(code)
+                normalized = normalized.replace(phrase, " ")
+        if self.words:
+            found.update(self.names[match.group()] for match in self.words.finditer(normalized))
         for name in self.cjk:
             if name in normalized:
                 found.add(self.names[name])
@@ -192,7 +213,9 @@ def _affiliation_places(item_id, addresses, role, names):
         evidence = _institution_address(record.get("address"))[-_MAX_EVIDENCE:]
         if not evidence or _PERSONAL_LOCATION.search(evidence):
             continue
-        code = names.explicit(_clean(record.get("country"))) or names.affiliation(evidence)
+        raw_country = _clean(record.get("country"))
+        code = (names.explicit(raw_country) or next(iter(names.in_evidence(raw_country)), None)
+                or names.affiliation(evidence))
         city = _unique_city(evidence, code)
         if not code and city and city["country"] in names.countries:
             code = city["country"]
@@ -213,7 +236,8 @@ def _metadata(item_id: str, item: Item, names: _CountryNames) -> list[dict]:
         for site in sites if isinstance(sites, list) else ():
             if not isinstance(site, dict):
                 continue
-            code = names.explicit(_clean(site.get("country")))
+            raw_country = _clean(site.get("country"))
+            code = names.explicit(raw_country) or next(iter(names.in_evidence(raw_country)), None)
             if not code:
                 continue
             site_name = ", ".join(value for key in ("facility", "city", "state")
@@ -250,6 +274,8 @@ def _candidate(item: Item, known: list[dict], names: _CountryNames) -> dict | No
             roles.append("last_author_institution")
         if not known:
             roles.append("institution")
+    elif item.kind == "trial":
+        roles = ["institution"]
     elif item.kind in _EVENT_KINDS:
         roles = ["event"]
     else:
@@ -265,9 +291,11 @@ def _candidate(item: Item, known: list[dict], names: _CountryNames) -> dict | No
     if "institution" in roles:
         fields.extend(("affiliation", _institution_address(value)[-_MAX_EVIDENCE:])
                       for value in item.affiliations[:6])
+    inferable_affiliation = any(role in _AFFILIATION_ROLES.values() for role in roles)
     fields = [{"field": field, "text": text} for field, text in fields
               if text and any(_fits_role(role, field, text) for role in roles)
-              and (names.in_evidence(text) or city_candidates(text))]
+              and (names.in_evidence(text) or city_candidates(text)
+                   or (inferable_affiliation and field in _AFFILIATION_ROLES))]
     if not fields:
         return None
     return {"kind": item.kind, "roles": roles, "fields": fields}
@@ -287,7 +315,11 @@ def _validate(row, candidate, names: _CountryNames) -> dict | None:
     countries = names.in_evidence(evidence)
     city_hint = _clean(row.get("city"), 100) or None
     city = _unique_city(evidence, code if countries == {code} else None, city_hint)
-    if countries != {code} and (countries or not city or city["country"] != code):
+    if role in _AFFILIATION_ROLES.values() and not countries and not city:
+        # Institutional names often do not repeat the country. The model may
+        # infer it from the exact affiliation; the UI labels this as AI inference.
+        pass
+    elif countries != {code} and (countries or not city or city["country"] != code):
         return None
     result = {"country": code, "role": role, "evidence": evidence}
     if city:
@@ -363,7 +395,7 @@ def _extract_batch(chat, batch, names: _CountryNames):
                                                 for key, (_, candidate) in source.items()], ensure_ascii=False)},
     ]
     try:
-        message = chat(messages, 1500)
+        message = chat(messages, 4000)
         content = _clean(message.get("content"))
         if len(content) > _MAX_RESPONSE:
             return None
@@ -389,7 +421,9 @@ def _extract_batch(chat, batch, names: _CountryNames):
     return found, malformed
 
 
-def locate_items(items: dict[str, Item], *, chat=None, cache_dir=None) -> dict:
+def locate_items(items: dict[str, Item], *, chat=None, cache_dir=None,
+                 max_model_items: int = _MAX_MODEL_ITEMS,
+                 batch_size: int = _BATCH_SIZE) -> dict:
     """Map structured locations and optional model evidence to labelled report points."""
     if not items:
         return {"places": [], "unknown": []}
@@ -428,24 +462,37 @@ def locate_items(items: dict[str, Item], *, chat=None, cache_dir=None) -> dict:
         else:
             add_model(item_id, cached)
 
-    if len(pending) > _MAX_MODEL_ITEMS:
+    if len(pending) > max_model_items:
         prioritized = sorted(pending, key=lambda pair: (pair[0] in mapped,
                                                         "last_author_institution" not in pair[1]["roles"]))
-        keep = {item_id for item_id, _ in prioritized[:_MAX_MODEL_ITEMS]}
+        keep = {item_id for item_id, _ in prioritized[:max_model_items]}
         deferred.update(item_id for item_id, _ in pending if item_id not in keep)
         pending = [pair for pair in pending if pair[0] in keep]
-    for start in range(0, min(len(pending), _MAX_MODEL_ITEMS), _BATCH_SIZE):
-        batch = pending[start:min(start + _BATCH_SIZE, _MAX_MODEL_ITEMS)]
+    for start in range(0, len(pending), batch_size):
+        batch = pending[start:start + batch_size]
         response = _extract_batch(chat, batch, names)
+        if response is None and len(batch) > 1:
+            # Long batches can exhaust the model's visible-output budget while
+            # still returning HTTP 200. Isolate those records instead of
+            # reporting the whole batch as unlocatable.
+            found, malformed = {}, set()
+            for pair in batch:
+                retry = _extract_batch(chat, [pair], names)
+                if retry is None:
+                    malformed.add(pair[0])
+                else:
+                    found.update(retry[0])
+                    malformed.update(retry[1])
+            response = (found, malformed)
         if response is None:
             deferred.update(item_id for item_id, _ in batch)
             continue
         rows, malformed = response
         deferred.update(malformed)
         for item_id, candidate in batch:
-            add_model(item_id, rows[item_id])
+            add_model(item_id, rows.get(item_id, []))
             if item_id not in malformed:
-                _save_cache(_cache_path(cache_dir, candidate), rows[item_id])
+                _save_cache(_cache_path(cache_dir, candidate), rows.get(item_id, []))
     study_sites = {place["id"] for place in places if place["role"] == "study_site"}
     places = [place for place in places
               if place["role"] not in _AFFILIATION_ROLES.values() or place["id"] not in study_sites]
