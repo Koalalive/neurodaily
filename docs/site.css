@@ -269,20 +269,6 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 .deploy-band .feature-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 760px) { .deploy-band .feature-grid { grid-template-columns: 1fr; } }
 
-/* Inline commands inside installation copy */
-.install-grid code.cmd {
-  display: inline-block;
-  padding: 1px 6px;
-  border: 1px solid #4b416d;
-  border-radius: 4px;
-  color: #f0e4b0;
-  background: #1a1730;
-  font-size: .88em;
-  line-height: 1.35;
-  white-space: nowrap;
-  vertical-align: .08em;
-}
-
 /* Five feature cards read better as 3 + 2 on wide screens. */
 #features .feature-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .install-grid code.cmd-block {
