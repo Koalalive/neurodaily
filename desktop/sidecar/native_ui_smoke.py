@@ -108,6 +108,7 @@ def desktop_session(executable, root, home, url_log, service_port):
     (xdg_config / "user-dirs.dirs").write_text(f'XDG_DOWNLOAD_DIR="{downloads}"\n', encoding="utf-8")
     env = {**os.environ, "PATH": f"{shim.parent}{os.pathsep}{os.environ['PATH']}",
            "NEURODAILY_HOME": str(home), "NEURODAILY_PORT": str(service_port),
+           "NEURODAILY_ALLOW_PRIVATE_SOURCES": "1",
            "NEURODAILY_UI_URLS": str(url_log), "NO_PROXY": "127.0.0.1,localhost",
            "XDG_CONFIG_HOME": str(xdg_config), "XDG_DATA_HOME": str(root / "xdg-data"),
            "XDG_CACHE_HOME": str(root / "xdg-cache"), "TAURI_WEBVIEW_AUTOMATION": "true",
