@@ -871,6 +871,10 @@ class WebSearchOutcomeTests(unittest.TestCase):
         stack.enter_context(mock.patch("neurodaily.webapp.run_digest", return_value=self.result))
         stack.enter_context(mock.patch("neurodaily.journal_metrics.ensure_fresh"))
         self.ai = stack.enter_context(mock.patch("neurodaily.ai_summary.generate", return_value=""))
+        # Scheduled-run tests exercise task/report/delivery wiring, not live
+        # geolocation. Keep them deterministic and fast.
+        self.geo = stack.enter_context(mock.patch(
+            "neurodaily.research_activity.enrich_geography", return_value=False))
         stack.enter_context(mock.patch("neurodaily.mailer.load_cfg", return_value={"enabled": False}))
         stack.enter_context(mock.patch("neurodaily.mailer.render_email", return_value=("", "", "")))
         self.mail = stack.enter_context(mock.patch("neurodaily.mailer.save_last"))
