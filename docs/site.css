@@ -212,3 +212,20 @@ code { font: .91em ui-monospace, "SFMono-Regular", Consolas, monospace; overflow
   color: var(--navy);
   font-weight: 700;
 }
+
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.skill-card {
+  padding: 20px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--white);
+}
+.skill-card h3 { margin: 0 0 8px; font-family: var(--serif); }
+.skill-card p { margin: 0 0 14px; color: var(--muted); }
+.skill-card a { font-weight: 600; }
+@media (max-width: 760px) { .skill-grid { grid-template-columns: 1fr; } }
