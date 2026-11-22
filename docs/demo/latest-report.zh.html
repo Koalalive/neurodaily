@@ -65,7 +65,7 @@
 <meta name="nd-report-date" content="2026-11-22">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="nd-base" content="">
-<title>NeuroDaily — neuro-demo | 2026-11-22 19:06</title>
+<title>NeuroDaily — neuro-demo | 2026-11-22 19:09</title>
 <style>
   :root {
     --bg: #000000; --panel: #0d0d0d; --panel2: #141414;
@@ -234,9 +234,9 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 <header>
   <div class="wrap">
     <h1><span class="logo">NeuroDaily</span> — <span>research digest</span></h1>
-    <div class="sub"><span>Auto-aggregated</span> 2026-11-22 19:06 · <span>Profile</span>: <span data-no-i18n>neuro-demo</span></div>
+    <div class="sub"><span>Auto-aggregated</span> 2026-11-22 19:09 · <span>Profile</span>: <span data-no-i18n>neuro-demo</span></div>
     
-    <div class="window"><span>检索时间窗</span> 2026-11-21 07:06 → 2026-11-22 19:06 · 36h · daily</div>
+    <div class="window"><span>检索时间窗</span> 2026-11-21 07:09 → 2026-11-22 19:09 · 36h · daily</div>
     
     
     <div class="chips">
@@ -244,17 +244,147 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     </div>
     
     <div class="stats">
-      <div class="stat"><b>31</b><span>Items</span></div>
+      <div class="stat"><b>33</b><span>Items</span></div>
       <div class="stat"><b>0</b><span>Papers</span></div>
       <div class="stat"><b>3</b><span>Industry</span></div>
       <div class="stat"><b>0</b><span>试验</span></div>
       <div class="stat"><b>8</b><span>会议</span></div>
-      <div class="stat"><b>20</b><span>Policy / News</span></div>
+      <div class="stat"><b>22</b><span>Policy / News</span></div>
     </div>
     </div>
 </header>
 
 <main class="wrap">
+<section id="topic-map" data-no-i18n>
+  <style>
+    #topic-map{margin-block:1.5rem;padding:clamp(12px,2.5vw,24px);border:1px solid #3a4a63;border-radius:16px;background:#101928;color:#e2eaf5}
+    #topic-map h2,#topic-map h3,#topic-map h4{color:#f1f6ff;margin:0 0 .6em}
+    #topic-map p{color:#b9cbdf}
+    #topic-map .tm-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:14px}
+    #topic-map .tm-canvas{width:100%;aspect-ratio:1.8;border:1px solid #334f70;border-radius:12px;background:#0b172a;cursor:crosshair}
+    #topic-map .tm-side{padding:12px;border:1px solid #3b5574;border-radius:10px;background:#15233a;min-height:220px}
+    #topic-map .tm-side h3{font-size:1rem;margin-bottom:8px}
+    #topic-map .tm-side p{margin:.35em 0;font-size:.88rem;line-height:1.55}
+    #topic-map .tm-side a{color:#9addff}
+    #topic-map .tm-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px}
+    #topic-map .tm-chip{font:inherit;font-size:.75rem;color:#dbe9f8;background:#1c2b40;border:1px solid #455d79;border-radius:999px;padding:3px 8px;cursor:pointer}
+    #topic-map .tm-chip[aria-pressed=true]{background:#264464;border-color:#88bbf0}
+    #topic-map .tm-note{font-size:.82rem;color:#9fb3c8}
+    @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
+  </style>
+  
+  
+  <h2 data-tm="title">🧭 主题景观 <span style="font-size:.7em;font-weight:400;color:#9fb3c8">LDA + t-SNE</span></h2>
+  <p class="tm-note" data-tm="note">X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。</p>
+  <div class="tm-legend" aria-label="主题筛选"></div>
+  <div class="tm-layout">
+    <div>
+      <canvas class="tm-canvas" width="1100" height="620" aria-label="LDA t-SNE topic landscape"></canvas>
+    </div>
+    <aside class="tm-side" aria-live="polite">
+      <h3 data-tm="select">选择圆点</h3>
+      <p class="tm-note" data-tm="hint">颜色表示 LDA 主导主题；位置越近表示主题分布越相似。</p>
+    </aside>
+  </div>
+  <script type="application/json" id="nd-topic-data">{"enabled": true, "method": "lda_tsne", "n_topics": 6, "points": [{"confidence": 0.5833, "date": "2026-11-20\n", "id": "url:https://www.science.org/content/article/scientists-control-virtual-fruit-fly-map-insect-s-brain", "kind": "news", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "policy", "summary": "Scientists control a virtual fruit fly with map of insect\u2019s brain Modeling effort aims to predict how neuron activity drives animal movement", "title": "Scientists control a virtual fruit fly with map of insect\u2019s brain", "topic": 4, "url": "https://www.science.org/content/article/scientists-control-virtual-fruit-fly-map-insect-s-brain", "venue": "Latest News from Science Magazine", "x": -11.58767, "y": 8.56295}, {"confidence": 0.9167, "date": "2026-11-18", "id": "url:http://www.fda.gov/news-events/press-announcements/fda-approves-first-drug-treat-neurological-symptoms-type-3-gaucher-disease", "kind": "funding", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "policy", "summary": "FDA Approves First Drug to Treat Neurological Symptoms of Type 3 Gaucher Disease FDA today approved Infilbray (venglustat) tablets, the first treatment for the neurological symptoms of Type 3 Gaucher disease (GD3) in adults and pediatric pa", "title": "FDA Approves First Drug to Treat Neurological Symptoms of Type 3 Gaucher Disease", "topic": 4, "url": "http://www.fda.gov/news-events/press-announcements/fda-approves-first-drug-treat-neurological-symptoms-type-3-gaucher-disease", "venue": "FDA Press Releases RSS Feed", "x": -3.54037, "y": 22.59906}, {"confidence": 0.944, "date": "2027-09-26", "id": "url:https://miccai.org/upcoming-conferences", "kind": "conference", "label": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "labels": {"en": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "ru": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "zh": "\u5b66\u3001\u8fd8\u6709\u3001\u6709"}, "source": "conferences", "summary": "MICCAI 2027 \u533b\u5b66\u56fe\u50cf\u8ba1\u7b97\u4e0e\u8ba1\u7b97\u673a\u8f85\u52a9\u4ecb\u5165 \u00b7 \u65b0\u897f\u5170 \u5965\u514b\u5170 \u00b7 \u8fd8\u6709 308 \u5929", "title": "MICCAI 2027", "topic": 1, "url": "https://miccai.org/upcoming-conferences/", "venue": "conferences", "x": 34.75624, "y": 36.91127}, {"confidence": 0.9472, "date": "2027-07-14", "id": "url:https://2027.midl.io", "kind": "conference", "label": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "labels": {"en": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "ru": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "zh": "\u5b66\u3001\u8fd8\u6709\u3001\u6709"}, "source": "conferences", "summary": "MIDL 2027 \u533b\u5b66\u5f71\u50cf\u6df1\u5ea6\u5b66\u4e60 \u00b7 \u8461\u8404\u7259 \u6ce2\u5c14\u56fe \u00b7 \u8fd8\u6709 234 \u5929", "title": "MIDL 2027", "topic": 1, "url": "https://2027.midl.io/", "venue": "conferences", "x": 42.23929, "y": 33.89874}, {"confidence": 0.9701, "date": "2027-06-27", "id": "url:https://2027.ipmi-conf.org", "kind": "conference", "label": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "labels": {"en": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "ru": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "zh": "\u5b66\u3001\u8fd8\u6709\u3001\u6709"}, "source": "conferences", "summary": "IPMI 2027 \u533b\u5b66\u5f71\u50cf\u4fe1\u606f\u5904\u7406 \u00b7 \u52a0\u62ff\u5927 \u9b41\u5317\u514b \u00b7 \u8fd8\u6709 217 \u5929 \u00b7 \u8bba\u6587\u622a\u6b62 2026-12-07", "title": "IPMI 2027", "topic": 1, "url": "https://2027.ipmi-conf.org/", "venue": "conferences", "x": 34.31585, "y": 44.97744}, {"confidence": 0.6751, "date": "2027-06-26", "id": "url:https://www.humanbrainmapping.org/ohbm-2027", "kind": "conference", "label": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "labels": {"en": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "ru": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "zh": "\u5b66\u3001\u8fd8\u6709\u3001\u6709"}, "source": "conferences", "summary": "OHBM 2027 \u4eba\u8111\u56fe\u8c31\u7ec4\u7ec7\u5e74\u4f1a \u00b7 \u52a0\u62ff\u5927\u591a\u4f26\u591a \u00b7 \u8fd8\u6709 216 \u5929 \u00b7 \u6458\u8981\u622a\u6b62\uff08\u7ea6\uff09 2026-12-15", "title": "OHBM 2027", "topic": 1, "url": "https://www.humanbrainmapping.org/ohbm-2027/", "venue": "conferences", "x": 26.99821, "y": 31.26303}, {"confidence": 0.5418, "date": "2027-06-07", "id": "url:https://bcisociety.org/bci-meeting", "kind": "conference", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "conferences", "summary": "International BCI Meeting 2027 \u56fd\u9645\u8111\u673a\u63a5\u53e3\u5927\u4f1a \u00b7 \u514b\u7f57\u5730\u4e9a \u5e0c\u8d1d\u5c3c\u514b \u00b7 \u8fd8\u6709 197 \u5929 \u00b7 \u6458\u8981\u622a\u6b62 2027-01-15", "title": "International BCI Meeting 2027", "topic": 4, "url": "https://bcisociety.org/bci-meeting/", "venue": "conferences", "x": -11.42406, "y": -0.34973}, {"confidence": 0.9701, "date": "2027-05-25", "id": "url:https://biomedicalimaging.org/2027", "kind": "conference", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "conferences", "summary": "ISBI 2027 IEEE \u56fd\u9645\u751f\u7269\u533b\u5b66\u6210\u50cf\u7814\u8ba8\u4f1a \u00b7 \u745e\u58eb \u6d1b\u6851 \u00b7 \u8fd8\u6709 184 \u5929 \u00b7 \u6458\u8981\u622a\u6b62 2027-02-01", "title": "ISBI 2027", "topic": 4, "url": "https://biomedicalimaging.org/2027/", "venue": "conferences", "x": -18.39435, "y": 24.78497}, {"confidence": 0.9739, "date": "2027-05-08", "id": "url:https://www.ismrm.org/27m", "kind": "conference", "label": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "labels": {"en": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "ru": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "zh": "\u5b66\u3001\u8fd8\u6709\u3001\u6709"}, "source": "conferences", "summary": "ISMRM 2027 \u56fd\u9645\u533b\u5b66\u78c1\u5171\u632f\u5b66\u4f1a\u5e74\u4f1a \u00b7 \u52a0\u62ff\u5927 \u6e29\u54e5\u534e \u00b7 \u8fd8\u6709 167 \u5929", "title": "ISMRM 2027", "topic": 1, "url": "https://www.ismrm.org/27m/", "venue": "conferences", "x": 35.71019, "y": 29.46659}, {"confidence": 0.9739, "date": "2027-02-14", "id": "url:https://spie.org/conferences-and-exhibitions/medical-imaging", "kind": "conference", "label": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "labels": {"en": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "ru": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "zh": "\u5b66\u3001\u8fd8\u6709\u3001\u6709"}, "source": "conferences", "summary": "SPIE Medical Imaging 2027 \u533b\u5b66\u5f71\u50cf\u4e0e\u56fe\u50cf\u5904\u7406 \u00b7 \u52a0\u62ff\u5927 \u6e29\u54e5\u534e \u00b7 \u8fd8\u6709 84 \u5929", "title": "SPIE Medical Imaging 2027", "topic": 1, "url": "https://spie.org/conferences-and-exhibitions/medical-imaging", "venue": "conferences", "x": 41.37424, "y": 41.64949}, {"confidence": 0.6002, "date": "2026-11-22", "id": "url:https://news.google.com/rss/articles/CBMiR0FVX3lxTE9xT21ITWZwTTVPNkN5ejNnb2xGOURzR0NjcUNQR1A5aFJmU2FFWm9lc1d2bGxxZVRpUFpJTXdBTWFHVl9TWHhn?oc=5", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u53e3", "labels": {"en": "\u63a5\u3001\u8111\u3001\u53e3", "ru": "\u63a5\u3001\u8111\u3001\u53e3", "zh": "\u63a5\u3001\u8111\u3001\u53e3"}, "source": "google_news_zh", "summary": "\u8111\u673a\u63a5\u53e3\u4e34\u5e8a\u8bd5\u9a8c\uff0c\u5728\u5168\u56fd\u62a2\u75c5\u4eba \u8111\u673a\u63a5\u53e3\u4e34\u5e8a\u8bd5\u9a8c\uff0c\u5728\u5168\u56fd\u62a2\u75c5\u4eba \u52a8\u8109\u7f51", "title": "\u8111\u673a\u63a5\u53e3\u4e34\u5e8a\u8bd5\u9a8c\uff0c\u5728\u5168\u56fd\u62a2\u75c5\u4eba", "topic": 2, "url": "https://news.google.com/rss/articles/CBMiR0FVX3lxTE9xT21ITWZwTTVPNkN5ejNnb2xGOURzR0NjcUNQR1A5aFJmU2FFWm9lc1d2bGxxZVRpUFpJTXdBTWFHVl9TWHhn?oc=5", "venue": "Google News \u4e2d\u6587", "x": -33.81214, "y": -7.06246}, {"confidence": 0.9679, "date": "2026-11-22", "id": "url:https://news.google.com/rss/articles/CBMicEFVX3lxTE15Qkp5aE9WYkJ1NzRibVJUaEZIWk5nUjhOZmJPTjZSTmJTRzRYUzMxTmZHTDJweGlwWXpQdTdPOWpqVzNySGhRa3Z2cWFOandMOTJqRVExZE9JcVJ0cDZSY1VZS1NaaXIxYThfTlN1MXQ?oc=5", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u53e3", "labels": {"en": "\u63a5\u3001\u8111\u3001\u53e3", "ru": "\u63a5\u3001\u8111\u3001\u53e3", "zh": "\u63a5\u3001\u8111\u3001\u53e3"}, "source": "google_news_zh", "summary": "\u4e00\u680b\u697c\u201c\u8dd1\u901a\u201d\u8111\u673a\u63a5\u53e3\u4ea7\u4e1a\u94fe \u4e00\u680b\u697c\u201c\u8dd1\u901a\u201d\u8111\u673a\u63a5\u53e3\u4ea7\u4e1a\u94fe \u6b66\u6c49\u5e02\u4eba\u6c11\u653f\u5e9c", "title": "\u4e00\u680b\u697c\u201c\u8dd1\u901a\u201d\u8111\u673a\u63a5\u53e3\u4ea7\u4e1a\u94fe", "topic": 2, "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE15Qkp5aE9WYkJ1NzRibVJUaEZIWk5nUjhOZmJPTjZSTmJTRzRYUzMxTmZHTDJweGlwWXpQdTdPOWpqVzNySGhRa3Z2cWFOandMOTJqRVExZE9JcVJ0cDZSY1VZS1NaaXIxYThfTlN1MXQ?oc=5", "venue": "Google News \u4e2d\u6587", "x": -40.00159, "y": -16.31419}, {"confidence": 0.9822, "date": "2026-11-22", "id": "url:https://news.google.com/rss/articles/CBMiiAFBVV95cUxQMGdQYVVMZnJWbXBwQzBGMWVWZDFqcVVOd1ZXNlR3ekI4VG1oYzh1cFFZOE9XQ3BGUzZKTFFzckZmYjRuTjZ3aFZzRTNPNWZqckZ0dEhEcWJkeHN4UlA1Z2l3QkItR29mMUVJMlJXSGxyX3R1YVU0RW5TZ25EWEpSVEdtMVh5ZnJX?oc=5", "kind": "news", "label": "\u673a\u3001\u4f1a\u3001\u5b66", "labels": {"en": "\u673a\u3001\u4f1a\u3001\u5b66", "ru": "\u673a\u3001\u4f1a\u3001\u5b66", "zh": "\u673a\u3001\u4f1a\u3001\u5b66"}, "source": "google_news_zh", "summary": "2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u5317\u4eac\u660c\u5e73\u6210\u529f\u4e3e\u529e 2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u5317\u4eac\u660c\u5e73\u6210\u529f\u4e3e\u529e Sohu", "title": "2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u5317\u4eac\u660c\u5e73\u6210\u529f\u4e3e\u529e", "topic": 5, "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQMGdQYVVMZnJWbXBwQzBGMWVWZDFqcVVOd1ZXNlR3ekI4VG1oYzh1cFFZOE9XQ3BGUzZKTFFzckZmYjRuTjZ3aFZzRTNPNWZqckZ0dEhEcWJkeHN4UlA1Z2l3QkItR29mMUVJMlJXSGxyX3R1YVU0RW5TZ25EWEpSVEdtMVh5ZnJX?oc=5", "venue": "Google News \u4e2d\u6587", "x": 15.7538, "y": -44.97744}, {"confidence": 0.981, "date": "2026-11-22", "id": "url:https://news.google.com/rss/articles/CBMiVkFVX3lxTE5ieXlJTTBScEphZkVkWDFZYUZON09KWkRDVXpLSjA0WFRGSDBWcmZFbmlxUTRDbXJZZFpYS09Qd0xYSjBncW9rUzgydnpoaGZWSF85dHRB?oc=5", "kind": "news", "label": "\u673a\u3001\u4f1a\u3001\u5b66", "labels": {"en": "\u673a\u3001\u4f1a\u3001\u5b66", "ru": "\u673a\u3001\u4f1a\u3001\u5b66", "zh": "\u673a\u3001\u4f1a\u3001\u5b66"}, "source": "google_news_zh", "summary": "2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u5317\u4eac\u660c\u5e73\u533a\u4e3e\u529e 2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u5317\u4eac\u660c\u5e73\u533a\u4e3e\u529e news.qq.com", "title": "2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u5317\u4eac\u660c\u5e73\u533a\u4e3e\u529e", "topic": 5, "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE5ieXlJTTBScEphZkVkWDFZYUZON09KWkRDVXpLSjA0WFRGSDBWcmZFbmlxUTRDbXJZZFpYS09Qd0xYSjBncW9rUzgydnpoaGZWSF85dHRB?oc=5", "venue": "Google News \u4e2d\u6587", "x": 17.33283, "y": -38.58865}, {"confidence": 0.9898, "date": "2026-11-22", "id": "url:https://news.google.com/rss/articles/CBMijAFBVV95cUxNZTFxRkVPRWF3WHp0cUhpWVhvUExDcEJxbFUzeGo4VVZZS1JUbThXTGJwSkYzRXN0bmEySHBYSXdIZjlFT1JwVUVQc2xYaGg0UFVQOUM0WWRJSkhGWTdkQkxpRmUwX3Jzem91eXV6b2tNeDJ2VERwUTZPQnFhSjhiUWlVaWpUN01uMUxXUw?oc=5", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u673a", "labels": {"en": "\u63a5\u3001\u8111\u3001\u673a", "ru": "\u63a5\u3001\u8111\u3001\u673a", "zh": "\u63a5\u3001\u8111\u3001\u673a"}, "source": "google_news_zh", "summary": "2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u4eac\u4e3e\u529e\uff0c\u300a\u8111\u673a\u63a5\u53e3\u521b\u65b0\u53d1\u5c55\u7814\u7a76\u62a5\u544a\uff082026\uff09\u300b\u53d1\u5e03 2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u4eac\u4e3e\u529e\uff0c\u300a\u8111\u673a\u63a5\u53e3\u521b\u65b0\u53d1\u5c55\u7814\u7a76\u62a5\u544a\uff082026\uff09\u300b\u53d1\u5e03 Sohu", "title": "2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u4eac\u4e3e\u529e\uff0c\u300a\u8111\u673a\u63a5\u53e3\u521b\u65b0\u53d1\u5c55\u7814\u7a76\u62a5\u544a\uff082026\uff09\u300b\u53d1\u5e03", "topic": 0, "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxNZTFxRkVPRWF3WHp0cUhpWVhvUExDcEJxbFUzeGo4VVZZS1JUbThXTGJwSkYzRXN0bmEySHBYSXdIZjlFT1JwVUVQc2xYaGg0UFVQOUM0WWRJSkhGWTdkQkxpRmUwX3Jzem91eXV6b2tNeDJ2VERwUTZPQnFhSjhiUWlVaWpUN01uMUxXUw?oc=5", "venue": "Google News \u4e2d\u6587", "x": -6.61915, "y": -23.32565}, {"confidence": 0.6924, "date": "2026-11-22", "id": "url:https://news.google.com/rss/articles/CBMiVEFVX3lxTFA3dXdvY25nekJHM3YxVllvbHh4VFFGRXFxRDNNZHZNb0FfaUhTWlBCTHhrNnZDc3lERGdJaTgyM01UVnJ6MlMteV8teWU1WWFiWGV0NQ?oc=5", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u673a", "labels": {"en": "\u63a5\u3001\u8111\u3001\u673a", "ru": "\u63a5\u3001\u8111\u3001\u673a", "zh": "\u63a5\u3001\u8111\u3001\u673a"}, "source": "google_news_zh", "summary": "2026\u5e74\u8111\u673a\u63a5\u53e3\u521b\u65b0\u53d1\u5c55\u7814\u7a76\u62a5\u544a\uff1a\u4ece\u201c\u5927\u8111\u4e0e\u5916\u90e8\u8bbe\u5907\u7684\u76f4\u63a5\u8fde\u63a5\u201d\u8d70\u5411\u66f4\u4e3a\u591a\u7ef4\u7684\u4ea7\u4e1a\u8d4b\u80fd 2026\u5e74\u8111\u673a\u63a5\u53e3\u521b\u65b0\u53d1\u5c55\u7814\u7a76\u62a5\u544a\uff1a\u4ece\u201c\u5927\u8111\u4e0e\u5916\u90e8\u8bbe\u5907\u7684\u76f4\u63a5\u8fde\u63a5\u201d\u8d70\u5411\u66f4\u4e3a\u591a\u7ef4\u7684\u4ea7\u4e1a\u8d4b\u80fd \u7b2c\u4e00\u8d22\u7ecf", "title": "2026\u5e74\u8111\u673a\u63a5\u53e3\u521b\u65b0\u53d1\u5c55\u7814\u7a76\u62a5\u544a\uff1a\u4ece\u201c\u5927\u8111\u4e0e\u5916\u90e8\u8bbe\u5907\u7684\u76f4\u63a5\u8fde\u63a5\u201d\u8d70\u5411\u66f4\u4e3a\u591a\u7ef4\u7684\u4ea7\u4e1a\u8d4b\u80fd", "topic": 0, "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTFA3dXdvY25nekJHM3YxVllvbHh4VFFGRXFxRDNNZHZNb0FfaUhTWlBCTHhrNnZDc3lERGdJaTgyM01UVnJ6MlMteV8teWU1WWFiWGV0NQ?oc=5", "venue": "Google News \u4e2d\u6587", "x": -13.90721, "y": -21.69742}, {"confidence": 0.9679, "date": "2026-11-22", "id": "url:https://news.google.com/rss/articles/CBMickFVX3lxTE1famVySWtZckxadjBOMWtfWHlMTTZ3cEZSbmNHOUZOTGxGb2htWTJWWE5wMGlUMHlicnlIdHVDVXlVYlJtUlNrUFBYTDBhNHUwY1NkLXZfUjV6d0NrU3RRdnFuOFRUMmZqMWFaSjgzYXJDUQ?oc=5", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u53e3", "labels": {"en": "\u63a5\u3001\u8111\u3001\u53e3", "ru": "\u63a5\u3001\u8111\u3001\u53e3", "zh": "\u63a5\u3001\u8111\u3001\u53e3"}, "source": "google_news_zh", "summary": "2026\u5e74\u5168\u7403\u8111\u673a\u63a5\u53e3\u4f01\u4e1a\u6570\u91cf\u5b9e\u73b0\u8f83\u5feb\u589e\u957f 2026\u5e74\u5168\u7403\u8111\u673a\u63a5\u53e3\u4f01\u4e1a\u6570\u91cf\u5b9e\u73b0\u8f83\u5feb\u589e\u957f \u4eac\u62a5\u7f51", "title": "2026\u5e74\u5168\u7403\u8111\u673a\u63a5\u53e3\u4f01\u4e1a\u6570\u91cf\u5b9e\u73b0\u8f83\u5feb\u589e\u957f", "topic": 2, "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE1famVySWtZckxadjBOMWtfWHlMTTZ3cEZSbmNHOUZOTGxGb2htWTJWWE5wMGlUMHlicnlIdHVDVXlVYlJtUlNrUFBYTDBhNHUwY1NkLXZfUjV6d0NrU3RRdnFuOFRUMmZqMWFaSjgzYXJDUQ?oc=5", "venue": "Google News \u4e2d\u6587", "x": -42.23929, "y": -10.48159}, {"confidence": 0.6065, "date": "2026-11-21", "id": "url:https://news.google.com/rss/articles/CBMiZkFVX3lxTE96Q00tQ1lONG95NnBIcVdYbk1ISVBBMWtiQ1ZNSkNwU2k2cGZXOXVhMmd4OGpPOTd1MHpuZ1h6VkE3Q19HRE9RY3RVQ1hMazlDdXJQZHNRR3EyRGxSYzc0bGtrT01yZw?oc=5", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u53e3", "labels": {"en": "\u63a5\u3001\u8111\u3001\u53e3", "ru": "\u63a5\u3001\u8111\u3001\u53e3", "zh": "\u63a5\u3001\u8111\u3001\u53e3"}, "source": "google_news_zh", "summary": "\u70ed\u641c\u91cc\u7684\u65b0\u798f\u5efa \uff5c\u4ece\u5b9e\u9a8c\u5ba4\u5230\u4e34\u5e8a\uff0c\u8111\u673a\u63a5\u53e3\u7684\u4e94\u5e74\u63a5\u529b \u70ed\u641c\u91cc\u7684\u65b0\u798f\u5efa \uff5c\u4ece\u5b9e\u9a8c\u5ba4\u5230\u4e34\u5e8a\uff0c\u8111\u673a\u63a5\u53e3\u7684\u4e94\u5e74\u63a5\u529b \u4e1c\u5357\u7f51", "title": "\u70ed\u641c\u91cc\u7684\u65b0\u798f\u5efa \uff5c\u4ece\u5b9e\u9a8c\u5ba4\u5230\u4e34\u5e8a\uff0c\u8111\u673a\u63a5\u53e3\u7684\u4e94\u5e74\u63a5\u529b", "topic": 2, "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE96Q00tQ1lONG95NnBIcVdYbk1ISVBBMWtiQ1ZNSkNwU2k2cGZXOXVhMmd4OGpPOTd1MHpuZ1h6VkE3Q19HRE9RY3RVQ1hMazlDdXJQZHNRR3EyRGxSYzc0bGtrT01yZw?oc=5", "venue": "Google News \u4e2d\u6587", "x": -31.90407, "y": -12.53963}, {"confidence": 0.987, "date": "2026-11-21", "id": "url:https://news.google.com/rss/articles/CBMijgFBVV95cUxPSHJhUzROaThpR21jSk40eTVPendtWGE2RnhCTlozMi1fNGZNeUVwbmlGRms4ZmV0YUFWRWE5NXpQZ3dSRkotU3NRV3d6SFQ4V01zenNHZWxZekVLTG9QNjlQRHVQbThMcmFlUEVqWkthVmdJOXh6dkpSeElLZ0tfTUtVUWcxT09MMEJRSTJ3?oc=5", "kind": "news", "label": "\u7f8e\u3001\u4f4d\u3001\u751f", "labels": {"en": "\u7f8e\u3001\u4f4d\u3001\u751f", "ru": "\u7f8e\u3001\u4f4d\u3001\u751f", "zh": "\u7f8e\u3001\u4f4d\u3001\u751f"}, "source": "google_news_zh", "summary": "\u666e\u6797\u65af\u987f\u7b2c\u4e00\u4f4d\u88abICE\u62d8\u7559\u7684\u535a\u58eb\u751f\uff0c\u662f\u4e00\u4f4d\u8d74\u7f8e10\u5e74\u7684\u4e0a\u6d77\u59d1\u5a18\uff08\u7f8e\u4e2d\u62a5\u5bfc\uff09 \u666e\u6797\u65af\u987f\u7b2c\u4e00\u4f4d\u88abICE\u62d8\u7559\u7684\u535a\u58eb\u751f\uff0c\u662f\u4e00\u4f4d\u8d74\u7f8e10\u5e74\u7684\u4e0a\u6d77\u59d1\u5a18\uff08\u7f8e\u4e2d\u62a5\u5bfc\uff09 \u7f8e\u4e2d\u5831\u5c0e", "title": "\u666e\u6797\u65af\u987f\u7b2c\u4e00\u4f4d\u88abICE\u62d8\u7559\u7684\u535a\u58eb\u751f\uff0c\u662f\u4e00\u4f4d\u8d74\u7f8e10\u5e74\u7684\u4e0a\u6d77\u59d1\u5a18\uff08\u7f8e\u4e2d\u62a5\u5bfc\uff09", "topic": 3, "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxPSHJhUzROaThpR21jSk40eTVPendtWGE2RnhCTlozMi1fNGZNeUVwbmlGRms4ZmV0YUFWRWE5NXpQZ3dSRkotU3NRV3d6SFQ4V01zenNHZWxZekVLTG9QNjlQRHVQbThMcmFlUEVqWkthVmdJOXh6dkpSeElLZ0tfTUtVUWcxT09MMEJRSTJ3?oc=5", "venue": "Google News \u4e2d\u6587", "x": 24.58976, "y": -4.39732}, {"confidence": 0.9881, "date": "2026-11-21", "id": "url:https://news.google.com/rss/articles/CBMijgFBVV95cUxOZndPb0JPVFFuR0Y2VzJBam5MbFBQbGwwcVhrUm5Zd2RuLWk4emRHaG8yUlBtVVRyYzRkSVRWdWsyMTNZTUpsbV91Q2ZnY2VyTkZMSzJhUlB4NjUtMmFZSmpNVGtBRDhCUUZhaWhVTl8wNTFuRXBiOEtSWW41LXQ5Q3c2MklfeDB3UklBSWhB?oc=5", "kind": "news", "label": "\u7f8e\u3001\u4f4d\u3001\u751f", "labels": {"en": "\u7f8e\u3001\u4f4d\u3001\u751f", "ru": "\u7f8e\u3001\u4f4d\u3001\u751f", "zh": "\u7f8e\u3001\u4f4d\u3001\u751f"}, "source": "google_news_zh", "summary": "\u6050\u6016\uff01\u666e\u6797\u65af\u987f\u534e\u4eba\u5973\u535a\u58eb\u751f\u5f00\u5b66\u672f\u4f1a\u8bae\uff0c\u8fd4\u7a0b\u65f6\u5728\u673a\u573a\u88ab\u62d8\u7559\uff01MIT\u53cc\u5b66\u4f4d\u80cc\u666f\uff0c\u66fe\u5b9e\u4e60Meta\u4e0e\u5fae\u8f6fAI\uff0c\u6821\u65b9\u5df2\u5b89\u6392\u5f8b\u5e08\uff08\u7f8e\u4e2d\u62a5\u5bfc\uff09 \u6050\u6016\uff01\u666e\u6797\u65af\u987f\u534e\u4eba\u5973\u535a\u58eb\u751f\u5f00\u5b66\u672f\u4f1a\u8bae\uff0c\u8fd4\u7a0b\u65f6\u5728\u673a\u573a\u88ab\u62d8\u7559\uff01MIT\u53cc\u5b66\u4f4d\u80cc\u666f\uff0c\u66fe\u5b9e\u4e60Meta\u4e0e\u5fae\u8f6fAI\uff0c\u6821\u65b9\u5df2\u5b89\u6392\u5f8b\u5e08\uff08\u7f8e\u4e2d\u62a5\u5bfc\uff09 \u7f8e\u4e2d\u5831\u5c0e", "title": "\u6050\u6016\uff01\u666e\u6797\u65af\u987f\u534e\u4eba\u5973\u535a\u58eb\u751f\u5f00\u5b66\u672f\u4f1a\u8bae\uff0c\u8fd4\u7a0b\u65f6\u5728\u673a\u573a\u88ab\u62d8\u7559\uff01MIT\u53cc\u5b66\u4f4d\u80cc\u666f\uff0c\u66fe\u5b9e\u4e60Meta\u4e0e\u5fae\u8f6fAI\uff0c\u6821\u65b9\u5df2\u5b89\u6392\u5f8b\u5e08\uff08\u7f8e\u4e2d\u62a5\u5bfc\uff09", "topic": 3, "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxOZndPb0JPVFFuR0Y2VzJBam5MbFBQbGwwcVhrUm5Zd2RuLWk4emRHaG8yUlBtVVRyYzRkSVRWdWsyMTNZTUpsbV91Q2ZnY2VyTkZMSzJhUlB4NjUtMmFZSmpNVGtBRDhCUUZhaWhVTl8wNTFuRXBiOEtSWW41LXQ5Q3c2MklfeDB3UklBSWhB?oc=5", "venue": "Google News \u4e2d\u6587", "x": 27.98526, "y": -10.74027}, {"confidence": 0.97, "date": "2026-11-21", "id": "url:https://news.google.com/rss/articles/CBMibkFVX3lxTE1TVU9hUGdGUXVFX3hrejFGUVRrM3czVDRtN2FISlRtbXVNdkFVNEo2cXJheGZxOFV2R2E2b2tOQ1lBOXhlc1RTR1h1bUswWmtzNjJmamVRZng0VGc2WkpJZkllb2JZR2c3a0JkMU1R?oc=5", "kind": "news", "label": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "labels": {"en": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "ru": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "zh": "\u5b66\u3001\u8fd8\u6709\u3001\u6709"}, "source": "google_news_zh", "summary": "\u5bf9\u8bdd\u5f0f\u5171\u540c\u8bc4\u4f30\u5fc3\u667a\u4e0e\u8111\u79d1\u5b66\u7814\u7a76\u4e2d\u7684\u5171\u540c\u751f\u4ea7\uff1a\u4e00\u79cd\u5bf9\u8bdd\u5f0f\u65b9\u6cd5 \u5bf9\u8bdd\u5f0f\u5171\u540c\u8bc4\u4f30\u5fc3\u667a\u4e0e\u8111\u79d1\u5b66\u7814\u7a76\u4e2d\u7684\u5171\u540c\u751f\u4ea7\uff1a\u4e00\u79cd\u5bf9\u8bdd\u5f0f\u65b9\u6cd5 \u751f\u7269\u901a", "title": "\u5bf9\u8bdd\u5f0f\u5171\u540c\u8bc4\u4f30\u5fc3\u667a\u4e0e\u8111\u79d1\u5b66\u7814\u7a76\u4e2d\u7684\u5171\u540c\u751f\u4ea7\uff1a\u4e00\u79cd\u5bf9\u8bdd\u5f0f\u65b9\u6cd5", "topic": 1, "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE1TVU9hUGdGUXVFX3hrejFGUVRrM3czVDRtN2FISlRtbXVNdkFVNEo2cXJheGZxOFV2R2E2b2tOQ1lBOXhlc1RTR1h1bUswWmtzNjJmamVRZng0VGc2WkpJZkllb2JZR2c3a0JkMU1R?oc=5", "venue": "Google News \u4e2d\u6587", "x": 28.0027, "y": 40.15123}, {"confidence": 0.978, "date": "2026-11-21", "id": "url:https://news.google.com/rss/articles/CBMibkFVX3lxTFBXYV92MTZZUk5fTVNlWGE0ZDllNktCbFRpeDEweElNcTdiYllWVGV1c1BLQ3NIeC1xeXZYMU1ITk5ZcnRrMDZYV1FFZngxWEk4ZjdsN1kzcE03SGtfTjZyS2pTYzdNb2o0LTlaN01B?oc=5", "kind": "news", "label": "\u673a\u3001\u4f1a\u3001\u5b66", "labels": {"en": "\u673a\u3001\u4f1a\u3001\u5b66", "ru": "\u673a\u3001\u4f1a\u3001\u5b66", "zh": "\u673a\u3001\u4f1a\u3001\u5b66"}, "source": "google_news_zh", "summary": "\u5927\u89c4\u6a21\u534f\u4f5c\u7f51\u7edc\u5bf9\u6b27\u6d32\u8111\u7814\u7a76\u5b66\u4f1a\u7684\u6218\u7565\u67b6\u6784\u4e0e\u6cbb\u7406\u673a\u5236\u2014\u2014\u4ee5\u6b27\u6d32\u795e\u7ecf\u7cbe\u795e\u836f\u7406\u5b66\u5b66\u9662\u7f51\u7edc\u4f53\u7cfb\u4e3a\u5206\u6790\u5bf9\u8c61 \u5927\u89c4\u6a21\u534f\u4f5c\u7f51\u7edc\u5bf9\u6b27\u6d32\u8111\u7814\u7a76\u5b66\u4f1a\u7684\u6218\u7565\u67b6\u6784\u4e0e\u6cbb\u7406\u673a\u5236\u2014\u2014\u4ee5\u6b27\u6d32\u795e\u7ecf\u7cbe\u795e\u836f\u7406\u5b66\u5b66\u9662\u7f51\u7edc\u4f53\u7cfb\u4e3a\u5206\u6790\u5bf9\u8c61 \u751f\u7269\u901a", "title": "\u5927\u89c4\u6a21\u534f\u4f5c\u7f51\u7edc\u5bf9\u6b27\u6d32\u8111\u7814\u7a76\u5b66\u4f1a\u7684\u6218\u7565\u67b6\u6784\u4e0e\u6cbb\u7406\u673a\u5236\u2014\u2014\u4ee5\u6b27\u6d32\u795e\u7ecf\u7cbe\u795e\u836f\u7406\u5b66\u5b66\u9662\u7f51\u7edc\u4f53\u7cfb\u4e3a\u5206\u6790\u5bf9\u8c61", "topic": 5, "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTFBXYV92MTZZUk5fTVNlWGE0ZDllNktCbFRpeDEweElNcTdiYllWVGV1c1BLQ3NIeC1xeXZYMU1ITk5ZcnRrMDZYV1FFZngxWEk4ZjdsN1kzcE03SGtfTjZyS2pTYzdNb2o0LTlaN01B?oc=5", "venue": "Google News \u4e2d\u6587", "x": 10.99544, "y": -40.44704}, {"confidence": 0.5833, "date": "2026-11-20\n", "id": "url:https://www.science.org/content/article/ai-may-have-solved-math-s-greatest-mystery-can-humans-understand-answer", "kind": "news", "label": "\u7f8e\u3001\u4f4d\u3001\u751f", "labels": {"en": "\u7f8e\u3001\u4f4d\u3001\u751f", "ru": "\u7f8e\u3001\u4f4d\u3001\u751f", "zh": "\u7f8e\u3001\u4f4d\u3001\u751f"}, "source": "policy", "summary": "AI may have solved math\u2019s greatest mystery. Can humans understand the answer? Anthropic researcher says Claude cracked 166-year-old Riemann hypothesis, but sprawling proof could take years to decipher", "title": "AI may have solved math\u2019s greatest mystery. Can humans understand the answer?", "topic": 3, "url": "https://www.science.org/content/article/ai-may-have-solved-math-s-greatest-mystery-can-humans-understand-answer", "venue": "Latest News from Science Magazine", "x": 15.47234, "y": -4.84548}, {"confidence": 0.5833, "date": "2026-11-19\n", "id": "url:https://www.science.org/content/article/killing-more-sea-lions-won-t-help-endangered-salmon-recover-model-suggests", "kind": "news", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "policy", "summary": "Killing more sea lions won\u2019t help endangered salmon recover, model suggests Surprising result contrasts with earlier studies and complicates policy debates about culling", "title": "Killing more sea lions won\u2019t help endangered salmon recover, model suggests", "topic": 4, "url": "https://www.science.org/content/article/killing-more-sea-lions-won-t-help-endangered-salmon-recover-model-suggests", "venue": "Latest News from Science Magazine", "x": -1.42845, "y": 12.13863}, {"confidence": 0.1667, "date": "2026-11-19\n", "id": "url:https://www.science.org/content/article/flawed-research-papers-should-be-retracted-faster-u-s-academy-urges", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u673a", "labels": {"en": "\u63a5\u3001\u8111\u3001\u673a", "ru": "\u63a5\u3001\u8111\u3001\u673a", "zh": "\u63a5\u3001\u8111\u3001\u673a"}, "source": "policy", "summary": "Flawed research papers should be retracted faster, U.S. academy urges Report recommends deadlines and destigmatizing errors", "title": "Flawed research papers should be retracted faster, U.S. academy urges", "topic": 0, "url": "https://www.science.org/content/article/flawed-research-papers-should-be-retracted-faster-u-s-academy-urges", "venue": "Latest News from Science Magazine", "x": 2.13644, "y": -5.06451}, {"confidence": 0.791, "date": "2026-11-19\n", "id": "url:https://www.science.org/content/article/exclusive-i-got-eavesdrop-ai-agents-doing-science-it-was-eye-opening", "kind": "news", "label": "\u7f8e\u3001\u4f4d\u3001\u751f", "labels": {"en": "\u7f8e\u3001\u4f4d\u3001\u751f", "ru": "\u7f8e\u3001\u4f4d\u3001\u751f", "zh": "\u7f8e\u3001\u4f4d\u3001\u751f"}, "source": "policy", "summary": "Exclusive: I got to eavesdrop on AI agents doing science. It was eye opening 936 agents exchanged thousands of messages, each publishing end-to-end research on their own preprint server. But was it any good?", "title": "Exclusive: I got to eavesdrop on AI agents doing science. It was eye opening", "topic": 3, "url": "https://www.science.org/content/article/exclusive-i-got-eavesdrop-ai-agents-doing-science-it-was-eye-opening", "venue": "Latest News from Science Magazine", "x": 20.70778, "y": -11.51878}, {"confidence": 0.5829, "date": "2026-11-19\n", "id": "url:https://www.science.org/content/article/china-importing-thousands-research-primates-sparking-fears-monkey-trade-war", "kind": "news", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "policy", "summary": "China is importing thousands of research primates, sparking fears of monkey trade war Animals are coming from Cambodia, which has been accused of laundering wild-caught monkeys", "title": "China is importing thousands of research primates, sparking fears of monkey trade war", "topic": 4, "url": "https://www.science.org/content/article/china-importing-thousands-research-primates-sparking-fears-monkey-trade-war", "venue": "Latest News from Science Magazine", "x": -4.607, "y": 5.84091}, {"confidence": 0.7221, "date": "2026-11-19\n", "id": "url:https://www.science.org/content/article/chemists-are-uncovering-hidden-world-pollution", "kind": "news", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "policy", "summary": "Chemists are uncovering a hidden world of pollution New analytical tools are revealing thousands of chemicals that conventional tests miss", "title": "Chemists are uncovering a hidden world of pollution", "topic": 4, "url": "https://www.science.org/content/article/chemists-are-uncovering-hidden-world-pollution", "venue": "Latest News from Science Magazine", "x": -8.59582, "y": 15.56317}, {"confidence": 0.5833, "date": "2026-11-18\n", "id": "url:https://www.science.org/content/article/researchers-regain-key-connections-department-energy-s-science-wing", "kind": "news", "label": "\u7f8e\u3001\u4f4d\u3001\u751f", "labels": {"en": "\u7f8e\u3001\u4f4d\u3001\u751f", "ru": "\u7f8e\u3001\u4f4d\u3001\u751f", "zh": "\u7f8e\u3001\u4f4d\u3001\u751f"}, "source": "policy", "summary": "Researchers regain key connections to Department of Energy\u2019s science wing New advisory subpanels bring back some functions of advisory committees disbanded last year", "title": "Researchers regain key connections to Department of Energy\u2019s science wing", "topic": 3, "url": "https://www.science.org/content/article/researchers-regain-key-connections-department-energy-s-science-wing", "venue": "Latest News from Science Magazine", "x": 13.23784, "y": -11.24015}, {"confidence": 0.5833, "date": "2026-11-18\n", "id": "url:https://www.science.org/content/article/nih-director-calls-new-probe-controversial-covid-19-origin-paper", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u673a", "labels": {"en": "\u63a5\u3001\u8111\u3001\u673a", "ru": "\u63a5\u3001\u8111\u3001\u673a", "zh": "\u63a5\u3001\u8111\u3001\u673a"}, "source": "policy", "summary": "NIH director calls for new probe of controversial COVID-19 origin paper Bhattacharya wants Nature Medicine to review whether former NIH leaders ghostwrote manuscript challenging theory an engineered virus caused pandemic", "title": "NIH director calls for new probe of controversial COVID-19 origin paper", "topic": 0, "url": "https://www.science.org/content/article/nih-director-calls-new-probe-controversial-covid-19-origin-paper", "venue": "Latest News from Science Magazine", "x": -4.60581, "y": -15.04507}, {"confidence": 0.7216, "date": "2026-11-18\n", "id": "url:https://www.science.org/content/article/are-t-cell-engagers-next-big-thing-autoimmune-disease-treatment", "kind": "news", "label": "\u63a5\u3001\u8111\u3001\u673a", "labels": {"en": "\u63a5\u3001\u8111\u3001\u673a", "ru": "\u63a5\u3001\u8111\u3001\u673a", "zh": "\u63a5\u3001\u8111\u3001\u673a"}, "source": "policy", "summary": "Are T cell \u2018engagers\u2019 the next big thing in autoimmune disease treatment? Engineered antibodies may produce remissions and offer safety benefits over cell therapies that have killed patients", "title": "Are T cell \u2018engagers\u2019 the next big thing in autoimmune disease treatment?", "topic": 0, "url": "https://www.science.org/content/article/are-t-cell-engagers-next-big-thing-autoimmune-disease-treatment", "venue": "Latest News from Science Magazine", "x": -11.322, "y": -15.43821}, {"confidence": 0.8958, "date": "2026-11-17", "id": "url:http://www.fda.gov/news-events/press-announcements/fda-launches-global-reliance-disclosure-program-expand-patient-access-medicines-worldwide", "kind": "funding", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "policy", "summary": "FDA Launches the Global Reliance Disclosure Program to Expand Patient Access to Medicines Worldwide FDA today announced the Global Reliance Disclosure Program (GRDP), a landmark initiative that will fundamentally transform how the FDA\u0027s reg", "title": "FDA Launches the Global Reliance Disclosure Program to Expand Patient Access to Medicines Worldwide", "topic": 4, "url": "http://www.fda.gov/news-events/press-announcements/fda-launches-global-reliance-disclosure-program-expand-patient-access-medicines-worldwide", "venue": "FDA Press Releases RSS Feed", "x": -10.93015, "y": 23.76707}, {"confidence": 0.9167, "date": "2026-11-17", "id": "url:http://www.fda.gov/news-events/press-announcements/fda-approves-first-drug-shown-help-patients-infantile-onset-niemann-pick-disease-type-c-live-longer", "kind": "funding", "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "source": "policy", "summary": "FDA Approves First Drug Shown to Help Patients with Infantile-Onset Niemann-Pick Disease Type C Live Longer FDA approved Lembaz (adrabetadex) injection, the first treatment shown to help people with a severe form of Niemann-Pick disease typ", "title": "FDA Approves First Drug Shown to Help Patients with Infantile-Onset Niemann-Pick Disease Type C Live Longer", "topic": 4, "url": "http://www.fda.gov/news-events/press-announcements/fda-approves-first-drug-shown-help-patients-infantile-onset-niemann-pick-disease-type-c-live-longer", "venue": "FDA Press Releases RSS Feed", "x": -16.96771, "y": 16.81537}], "topics": [{"examples": ["2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u4eac\u4e3e\u529e\uff0c\u300a\u8111\u673a\u63a5\u53e3\u521b\u65b0\u53d1\u5c55\u7814\u7a76\u62a5\u544a\uff082026\uff09\u300b\u53d1\u5e03", "Are T cell \u2018engagers\u2019 the next big thing in autoimmune disease treatment?", "2026\u5e74\u8111\u673a\u63a5\u53e3\u521b\u65b0\u53d1\u5c55\u7814\u7a76\u62a5\u544a\uff1a\u4ece\u201c\u5927\u8111\u4e0e\u5916\u90e8\u8bbe\u5907\u7684\u76f4\u63a5\u8fde\u63a5\u201d\u8d70\u5411\u66f4\u4e3a\u591a\u7ef4\u7684\u4ea7\u4e1a\u8d4b\u80fd"], "id": 0, "label": "\u63a5\u3001\u8111\u3001\u673a", "labels": {"en": "\u63a5\u3001\u8111\u3001\u673a", "ru": "\u63a5\u3001\u8111\u3001\u673a", "zh": "\u63a5\u3001\u8111\u3001\u673a"}, "size": 5, "terms": ["\u63a5", "\u8111", "\u673a", "\u63a5\u53e3", "\u8111\u673a", "\u673a\u63a5", "\u53e3", "\u53d1", "\u5927", "\u5c55\u7814", "\u53e3\u521b", "\u521b"]}, {"examples": ["SPIE Medical Imaging 2027", "ISMRM 2027", "IPMI 2027"], "id": 1, "label": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "labels": {"en": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "ru": "\u5b66\u3001\u8fd8\u6709\u3001\u6709", "zh": "\u5b66\u3001\u8fd8\u6709\u3001\u6709"}, "size": 7, "terms": ["\u5b66", "\u8fd8\u6709", "\u6709", "\u5929", "\u6709\u5929", "\u8fd8", "\u5171", "\u50cf", "\u533b", "\u533b\u5b66", "\u5927", "\u52a0\u62ff"]}, {"examples": ["\u4e00\u680b\u697c\u201c\u8dd1\u901a\u201d\u8111\u673a\u63a5\u53e3\u4ea7\u4e1a\u94fe", "2026\u5e74\u5168\u7403\u8111\u673a\u63a5\u53e3\u4f01\u4e1a\u6570\u91cf\u5b9e\u73b0\u8f83\u5feb\u589e\u957f", "\u70ed\u641c\u91cc\u7684\u65b0\u798f\u5efa \uff5c\u4ece\u5b9e\u9a8c\u5ba4\u5230\u4e34\u5e8a\uff0c\u8111\u673a\u63a5\u53e3\u7684\u4e94\u5e74\u63a5\u529b"], "id": 2, "label": "\u63a5\u3001\u8111\u3001\u53e3", "labels": {"en": "\u63a5\u3001\u8111\u3001\u53e3", "ru": "\u63a5\u3001\u8111\u3001\u53e3", "zh": "\u63a5\u3001\u8111\u3001\u53e3"}, "size": 4, "terms": ["\u63a5", "\u8111", "\u53e3", "\u673a\u63a5", "\u8111\u673a", "\u63a5\u53e3", "\u673a", "\u4e1a", "\u5e74", "\u5b9e", "\u5168", "\u4ea7\u4e1a"]}, {"examples": ["\u6050\u6016\uff01\u666e\u6797\u65af\u987f\u534e\u4eba\u5973\u535a\u58eb\u751f\u5f00\u5b66\u672f\u4f1a\u8bae\uff0c\u8fd4\u7a0b\u65f6\u5728\u673a\u573a\u88ab\u62d8\u7559\uff01MIT\u53cc\u5b66\u4f4d\u80cc\u666f\uff0c\u66fe\u5b9e\u4e60Meta\u4e0e\u5fae\u8f6fAI\uff0c\u6821\u65b9\u5df2\u5b89\u6392\u5f8b\u5e08\uff08\u7f8e\u4e2d\u62a5\u5bfc\uff09", "\u666e\u6797\u65af\u987f\u7b2c\u4e00\u4f4d\u88abICE\u62d8\u7559\u7684\u535a\u58eb\u751f\uff0c\u662f\u4e00\u4f4d\u8d74\u7f8e10\u5e74\u7684\u4e0a\u6d77\u59d1\u5a18\uff08\u7f8e\u4e2d\u62a5\u5bfc\uff09", "Exclusive: I got to eavesdrop on AI agents doing science. It was eye opening"], "id": 3, "label": "\u7f8e\u3001\u4f4d\u3001\u751f", "labels": {"en": "\u7f8e\u3001\u4f4d\u3001\u751f", "ru": "\u7f8e\u3001\u4f4d\u3001\u751f", "zh": "\u7f8e\u3001\u4f4d\u3001\u751f"}, "size": 5, "terms": ["\u7f8e", "\u4f4d", "\u751f", "\u4e00", "\u5b66", "\u62a5", "\u58eb", "\u6797", "\u6797\u65af", "\u62a5\u5bfc", "\u5bfc", "\u58eb\u751f"]}, {"examples": ["ISBI 2027", "FDA Approves First Drug Shown to Help Patients with Infantile-Onset Niemann-Pick Disease Type C Live Longer", "FDA Approves First Drug to Treat Neurological Symptoms of Type 3 Gaucher Disease"], "id": 4, "label": "fda\u3001type\u3001drug", "labels": {"en": "fda\u3001type\u3001drug", "ru": "fda\u3001type\u3001drug", "zh": "fda\u3001type\u3001drug"}, "size": 9, "terms": ["fda", "type", "drug", "help", "\u8981", "\u8981\u622a", "\u6458", "\u5929\u6458", "\u6458\u8981", "\u6b62", "\u622a", "\u622a\u6b62"]}, {"examples": ["2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u5317\u4eac\u660c\u5e73\u6210\u529f\u4e3e\u529e", "2026\u8111\u673a\u63a5\u53e3\u5927\u4f1a\u5728\u5317\u4eac\u660c\u5e73\u533a\u4e3e\u529e", "\u5927\u89c4\u6a21\u534f\u4f5c\u7f51\u7edc\u5bf9\u6b27\u6d32\u8111\u7814\u7a76\u5b66\u4f1a\u7684\u6218\u7565\u67b6\u6784\u4e0e\u6cbb\u7406\u673a\u5236\u2014\u2014\u4ee5\u6b27\u6d32\u795e\u7ecf\u7cbe\u795e\u836f\u7406\u5b66\u5b66\u9662\u7f51\u7edc\u4f53\u7cfb\u4e3a\u5206\u6790\u5bf9\u8c61"], "id": 5, "label": "\u673a\u3001\u4f1a\u3001\u5b66", "labels": {"en": "\u673a\u3001\u4f1a\u3001\u5b66", "ru": "\u673a\u3001\u4f1a\u3001\u5b66", "zh": "\u673a\u3001\u4f1a\u3001\u5b66"}, "size": 3, "terms": ["\u673a", "\u4f1a", "\u5b66", "\u5927", "\u8111", "\u5317", "\u4eac", "\u7406", "\u5927\u4f1a", "\u53e3\u5927", "\u7f51", "\u4e3e\u529e"]}], "unknown": []}</script>
+  <script>
+  (() => {
+    const root = document.getElementById('topic-map');
+    const data = JSON.parse(document.getElementById('nd-topic-data').textContent);
+    const tm = {
+      zh: {title:'🧭 主题景观 LDA + t-SNE', note:'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。', select:'选择圆点', hint:'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。', all:'全部', items:'个条目', topics:'个主题', original:'阅读原文 ↗', confidence:'主题置信度：', topic:'主题', kinds:{paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}},
+      en: {title:'🧭 Topic landscape LDA + t-SNE', note:'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.', select:'Select a point', hint:'Color is the dominant LDA topic; closer points have more similar topic distributions.', all:'All', items:'items', topics:'topics', original:'Read source ↗', confidence:'Topic confidence: ', topic:'Topic', kinds:{paper:'Paper',trial:'Trial',news:'News',policy:'Policy',funding:'Industry',conference:'Conference'}},
+      ru: {title:'🧭 Тематический ландшафт LDA + t-SNE', note:'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.', select:'Выберите точку', hint:'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.', all:'Все', items:'записей', topics:'тем', original:'Открыть источник ↗', confidence:'Уверенность темы: ', topic:'Тема', kinds:{paper:'Статья',trial:'Испытание',news:'Новость',policy:'Политика',funding:'Индустрия',conference:'Конференция'}}
+    }["zh"] || null;
+    if (tm) {
+      const title = root.querySelector('[data-tm="title"]'); if (title) title.textContent = tm.title;
+      const note = root.querySelector('[data-tm="note"]'); if (note) note.textContent = tm.note;
+      const sideTitle = root.querySelector('.tm-side h3'); if (sideTitle) sideTitle.textContent = tm.select;
+      const hint = root.querySelector('.tm-side .tm-note'); if (hint) hint.textContent = tm.hint;
+    }
+    if (!data || !data.enabled || !Array.isArray(data.points) || !data.points.length) {
+      root.hidden = true;
+      return;
+    }
+    document.querySelectorAll('a[href="#topic-map"]').forEach(link => {link.hidden = false;});
+    const canvas = root.querySelector('.tm-canvas');
+    const side = root.querySelector('.tm-side');
+    const legend = root.querySelector('.tm-legend');
+    const ctx = canvas.getContext('2d');
+    let selectedTopic = 'all';
+    let selectedPoint = null;
+    const hue = id => (Number(id) * 47 + 190) % 360;
+    const color = id => `hsl(${hue(id)} 72% 62%)`;
+    const esc = value => String(value == null ? '' : value);
+    const lang = "zh";
+    const kindLabel = kind => (tm?.kinds?.[kind] || ({paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}[kind] || kind));
+    const topics = (data.topics || []).slice().sort((a,b) => b.size - a.size);
+    const shown = () => data.points.filter(p => selectedTopic === 'all' || p.topic === selectedTopic);
+    const scale = () => {
+      const pts = data.points;
+      const maxX = Math.max(1e-6, ...pts.map(p => Math.abs(p.x)));
+      const maxY = Math.max(1e-6, ...pts.map(p => Math.abs(p.y)));
+      return {sx: (canvas.width * .44) / maxX, sy: (canvas.height * .44) / maxY};
+    };
+    const position = (p, sc) => ({
+      x: canvas.width / 2 + p.x * sc.sx,
+      y: canvas.height / 2 - p.y * sc.sy,
+    });
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0b172a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = '#223a57'; ctx.lineWidth = 1;
+      for (let i=1;i<5;i++) {
+        ctx.beginPath(); ctx.moveTo(0,canvas.height*i/5); ctx.lineTo(canvas.width,canvas.height*i/5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(canvas.width*i/5,0); ctx.lineTo(canvas.width*i/5,canvas.height); ctx.stroke();
+      }
+      const sc = scale();
+      const visible = shown();
+      for (const p of visible) {
+        const q = position(p, sc);
+        ctx.beginPath(); ctx.arc(q.x, q.y, p === selectedPoint ? 8 : 5, 0, Math.PI*2);
+        ctx.fillStyle = color(p.topic); ctx.fill();
+        ctx.lineWidth = p === selectedPoint ? 3 : 1.2; ctx.strokeStyle = p === selectedPoint ? '#fff' : '#0b172a'; ctx.stroke();
+      }
+      ctx.fillStyle = '#9fb3c8'; ctx.font = '18px -apple-system,Segoe UI,sans-serif';
+      ctx.fillText(visible.length + ' ' + (tm?.items || '个条目') + ' · ' + topics.length + ' ' + (tm?.topics || '个主题'), 18, 28);
+    }
+    function detail(p) {
+      side.replaceChildren();
+      const h = document.createElement('h3'); h.textContent = (p.labels && p.labels[lang]) || p.label || ((tm?.topic || '主题') + ' ' + p.topic); side.append(h);
+      const title = document.createElement('p'); title.textContent = p.title || ''; title.style.fontWeight = '700'; side.append(title);
+      const meta = document.createElement('p'); meta.textContent = [kindLabel(p.kind), p.venue, p.date].filter(Boolean).join(' · '); side.append(meta);
+      if (p.summary) { const summary = document.createElement('p'); summary.textContent = p.summary; side.append(summary); }
+      if (/^https?:/i.test(p.url || '')) {
+        const a = document.createElement('a'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = tm?.original || '阅读原文 ↗'; side.append(a);
+      }
+      const hint = document.createElement('p'); hint.className = 'tm-note'; hint.textContent = (tm?.confidence || '主题置信度：') + (p.confidence != null ? Math.round(p.confidence*100) + '%' : '—'); side.append(hint);
+    }
+    function pick(event) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = (event.clientX - rect.left) * canvas.width / rect.width;
+      const my = (event.clientY - rect.top) * canvas.height / rect.height;
+      const sc = scale();
+      let best = null, bestD = 18 * 18;
+      for (const p of shown()) {
+        const q = position(p, sc); const d = (q.x-mx)**2 + (q.y-my)**2;
+        if (d < bestD) { bestD = d; best = p; }
+      }
+      if (best) { selectedPoint = best; detail(best); draw(); }
+    }
+    function chip(label, id) {
+      const b = document.createElement('button'); b.type='button'; b.className='tm-chip'; b.textContent=label;
+      b.setAttribute('aria-pressed', String(selectedTopic === id));
+      b.onclick = () => { selectedTopic = id; selectedPoint = null; legend.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); draw(); };
+      return b;
+    }
+    legend.append(chip(tm?.all || '全部', 'all'));
+    for (const t of topics.slice(0, 14)) { const label=(t.labels&&t.labels[lang])||t.label||('主题 '+t.id); legend.append(chip(label + ' · ' + t.size, t.id)); }
+    canvas.addEventListener('click', pick);
+    draw();
+  })();
+  </script>
+</section>
 <section id="on-this-day"><div class="sec-head"><div><h2 class="sec-title"><span class="dot"></span>📅 历史上的今天<span class="count">(11 月 22 日 · 经典里程碑（非特定日期） · 1)</span></h2><p class="sec-desc">神经科学 / 神经病学 / 精神病学 / 神经外科史上的今天。</p></div></div><details class="card otd-card" open><summary><span class="chevron"></span><div class="card-main"><h3>神经信息学</h3><div class="meta"><span class="badge b-doc">学术发现</span><span class="tag tj">1990</span><span class="tag t">神经科学</span><span class="tag t">经典里程碑</span></div></div></summary><div class="card-body"><p class="summary">二十世纪最后十年，生命科学领域正经历一场静默而深刻的革命。传统生物学研究依赖实验观察与手工记录，但神经科学却面临一个前所未有的困境：脑研究所产生的数据量呈指数级增长，从单个神经元的电生理记录到大规模脑成像图谱，从分子水平的受体分布到行为学的追踪数据，这些信息分散在不同实验室、不同格式、不同国家的论文与硬盘中，彼此割裂，难以整合。研究者常常花费数月时间重复他人已完成的实验，或因为无法检索到关键数据集而错过重要发现。这种“数据孤岛”现象严重制约了脑科学的整体推进，而彼时计算机科学与互联网技术刚刚开始成熟，为信息的存储、检索与共享提供了技术可能。正是在这一背景下，神经信息学作为一门新兴交叉学科应运而生。</p><p class="summary">1990年代，神经信息学正式被提出并逐步确立其学科框架。其核心思想并不复杂：将神经科学领域海量的实验数据、影像资料、基因表达谱、电生理记录以及相关文献，通过统一的数据库标准和计算工具进行系统化整合，使研究者能够像查询图书馆目录一样便捷地访问全球脑研究资源。这一理念的提出，标志着神经科学从“个体作坊式”研究向“大规模协作式”科学范式的转变。其具体机制包括建立标准化的数据格式与元数据规范，开发能够自动解析和标注神经数据的软件工具，以及构建分布式网络平台，让不同地区的实验室能够实时上传、共享和交叉验证数据。更重要的是，神经信息学强调计算模型与实验数据的结合——通过算法对海量数据进行模式识别、统计分析和模拟仿真，从而揭示单个实验难以发现的规律，例如神经元群体编码的时空动态、脑区之间的连接权重变化等。这一学科并非单纯的技术堆砌，而是试图建立一套“脑数据的通用语言”，让不同层次、不同模态的神经信息能够在同一框架下互操作。</p><p class="summary">神经信息学的影响迅速超出了实验室范畴。它直接催生了后来一系列大型脑数据库与共享平台的建设，使得人类基因组计划之后，脑科学也拥有了自己的“数据基础设施”。在后续的二十余年中，这一领域的发展为神经退行性疾病研究提供了大规模对照数据，为精神疾病的生物标志物筛选提供了计算工具，也为脑机接口和人工智能算法提供了训练素材。更深远的影响在于方法论层面：神经信息学确立了“数据驱动发现”的研究模式，研究者不再仅仅依赖假设-验证的线性路径，而是可以通过对海量数据的挖掘提出新问题、新假说。这种范式转变与同期兴起的“大数据”思潮相互呼应，使神经科学成为生命科学中最具计算特色的分支之一。</p><p class="summary">对今天的启示而言，神经信息学的诞生提醒我们，科学进步往往并非源于某个孤立的重大发现，而是来自对研究基础设施的重新思考。当数据成为科学的核心资产，如何组织、共享、验证和复用数据，就与设计实验本身同等重要。当前人工智能热潮中，神经科学数据与深度学习模型的结合，正是神经信息学理念的延续与深化。同时，它也带来一个持续存在的挑战：数据标准化与隐私保护之间的平衡，以及如何确保共享数据的质量与伦理合规。回望1990年代那个学科初创的时刻，我们看到的不仅是一个技术工具的集合，更是一种科学精神的转型——即承认脑的复杂性远超个体认知，唯有通过集体智慧的整合，才能逼近其奥秘。神经信息学的故事，至今仍在塑造着每一位神经科学家的工作方式，也提醒着后来者：真正的突破，有时就藏在那些看似枯燥的数据组织与计算工具之中。</p></div></details></section>
   <section id="papers">
   <div class="sec-head">
@@ -736,7 +866,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
   <div class="sec-head">
     <div>
       <h2 class="sec-title"><span class="dot"></span>🏛️ Policy, Funding &amp; News
-        <span class="count">(20)</span></h2>
+        <span class="count">(22)</span></h2>
       <p class="sec-desc">Institutional press, agency announcements, and news.</p>
       
     </div>
@@ -1044,6 +1174,82 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
         
         <div class="foot">
            · <a class="ext" href="https://news.google.com/rss/articles/CBMiZkFVX3lxTE96Q00tQ1lONG95NnBIcVdYbk1ISVBBMWtiQ1ZNSkNwU2k2cGZXOXVhMmd4OGpPOTd1MHpuZ1h6VkE3Q19HRE9RY3RVQ1hMazlDdXJQZHNRR3EyRGxSYzc0bGtrT01yZw?oc=5" target="_blank" rel="noopener">Read ↗</a>
+        </div>
+      </div>
+    </details>
+    
+    <details class="card">
+      <summary>
+        <span class="chevron"></span>
+        <div class="card-main">
+          <h3 data-no-i18n><a href="https://news.google.com/rss/articles/CBMijgFBVV95cUxPSHJhUzROaThpR21jSk40eTVPendtWGE2RnhCTlozMi1fNGZNeUVwbmlGRms4ZmV0YUFWRWE5NXpQZ3dSRkotU3NRV3d6SFQ4V01zenNHZWxZekVLTG9QNjlQRHVQbThMcmFlUEVqWkthVmdJOXh6dkpSeElLZ0tfTUtVUWcxT09MMEJRSTJ3?oc=5" target="_blank" rel="noopener">普林斯顿第一位被ICE拘留的博士生，是一位赴美10年的上海姑娘（美中报导）</a></h3>
+          <div class="meta">
+  <span class="badge b-policy">News</span>
+  
+  
+  
+  <span class="tag t" data-no-i18n>google_news_zh</span>
+  
+  <span class="tag t">2026-11-21</span>
+  
+  
+</div>
+        </div>
+      </summary>
+      <div class="card-body">
+        
+        
+        
+        <p class="summary" data-no-i18n>普林斯顿第一位被ICE拘留的博士生，是一位赴美10年的上海姑娘（美中报导） 美中報導</p>
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        <div class="foot">
+           · <a class="ext" href="https://news.google.com/rss/articles/CBMijgFBVV95cUxPSHJhUzROaThpR21jSk40eTVPendtWGE2RnhCTlozMi1fNGZNeUVwbmlGRms4ZmV0YUFWRWE5NXpQZ3dSRkotU3NRV3d6SFQ4V01zenNHZWxZekVLTG9QNjlQRHVQbThMcmFlUEVqWkthVmdJOXh6dkpSeElLZ0tfTUtVUWcxT09MMEJRSTJ3?oc=5" target="_blank" rel="noopener">Read ↗</a>
+        </div>
+      </div>
+    </details>
+    
+    <details class="card">
+      <summary>
+        <span class="chevron"></span>
+        <div class="card-main">
+          <h3 data-no-i18n><a href="https://news.google.com/rss/articles/CBMijgFBVV95cUxOZndPb0JPVFFuR0Y2VzJBam5MbFBQbGwwcVhrUm5Zd2RuLWk4emRHaG8yUlBtVVRyYzRkSVRWdWsyMTNZTUpsbV91Q2ZnY2VyTkZMSzJhUlB4NjUtMmFZSmpNVGtBRDhCUUZhaWhVTl8wNTFuRXBiOEtSWW41LXQ5Q3c2MklfeDB3UklBSWhB?oc=5" target="_blank" rel="noopener">恐怖！普林斯顿华人女博士生开学术会议，返程时在机场被拘留！MIT双学位背景，曾实习Meta与微软AI，校方已安排律师（美中报导）</a></h3>
+          <div class="meta">
+  <span class="badge b-policy">News</span>
+  
+  
+  
+  <span class="tag t" data-no-i18n>google_news_zh</span>
+  
+  <span class="tag t">2026-11-21</span>
+  
+  
+</div>
+        </div>
+      </summary>
+      <div class="card-body">
+        
+        
+        
+        <p class="summary" data-no-i18n>恐怖！普林斯顿华人女博士生开学术会议，返程时在机场被拘留！MIT双学位背景，曾实习Meta与微软AI，校方已安排律师（美中报导） 美中報導</p>
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        <div class="foot">
+           · <a class="ext" href="https://news.google.com/rss/articles/CBMijgFBVV95cUxOZndPb0JPVFFuR0Y2VzJBam5MbFBQbGwwcVhrUm5Zd2RuLWk4emRHaG8yUlBtVVRyYzRkSVRWdWsyMTNZTUpsbV91Q2ZnY2VyTkZMSzJhUlB4NjUtMmFZSmpNVGtBRDhCUUZhaWhVTl8wNTFuRXBiOEtSWW41LXQ5Q3c2MklfeDB3UklBSWhB?oc=5" target="_blank" rel="noopener">Read ↗</a>
         </div>
       </div>
     </details>
@@ -1752,7 +1958,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
             <td>13</td>
             <td>13</td>
             <td>0</td>
-            <td>275 ms</td>
+            <td>122 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
@@ -1774,7 +1980,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
             <td>800</td>
             <td>100</td>
             <td>0</td>
-            <td>10252 ms</td>
+            <td>15982 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
@@ -1818,7 +2024,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
             <td>0</td>
             <td>0</td>
             <td>0</td>
-            <td>524 ms</td>
+            <td>273 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
@@ -1840,7 +2046,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
             <td>38</td>
             <td>0</td>
             <td>0</td>
-            <td>610 ms</td>
+            <td>325 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
@@ -1859,10 +2065,10 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
           <tr>
             <td data-no-i18n>google_news_zh</td>
             <td><span class="ok">正常</span></td>
-            <td>25</td>
-            <td>25</td>
-            <td>10</td>
-            <td>1906 ms</td>
+            <td>37</td>
+            <td>37</td>
+            <td>12</td>
+            <td>356 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
@@ -1881,10 +2087,10 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
           <tr>
             <td data-no-i18n>journal</td>
             <td><span class="bad">部分覆盖</span></td>
-            <td>460</td>
-            <td>65</td>
+            <td>502</td>
+            <td>69</td>
             <td>0</td>
-            <td>705 ms</td>
+            <td>866 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
@@ -1903,16 +2109,16 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
           <tr>
             <td data-no-i18n>policy</td>
             <td><span class="bad">部分覆盖</span></td>
-            <td>128</td>
-            <td>72</td>
+            <td>82</td>
+            <td>40</td>
             <td>13</td>
-            <td>685 ms</td>
+            <td>742 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
               <p>仅覆盖部分请求</p>
               
-              <p data-i18n="{count} 条因字段不足待确认。" data-i18n-count="15">15 条因字段不足待确认。</p>
+              
               <p data-i18n="请求回溯 · {count} 天" data-i18n-count="8">请求回溯 · 8 天</p>
               
               <details><summary>实际查询</summary><code>Policy RSS · 14 feed(s)</code></details>
@@ -1928,7 +2134,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
             <td>0</td>
             <td>0</td>
             <td>0</td>
-            <td>355 ms</td>
+            <td>474 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
@@ -1950,7 +2156,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
             <td>891</td>
             <td>500</td>
             <td>0</td>
-            <td>2437 ms</td>
+            <td>3492 ms</td>
           </tr>
           
             <tr><td colspan="6" class="source-detail">
@@ -2093,7 +2299,7 @@ brain, neuro, neuron, synapse, neuroinflammation, blood-brain barrier, neuroimag
   <section>
     <h2 class="sec-title"><span class="dot"></span>Warnings</h2>
     <div class="empty">
-      <div>⚠ journal: A journal RSS endpoint did not return a valid feed, HTTP 403</div><div>⚠ policy: Policy RSS is not a valid feed: https://www.nature.com/subjects/epilepsy.rss, Policy RSS is not a valid feed: https://www.nature.com/subjects/psychiatric-disorders.rss, Policy RSS is not a valid feed: https://www.nature.com/subjects/addiction.rss, Policy RSS is not a valid feed: https://www.nature.com/npjmentalhealth.rss, HTTP 403, Policy RSS unavailable: https://www.psychiatryonline.org/action/showFeed?type=etoc&amp;feed=rss&amp;jc=ajp</div>
+      <div>⚠ journal: A journal RSS endpoint did not return a valid feed, HTTP 403</div><div>⚠ policy: Policy RSS is not a valid feed: https://www.nature.com/subjects/addiction.rss, Policy RSS is not a valid feed: https://www.nature.com/subjects/psychiatric-disorders.rss, Policy RSS is not a valid feed: https://www.nature.com/npjmentalhealth.rss, Policy RSS is not a valid feed: https://www.nature.com/subjects/epilepsy.rss, Policy RSS is not a valid feed: https://www.nature.com/mp.rss, HTTP 403, Policy RSS unavailable: https://www.psychiatryonline.org/action/showFeed?type=etoc&amp;feed=rss&amp;jc=ajp, Policy RSS is not a valid feed: https://www.nature.com/natmentalhealth.rss, Policy RSS is not a valid feed: https://www.nature.com/subjects/neuroscience.rss</div>
     </div>
   </section>
   
@@ -2175,7 +2381,7 @@ if (runBtn) {
 }
 </script>
 
-<footer><span>Generated automatically by NeuroDaily</span> · 2026-11-22T19:06:38.251252</footer>
+<footer><span>Generated automatically by NeuroDaily</span> · 2026-11-22T19:09:25.265469</footer>
 <script>
 // Make every top-level section collapsible (AI summary, papers, trials, ...).
 (function initCollapsibleSections(){
