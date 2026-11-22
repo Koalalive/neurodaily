@@ -489,7 +489,7 @@ def DEFAULT_CONFIG() -> Config:
         "daily_paper_hours": 36,
         "manual_paper_hours": 240,
         "trials_hours": 36,
-        "funding_hours": 36,
+        "funding_hours": 168,
         "news_hours": 36,
         "other_lookback_days": 7,
     }

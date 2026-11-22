@@ -502,8 +502,9 @@ class WindowTests(unittest.TestCase):
 
     def test_default_windows(self):
         w = DEFAULT_CONFIG().windows
-        for key in ("daily_paper_hours", "trials_hours", "funding_hours", "news_hours"):
+        for key in ("daily_paper_hours", "trials_hours", "news_hours"):
             self.assertEqual(w[key], 36)
+        self.assertEqual(w["funding_hours"], 168)
         self.assertGreaterEqual(w["manual_paper_hours"], 36)
 
     def test_kind_windows_filter(self):
