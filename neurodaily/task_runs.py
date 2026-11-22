@@ -81,6 +81,7 @@ def _checkpoint(result: DigestResult) -> str:
         "report_locale": result.report_locale,
         "geography": result.geography,
         "topics": result.topics,
+        "search_window": result.search_window,
     })
 
 

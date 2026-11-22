@@ -81,6 +81,12 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
 #msg.ok{color:#34d399}#msg.bad{color:#f87171}
 .pill{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:.75rem;color:var(--muted)}
 .pill.on{color:#34d399;border-color:#164e3a}
+
+html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0b0b0c; }
+::-webkit-scrollbar-thumb { background: #3a4352; border: 2px solid #0b0b0c; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #58647a; }
 </style></head>
 <body>
 <header><h1>⚙ NeuroDaily Settings</h1><a href="/">← Back to dashboard</a><span class="mini" id="cfgpath"></span></header>

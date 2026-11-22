@@ -202,7 +202,8 @@ def build_context(result, cfg: dict | None = None) -> tuple[str, dict]:
     sec = result.sections or {}
     papers = sec.get("papers", [])
     industry = sec.get("industry", [])
-    trials = sec.get("trials_conferences", [])
+    trial_items = [item for item in sec.get("trials_conferences", []) if item.kind == "trial"]
+    conference_items = [item for item in sec.get("trials_conferences", []) if item.kind == "conference"]
     policy = sec.get("policy", [])
     refs: dict[str, dict] = {}
     max_chars = max(0, int(cfg.get("max_input_chars", 16000)))
@@ -210,7 +211,7 @@ def build_context(result, cfg: dict | None = None) -> tuple[str, dict]:
     lines = [
         f"日期：{str(getattr(result, 'generated_at', ''))[:10]}",
         f"抓取总量：{len(result.items)} 条；论文 {len(papers)}；产业/创投 {len(industry)}；"
-        f"临床试验 {len(trials)}；政策/新闻 {len(policy)}",
+        f"临床试验 {len(trial_items)}；学术会议 {len(conference_items)}；政策/新闻 {len(policy)}",
         "",
     ]
     used_chars = len("\n".join(lines))
@@ -247,7 +248,8 @@ def build_context(result, cfg: dict | None = None) -> tuple[str, dict]:
 
     block("论文", papers, int(cfg.get("max_papers", 30)))
     block("产业与创投", industry, int(cfg.get("max_other", 8)))
-    block("临床试验", trials, int(cfg.get("max_other", 8)))
+    block("临床试验", trial_items, int(cfg.get("max_other", 8)))
+    block("学术会议", conference_items, int(cfg.get("max_other", 8)))
     block("政策与新闻", policy, int(cfg.get("max_other", 8)))
 
     otd = getattr(result, "on_this_day", None) or []

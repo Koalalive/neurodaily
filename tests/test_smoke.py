@@ -580,7 +580,8 @@ class ReportTocTests(unittest.TestCase):
         from neurodaily.render import render_html
         h = render_html(build_result())
         self.assertIn('class="toc"', h)
-        self.assertIn('href="#trials_conferences"', h)
+        self.assertIn('href="#trials"', h)
+        self.assertIn('href="#conferences"', h)
         self.assertIn('href="#policy"', h)
         self.assertIn('id="papers"', h)
         self.assertIn('id="industry"', h)

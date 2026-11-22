@@ -25,7 +25,7 @@
 {% endfor %}
 {%- endmacro %}
 
-{% macro block_section(key, title, desc, badge_class) -%}
+{% macro block_section(key, title, desc, badge_class, entries=None) -%}
 <section id="{{ key }}">
   <div class="sec-head">
     <div>
@@ -35,7 +35,7 @@
       {% if key == 'papers' and sort_label %}<p class="sec-desc">排序 · {{ sort_label }}</p>{% endif %}
     </div>
   </div>
-  {% set entries = result.sections.get(key, []) %}
+  {% set entries = entries if entries is not none else result.sections.get(key, []) %}
   {% if entries %}
     {% for it in entries %}
     <details class="card">
@@ -109,6 +109,8 @@
   h1 .logo { background: linear-gradient(90deg, var(--accent), var(--accent2));
              -webkit-background-clip: text; background-clip: text; color: transparent; }
   .sub { color: var(--muted); margin-top: 6px; font-size: .95rem; }
+  .window { color: var(--muted); margin-top: 4px; font-size: .82rem; }
+  .window span { color: var(--accent); font-weight: 700; margin-right: 5px; }
   .chips { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
           padding: 4px 12px; font-size: .8rem; color: var(--accent); }
@@ -230,6 +232,12 @@
   .sec-toggle{margin-left:8px}
   h2.sec-title + .sec-toggle{display:inline-block;vertical-align:middle;margin:0 0 10px 10px}
   .sec-body[hidden]{display:none}
+
+html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0b0b0c; }
+::-webkit-scrollbar-thumb { background: #3a4352; border: 2px solid #0b0b0c; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #58647a; }
 </style>
 </head>
 <body>
@@ -243,7 +251,8 @@
   {% if result.on_this_day %}<a href="#on-this-day">📅 历史上的今天</a>{% endif %}
   <a href="#papers">📄 最新论文</a>
   <a href="#industry">💊 产业与融资</a>
-  <a href="#trials_conferences">🧪 临床试验</a>
+  <a href="#trials">🧪 临床试验</a>
+  <a href="#conferences">🗓️ 学术会议</a>
   <a href="#policy">🏛️ 政策与新闻</a>
   {% if result.config and result.config.journals %}<a href="#journals">📚 期刊</a>{% endif %}
   {% if result.health %}<a href="#source-health">📡 来源状态</a>{% endif %}
@@ -252,6 +261,9 @@
   <div class="wrap">
     <h1><span class="logo">NeuroDaily</span> — <span>{{ digest_title }}</span></h1>
     <div class="sub"><span>Auto-aggregated</span> {{ today }} · <span>Profile</span>: <span data-no-i18n>{{ result.config_profile }}</span></div>
+    {% if result.search_window %}
+    <div class="window"><span>检索时间窗</span> {{ result.search_window.start }} → {{ result.search_window.end }} · {{ result.search_window.hours }}h · {{ result.search_window.mode }}</div>
+    {% endif %}
     {% if result.config %}
     <div class="chips">
       {% for d in result.config.active_disciplines() %}<span class="chip" data-no-i18n>{{ d.name }}</span>{% endfor %}
@@ -261,7 +273,8 @@
       <div class="stat"><b>{{ result.items|length }}</b><span>Items</span></div>
       <div class="stat"><b>{{ result.sections.get('papers', [])|length }}</b><span>Papers</span></div>
       <div class="stat"><b>{{ result.sections.get('industry', [])|length }}</b><span>Industry</span></div>
-      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|length }}</b><span>Trials / Conf</span></div>
+      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'trial')|list|length }}</b><span>Trials</span></div>
+      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'conference')|list|length }}</b><span>Conferences</span></div>
       <div class="stat"><b>{{ result.sections.get('policy', [])|length }}</b><span>Policy / News</span></div>
     </div>
     <div class="toolbar">
@@ -280,7 +293,10 @@
 <main class="wrap">
   {{ block_section('papers', '📄 Latest Papers', 'New PubMed, arXiv, and bioRxiv preprints matching your focus.', 'b-doc') }}
   {{ block_section('industry', '💊 Commercial & Regulatory Progress', 'Recent FDA drug approvals and 510(k) device clearances.', 'b-drug') }}
-  {{ block_section('trials_conferences', '🧪 Trials & Conference Signals', 'New + updated clinical studies and event signals.', 'b-trial') }}
+  {% set trial_items = result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'trial')|list %}
+  {% set conference_items = result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'conference')|list %}
+  {{ block_section('trials', '🧪 Clinical Trials', 'New + updated clinical studies.', 'b-trial', trial_items) }}
+  {{ block_section('conferences', '🗓️ Academic Conferences', 'Upcoming conferences, deadlines and official links.', 'b-conference', conference_items) }}
   {{ block_section('policy', '🏛️ Policy, Funding & News', 'Institutional press, agency announcements, and news.', 'b-policy') }}
 
   {% if result.config and result.config.journals %}

@@ -12,7 +12,7 @@ import time
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
 
 from .config import Config, DEFAULT_CONFIG
@@ -46,6 +46,7 @@ class DigestResult:
     report_revision: int = 1
     report_locale: str = "zh"
     geography: dict | None = None
+    search_window: dict = field(default_factory=dict)
     topics: dict | None = None
 
     def counts(self) -> dict[str, int]:
@@ -331,17 +332,26 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
     except Exception:
         on_this_day = []
 
+    generated = datetime.now()
+    paper_hours = int(windows.get("paper", 0) or 0)
+    search_window = {
+        "mode": mode,
+        "hours": paper_hours,
+        "start": (generated - timedelta(hours=paper_hours)).strftime("%Y-%m-%d %H:%M"),
+        "end": generated.strftime("%Y-%m-%d %H:%M"),
+    } if paper_hours else {}
     final = DigestResult(
         items=deduped,
         sections=sections,
         health=health,
-        generated_at=datetime.now().isoformat(),
+        generated_at=generated.isoformat(),
         config_profile=config.profile,
         config=config,
         errors=errors,
         on_this_day=on_this_day,
         on_this_day_lang=_lang,
         fingerprint=fingerprint,
+        search_window=search_window,
     )
     if record:
         final.history_id = hist.record_run(

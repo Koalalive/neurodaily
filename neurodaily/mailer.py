@@ -32,21 +32,21 @@ _WEEKDAYS_BY_LANG = {
 }
 _LABELS = {
     "zh": {"latest": "📄 最新论文", "industry": "💊 商业与监管",
-           "trials": "🧪 临床试验与会议", "policy": "🏛️ 政策与新闻",
+           "trials": "🧪 临床试验", "policy": "🏛️ 政策与新闻",
            "items": "条", "papers": "篇论文", "summary": "🧠 今日 AI 摘要",
-           "otd": "📅 历史上的今天", "footer": "本邮件由 NeuroDaily 自动生成。",
+           "otd": "📅 历史上的今天", "conferences": "🗓️ 学术会议", "footer": "本邮件由 NeuroDaily 自动生成。",
            "attach": "完整交互式报告见附件 HTML（若附件缺失则因体积超限）。",
            "subject": "神经病专家的厕所读物-{date} {weekday}"},
     "en": {"latest": "📄 Latest papers", "industry": "💊 Industry & regulatory",
-           "trials": "🧪 Trials & conferences", "policy": "🏛️ Policy & news",
+           "trials": "🧪 Clinical trials", "policy": "🏛️ Policy & news",
            "items": "items", "papers": "papers", "summary": "🧠 AI daily overview",
-           "otd": "📅 On this day", "footer": "Generated automatically by NeuroDaily.",
+           "otd": "📅 On this day", "conferences": "🗓️ Academic conferences", "footer": "Generated automatically by NeuroDaily.",
            "attach": "The complete interactive report is attached as HTML.",
            "subject": "NeuroDaily Digest-{date} {weekday}"},
     "ru": {"latest": "📄 Новые публикации", "industry": "💊 Индустрия и регулирование",
-           "trials": "🧪 Испытания и конференции", "policy": "🏛️ Политика и новости",
+           "trials": "🧪 Клинические испытания", "policy": "🏛️ Политика и новости",
            "items": "записей", "papers": "публикаций", "summary": "🧠 ИИ-обзор дня",
-           "otd": "📅 В этот день", "footer": "Письмо сформировано автоматически NeuroDaily.",
+           "otd": "📅 В этот день", "conferences": "🗓️ Академические конференции", "footer": "Письмо сформировано автоматически NeuroDaily.",
            "attach": "Полный интерактивный отчёт приложен в HTML.",
            "subject": "NeuroDaily — {date} {weekday}"},
 }
@@ -187,7 +187,8 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
     sections = result.sections or {}
     papers_all = sections.get("papers", [])
     industry = sections.get("industry", [])
-    trials = sections.get("trials_conferences", [])
+    trial_items = [item for item in sections.get("trials_conferences", []) if item.kind == "trial"]
+    conferences = [item for item in sections.get("trials_conferences", []) if item.kind == "conference"]
     policy = sections.get("policy", [])
     summary_mode = (cfg.get("body_mode") or "summary") == "summary"
     n_papers = int(cfg.get("summary_papers", 12)) if summary_mode else int(cfg.get("max_papers", 40))
@@ -261,17 +262,17 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
         parts.extend(_item_html(it, accent) for it in papers)
 
     if summary_mode:
-        counts = [(labels["industry"], len(industry)), (labels["trials"], len(trials)),
-                  (labels["policy"], len(policy))]
+        counts = [(labels["industry"], len(industry)), (labels["trials"], len(trial_items)),
+                  (labels["conferences"], len(conferences)), (labels["policy"], len(policy))]
         line = " · ".join(f"{name} {n} 条" for name, n in counts if n)
         if line:
             parts.append(f'<div style="margin:16px 0;color:#555;font-size:13px">{line}</div>')
         max_other = int(cfg.get("max_other", 15))
-        for item in industry[:max_other] + trials[:max_other] + policy[:max_other]:
+        for item in industry[:max_other] + trial_items[:max_other] + conferences[:max_other] + policy[:max_other]:
             parts.append(_item_html(item, accent, summary_len=120))
     else:
-        for title, items in [(labels["industry"], industry), (labels["trials"], trials),
-                             (labels["policy"], policy)]:
+        for title, items in [(labels["industry"], industry), (labels["trials"], trial_items),
+                             (labels["conferences"], conferences), (labels["policy"], policy)]:
             if items:
                 parts.append(f'<h2 style="font-size:16px;color:{accent};margin:22px 0 6px">{title}</h2>')
                 parts.extend(_item_html(it, accent) for it in items[: int(cfg.get("max_other", 15))])
@@ -306,9 +307,9 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
             if it.url:
                 lines.append(f"  {it.url}")
         lines.append("")
-    lines.append(f"{labels['industry']} {len(industry)} · {labels['trials']} {len(trials)} · {labels['policy']} {len(policy)}")
+    lines.append(f"{labels['industry']} {len(industry)} · {labels['trials']} {len(trial_items)} · {labels['conferences']} {len(conferences)} · {labels['policy']} {len(policy)}")
     limit = int(cfg.get("max_other", 15))
-    for item in industry[:limit] + trials[:limit] + policy[:limit]:
+    for item in industry[:limit] + trial_items[:limit] + conferences[:limit] + policy[:limit]:
         lines.append(f"- {item.title}" + (f"  {item.url}" if item.url else ""))
     text = "\n".join(lines)
     return subject_for(result, cfg, language), html, text

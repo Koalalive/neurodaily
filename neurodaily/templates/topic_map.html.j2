@@ -33,9 +33,9 @@
     const root = document.getElementById('topic-map');
     const data = JSON.parse(document.getElementById('nd-topic-data').textContent);
     const tm = {
-      zh: {title:'🧭 主题景观 LDA + t-SNE', note:'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。', select:'选择圆点', hint:'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。'},
-      en: {title:'🧭 Topic landscape LDA + t-SNE', note:'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.', select:'Select a point', hint:'Color is the dominant LDA topic; closer points have more similar topic distributions.'},
-      ru: {title:'🧭 Тематический ландшафт LDA + t-SNE', note:'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.', select:'Выберите точку', hint:'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.'}
+      zh: {title:'🧭 主题景观 LDA + t-SNE', note:'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。', select:'选择圆点', hint:'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。', all:'全部', items:'个条目', topics:'个主题', original:'阅读原文 ↗', confidence:'主题置信度：', topic:'主题', kinds:{paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}},
+      en: {title:'🧭 Topic landscape LDA + t-SNE', note:'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.', select:'Select a point', hint:'Color is the dominant LDA topic; closer points have more similar topic distributions.', all:'All', items:'items', topics:'topics', original:'Read source ↗', confidence:'Topic confidence: ', topic:'Topic', kinds:{paper:'Paper',trial:'Trial',news:'News',policy:'Policy',funding:'Industry',conference:'Conference'}},
+      ru: {title:'🧭 Тематический ландшафт LDA + t-SNE', note:'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.', select:'Выберите точку', hint:'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.', all:'Все', items:'записей', topics:'тем', original:'Открыть источник ↗', confidence:'Уверенность темы: ', topic:'Тема', kinds:{paper:'Статья',trial:'Испытание',news:'Новость',policy:'Политика',funding:'Индустрия',conference:'Конференция'}}
     }[{{ language|tojson }}] || null;
     if (tm) {
       const title = root.querySelector('[data-tm="title"]'); if (title) title.textContent = tm.title;
@@ -57,7 +57,7 @@
     const hue = id => (Number(id) * 47 + 190) % 360;
     const color = id => `hsl(${hue(id)} 72% 62%)`;
     const esc = value => String(value == null ? '' : value);
-    const kindLabel = kind => ({paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业'}[kind] || kind);
+    const kindLabel = kind => (tm?.kinds?.[kind] || ({paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}[kind] || kind));
     const topics = (data.topics || []).slice().sort((a,b) => b.size - a.size);
     const shown = () => data.points.filter(p => selectedTopic === 'all' || p.topic === selectedTopic);
     const scale = () => {
@@ -87,18 +87,18 @@
         ctx.lineWidth = p === selectedPoint ? 3 : 1.2; ctx.strokeStyle = p === selectedPoint ? '#fff' : '#0b172a'; ctx.stroke();
       }
       ctx.fillStyle = '#9fb3c8'; ctx.font = '18px -apple-system,Segoe UI,sans-serif';
-      ctx.fillText(visible.length + ' 个条目 · ' + topics.length + ' 个主题', 18, 28);
+      ctx.fillText(visible.length + ' ' + (tm?.items || '个条目') + ' · ' + topics.length + ' ' + (tm?.topics || '个主题'), 18, 28);
     }
     function detail(p) {
       side.replaceChildren();
-      const h = document.createElement('h3'); h.textContent = p.label || ('主题 ' + p.topic); side.append(h);
+      const h = document.createElement('h3'); h.textContent = p.label || ((tm?.topic || '主题') + ' ' + p.topic); side.append(h);
       const title = document.createElement('p'); title.textContent = p.title || ''; title.style.fontWeight = '700'; side.append(title);
       const meta = document.createElement('p'); meta.textContent = [kindLabel(p.kind), p.venue, p.date].filter(Boolean).join(' · '); side.append(meta);
       if (p.summary) { const summary = document.createElement('p'); summary.textContent = p.summary; side.append(summary); }
       if (/^https?:/i.test(p.url || '')) {
-        const a = document.createElement('a'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '阅读原文 ↗'; side.append(a);
+        const a = document.createElement('a'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = tm?.original || '阅读原文 ↗'; side.append(a);
       }
-      const hint = document.createElement('p'); hint.className = 'tm-note'; hint.textContent = '主题置信度：' + (p.confidence != null ? Math.round(p.confidence*100) + '%' : '—'); side.append(hint);
+      const hint = document.createElement('p'); hint.className = 'tm-note'; hint.textContent = (tm?.confidence || '主题置信度：') + (p.confidence != null ? Math.round(p.confidence*100) + '%' : '—'); side.append(hint);
     }
     function pick(event) {
       const rect = canvas.getBoundingClientRect();
@@ -118,7 +118,7 @@
       b.onclick = () => { selectedTopic = id; selectedPoint = null; legend.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); draw(); };
       return b;
     }
-    legend.append(chip('全部', 'all'));
+    legend.append(chip(tm?.all || '全部', 'all'));
     for (const t of topics.slice(0, 14)) legend.append(chip((t.label || ('主题 '+t.id)) + ' · ' + t.size, t.id));
     canvas.addEventListener('click', pick);
     draw();
