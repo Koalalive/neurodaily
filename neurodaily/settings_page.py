@@ -307,6 +307,7 @@ footer{position:sticky;bottom:0;background:#000;border-top:1px solid var(--line)
       <div><label>From</label><input id="push_from"></div>
     </div>
     <div class="inline" style="margin-top:8px"><label>Subject template</label><input id="push_subject" style="flex:1"></div>
+    <div style="margin-top:8px"><label>Public report URL (optional)</label><input id="push_public_url" type="url" placeholder="https://your-server.example/report/latest" style="width:100%"></div>
     <div class="inline" style="margin-top:8px"><label>SMTP app password</label>
       <input type="password" id="push_password" placeholder="Leave blank to keep" style="flex:1">
       <span class="mini" id="push_pw_state"></span></div>
@@ -1068,6 +1069,7 @@ function pushPayload(){
       username:el('push_user').value.trim(),
       from:el('push_from').value.trim(),
       subject_template:el('push_subject').value.trim(),
+      public_url:el('push_public_url').value.trim(),
       attach_report:el('push_attach').checked},
     webhooks:{feishu:el('push_feishu').value.trim(),
       wecom:el('push_wecom').value.trim()}};
@@ -1090,6 +1092,7 @@ async function loadPush(){
     el('push_user').value=e.username||'';
     el('push_from').value=e.from||'';
     el('push_subject').value=e.subject_template||'';
+    el('push_public_url').value=e.public_url||'';
     el('push_attach').checked=e.attach_report!==false;
     el('push_pw_state').textContent=d.password_set?'(set)':'(not set)';
     var w=d.webhooks||{};

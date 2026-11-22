@@ -99,6 +99,7 @@ DEFAULT_CFG = {
     "attach_max_mb": 8,
     "language": "zh",
     "recipients": [],
+    "public_url": "",
 }
 
 
@@ -241,6 +242,14 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
                 f'<div style="color:#888;font-size:12px;margin:2px 0 6px">{_esc(e.get("kind_label"))} · '
                 f'{_esc(e.get("category_label"))}</div>{paras}</div>'
             )
+
+    public_url = str(cfg.get("public_url") or "").strip()
+    if public_url.startswith(("http://", "https://")):
+        safe_url = _esc(public_url)
+        label = {"zh": "在浏览器打开完整交互式日报（地图与主题图）",
+                 "en": "Open the full interactive digest in a browser (map and topics)",
+                 "ru": "Открыть полный интерактивный дайджест в браузере"}.get(language, "打开完整日报")
+        parts.append(f'<p style="margin:12px 0"><a href="{safe_url}" style="color:{accent};font-weight:700">{_esc(label)}</a></p>')
 
     if papers:
         hint = (f"显示前 {len(papers)} 篇" if language == "zh" else f"Showing {len(papers)} papers") + (

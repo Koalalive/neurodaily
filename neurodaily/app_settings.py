@@ -25,7 +25,8 @@ SCHEDULE_KEYS = {"enabled", "hour", "minute"}
 AI_KEYS = {"enabled", "base_url", "model", "max_papers", "max_other", "max_input_chars", "max_tokens"}
 EMAIL_KEYS = {"enabled", "to", "recipients", "language", "smtp_host", "smtp_port", "use_ssl",
               "username", "from", "from_name", "subject_template", "attach_report",
-              "attach_max_mb", "summary_papers", "summary_chars", "body_mode", "max_papers", "max_other"}
+              "attach_max_mb", "summary_papers", "summary_chars", "body_mode", "max_papers", "max_other",
+              "public_url"}
 SECRET_KEYS = {"password", "api_key", "password_env", "api_key_env", "password_file", "api_key_file"}
 
 
