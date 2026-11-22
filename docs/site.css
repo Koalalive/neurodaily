@@ -96,9 +96,10 @@ h1 { font-size: clamp(2.9rem, 6.8vw, 5.75rem); line-height: 1.16; letter-spacing
 .button-secondary:hover { border-color: var(--gold); color: var(--gold); }
 
 .hero-art {
-  width: min(100%, 386px);
+  width: min(100%, 193px);
   position: relative;
-  justify-self: end;
+  justify-self: center;
+  margin-inline: auto;
   padding: clamp(9px, 1.4vw, 15px);
   border: 1px solid #f1d79065;
   border-radius: 22px;
@@ -170,7 +171,7 @@ code { font: .91em ui-monospace, "SFMono-Regular", Consolas, monospace; overflow
   .wordmark img { width: 28px; }
   nav { column-gap: 18px; }
   .hero-layout { grid-template-columns: 1fr; gap: 25px; padding-block: 39px 34px; }
-  .hero-art { justify-self: start; width: 148px; }
+  .hero-art { justify-self: center; width: 120px; }
   .hero-line { margin-top: 13px; }
   .hero-description { margin-top: 13px; }
   .hero-actions { margin-top: 19px; }
