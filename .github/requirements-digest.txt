@@ -54,8 +54,9 @@ scipy==1.18.1 \
     --hash=sha256:f55fa87b6c612ecd6b058f167c53231b1d14e412efe361d3d6e38b3631c73218
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
-starlette==1.6.0 \
-    --hash=sha256:a86dd39d14bb45f85a3d18525215a9ef0cfd1f192ac793220e72598c90335f0c
+starlette==1.10.0 \
+    --hash=sha256:478c0ab3b4ced6e82719849c118fa406f0278a3499c1a898cd15cd31bdc38ce4 \
+    --hash=sha256:b8399098d4c1e3522734f7235dc79b1fc967f96cf139c81e0fa30479e0685f9b
 threadpoolctl==3.8.0 \
     --hash=sha256:f1b49c82704d50f13ffae019c727b0fa4f6791a58f48f06a09c45face1be66da
 typing-extensions==4.16.0 \
