@@ -28,7 +28,8 @@ Workflow: `.github/workflows/daily-demo.yml`
 - It verifies the demo config before building:
   - `windows.trials_hours >= 168`
   - `sources.trials.lookback_days >= 7`
-- It verifies generated pages contain `trials`, `conferences`, and translatable navigation before committing.
+- It verifies generated pages contain `trials`, `conferences`, AI summary, research map and no private prompt before committing.
+- It writes `docs/demo/last-updated.txt` on every successful run; this heartbeat also keeps the public schedule active on quiet days.
 - `concurrency: daily-demo` prevents overlapping runs.
 
 Supervisor checks after 08:00 Asia/Shanghai:
