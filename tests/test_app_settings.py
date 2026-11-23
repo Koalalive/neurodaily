@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from neurodaily import app_settings
+from neurodaily import ai_summary, app_settings, mailer
 
 
 class AppSettingsTests(unittest.TestCase):
@@ -18,6 +18,24 @@ class AppSettingsTests(unittest.TestCase):
     def test_import_requires_correct_wrapper(self):
         with self.assertRaises(ValueError):
             app_settings.import_settings({"format": "wrong", "version": 1, "settings": {}})
+
+    def test_import_rejects_server_changes_before_writing_any_settings(self):
+        for settings, message in (
+            ({"ai": {"base_url": "https://other.example.test/v1"}}, "API"),
+            ({"email": {"smtp_host": "smtp.other.example.test"}}, "SMTP"),
+        ):
+            with self.subTest(settings=settings), \
+                 patch.object(ai_summary, "load_cfg", return_value={**ai_summary.DEFAULT_CFG,
+                                                                    "api_key": "saved-key"}), \
+                 patch.object(mailer, "load_cfg", return_value={**mailer.DEFAULT_CFG,
+                                                                 "password": "saved-password"}), \
+                 patch.object(app_settings, "Config") as config, patch.object(app_settings, "_write") as write:
+                document = {"format": app_settings.FORMAT, "version": 1,
+                            "settings": {"output": {"dir": "elsewhere"}, **settings}}
+                with self.assertRaisesRegex(ValueError, message):
+                    app_settings.import_settings(document)
+                config.load.assert_not_called()
+                write.assert_not_called()
 
     def test_import_merges_only_whitelisted_sections(self):
         current = {"settings": {"format": "x"}}

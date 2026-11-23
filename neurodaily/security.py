@@ -33,24 +33,38 @@ def validate_http_url(value: str, *, allow_private: bool | None = None,
         raise ValueError("URL must not contain embedded credentials")
     if allow_private is None:
         allow_private = allow_private_sources()
-    hosts = {parts.hostname}
+    hosts = (parts.hostname,)
     if resolve:
-        try:
-            hosts = {info[4][0] for info in socket.getaddrinfo(parts.hostname, parts.port or 0,
-                                                               type=socket.SOCK_STREAM)}
-        except OSError as exc:
-            raise ValueError(f"URL host cannot be resolved: {parts.hostname}") from exc
+        public_addresses(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80), allow_private)
+    elif not allow_private:
+        _check_public_addresses(hosts)
+    return url
+
+
+def public_addresses(host: str, port: int, allow_private: bool = False) -> tuple[str, ...]:
+    try:
+        addresses = tuple(dict.fromkeys(info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)))
+    except OSError as exc:
+        raise ValueError("Source host could not be resolved") from exc
+    if not addresses:
+        raise ValueError("Source host could not be resolved")
+    if not allow_private:
+        _check_public_addresses(addresses)
+    return addresses
+
+
+def _check_public_addresses(hosts) -> None:
     for raw in hosts:
         try:
             ip = ipaddress.ip_address(raw)
         except ValueError:
-            if str(raw).casefold() in {"localhost", "localhost.localdomain"} and not allow_private:
+            if raw.casefold().rstrip(".") in {"localhost", "localhost.localdomain"}:
                 raise ValueError("URL points to localhost") from None
             continue
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            if not allow_private:
-                raise ValueError("URL resolves to a private or reserved address")
-    return url
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        if not ip.is_global or ip.is_reserved or ip.is_multicast or getattr(ip, "is_site_local", False):
+            raise ValueError("URL resolves to a private or reserved address")
 
 
 def validate_label(value: str) -> str:

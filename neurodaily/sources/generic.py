@@ -100,13 +100,13 @@ def fetch_rss(name: str, config, logger=None) -> list[Item]:
     try:
         validate_http_url(url, resolve=False)
     except ValueError:
-        record_failure(f"Blocked RSS URL: {url}")
+        record_failure("Blocked RSS URL")
         return []
     record_query("Configured RSS feed")
     mark_sampled()
     preview = bool(opts.get("preview"))
     resp = get(url, timeout=8.0 if preview else 15.0, retries=0 if preview else 1,
-               user_agent="python-httpx")
+               user_agent="python-httpx", untrusted_url=True)
     if resp is None:
         if logger:
             logger.warning("generic rss %s: fetch failed", name)
@@ -179,7 +179,7 @@ def fetch_json(name: str, config, logger=None) -> list[Item]:
         return []
     record_query("Configured JSON API")
     mark_sampled()
-    resp = get(url, timeout=20.0, retries=1, user_agent="python-httpx")
+    resp = get(url, timeout=20.0, retries=1, user_agent="python-httpx", untrusted_url=True)
     if resp is None:
         if logger:
             logger.warning("generic json %s: fetch failed", name)

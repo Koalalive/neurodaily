@@ -42,10 +42,11 @@ curl -fsSL https://koalalive.github.io/neurodaily/demo/latest-report.zh.html | \
 
 Expected: a successful `daily-demo` run and a non-zero trial count when ClinicalTrials.gov has fresh registry updates. A genuinely empty result is allowed, but verify the source health and the 168h config first.
 
-The `daily-demo` workflow receives `NEURODAILY_LLM_API_KEY`; AI summaries and
-the research-activity map run on the GitHub runner, and the workflow fails loudly
-if either section disappears from the generated public demo. The public snapshot
-removes the private focus-prompt section.
+The `daily-demo` workflow builds summaries and the research map in a read-only
+`generate` job. It checks the three public HTML files for required sections, the
+focus prompt and credentials before transferring them to the `publish` job.
+Only `publish` has repository write access. The two scheduled digests use the
+hashed Ubuntu/Python 3.12 dependency lock in `.github/requirements-digest.txt`.
 
 Important: GitHub disables scheduled workflows after 60 days without repository activity. If the 08:00 run stops, trigger `daily-demo` manually and make a normal commit; then verify the schedule is re-enabled in Actions.
 
@@ -97,10 +98,11 @@ Known fixed release-test issue: Linux and Windows upgrade checks were requesting
 Local tests:
 
 ```bash
+.venv/bin/python -m pip install -e '.[test]'
 .venv/bin/python -m unittest discover -s tests
 ```
 
-Expected: 241 tests pass.
+The CI test matrix uses Python 3.12 and 3.13.
 
 Demo build:
 
@@ -167,10 +169,17 @@ The website language switch is in `docs/site.js`; current expected document link
 - The LLM key is stored in the GitHub Environment `automation`, not as a repository secret.
 - `daily-demo` and `daily-digest` declare `environment: automation`; the repository-level LLM secret was deleted.
 - The `automation` environment is restricted to the `main` deployment branch.
-- `.github/CODEOWNERS` assigns workflow/security files to `@Koalalive`.
 - Only `Koalalive` has repository write/admin access (verified collaborator list).
 - `.github/CODEOWNERS` assigns workflow/security files to `@Koalalive`.
-- A main ruleset requiring PR/code-owner review was tested but reverted: GitHub Actions could not bypass it for the scheduled snapshot push, which would break the 08:00 update. Branch protection is therefore not active; daily automation relies on the sole-owner permission boundary.
+- `Protect main history` blocks branch deletion and non-fast-forward pushes to
+  `main`. The daily snapshot job can still make a normal push. Required PR review
+  is not enabled because the scheduled snapshot job also writes to `main`.
 - `secret-scan.yml` runs `scripts/check_secrets.py` on push and pull requests.
 - Local pre-commit: `git config core.hooksPath .githooks` (the hook scans staged files).
 - GitHub Secret Scanning and push protection are enabled on the public repository.
+- Dependabot alerts and automatic security update proposals are enabled. Weekly
+  dependency audits cover the locked Python digest environment and the desktop npm lockfile.
+- User-configured feeds and article links are resolved and validated at each
+  request and redirect. The guarded client connects to validated public addresses
+  directly and does not inherit proxy settings. Set `NEURODAILY_ALLOW_PRIVATE_SOURCES=1`
+  only when explicitly running a trusted local feed or an installer fixture.

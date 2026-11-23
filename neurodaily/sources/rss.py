@@ -34,7 +34,7 @@ def _fetch_meta_description(url: str) -> str:
     the article page to extract the abstract from ``<meta name=description>`` /
     ``og:description``. Timeout-bounded and non-fatal on failure.
     """
-    resp = get(url, timeout=12.0, retries=1, user_agent="python-httpx")
+    resp = get(url, timeout=12.0, retries=1, user_agent="python-httpx", untrusted_url=True)
     if resp is None:
         return ""
     text = resp.text
@@ -54,17 +54,18 @@ def _fetch_meta_description(url: str) -> str:
 def _parse_feed(url: str, kind: str, *, preview: bool = False) -> list[Item]:
     """Parse one feed URL into Items (caller applies the result limit)."""
     # feedparser.parse(url) blocks without timeout and stalls the fetch pool.
-    resp = get(url, timeout=8.0 if preview else 15.0, retries=0 if preview else 1, user_agent="python-httpx")
+    resp = get(url, timeout=8.0 if preview else 15.0, retries=0 if preview else 1,
+               user_agent="python-httpx", untrusted_url=True)
     if resp is None:
-        record_failure(f"Policy RSS unavailable: {url}")
+        record_failure("Policy RSS unavailable")
         return []
     try:
         parsed = feedparser.parse(resp.content)
     except Exception:
-        record_failure(f"Policy RSS could not be parsed: {url}")
+        record_failure("Policy RSS could not be parsed")
         return []
     if not parsed.entries and (parsed.get("bozo") or not parsed.get("version")):
-        record_failure(f"Policy RSS is not a valid feed: {url}")
+        record_failure("Policy RSS is not a valid feed")
         return []
     record_candidates(len(parsed.entries))
     out: list[Item] = []
@@ -116,7 +117,7 @@ def fetch(config, logger=None) -> list[Item]:
             validate_http_url(url, resolve=False)
             safe_feeds.append(url)
         except ValueError:
-            record_failure(f"Blocked RSS URL: {url}")
+            record_failure("Blocked RSS URL")
     feeds = safe_feeds
     if not feeds:
         return []

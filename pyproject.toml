@@ -8,14 +8,15 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "httpx>=0.27",
+    "certifi>=2026.10.18",
     "feedparser>=6.0",
     "jinja2>=3.1",
-    "beautifulsoup4>=4.12",
     "python-dateutil>=2.9",
 ]
 
 [project.optional-dependencies]
 topics = ["scikit-learn>=1.4"]
+test = ["beautifulsoup4>=4.12", "soupsieve>=4.0"]
 
 [project.scripts]
 neurodaily = "neurodaily.cli:main"

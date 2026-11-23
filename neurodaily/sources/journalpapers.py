@@ -56,7 +56,7 @@ def _doi(entry) -> str:
 def _parse_feed(config, journal_name: str, rss_url: str, *, advanced: bool = False,
                 preview: bool = False, aliases=(), issns=()) -> list[Item]:
     resp = get(rss_url, timeout=8.0 if preview else 15.0,
-               retries=0 if preview else 1, user_agent="python-httpx")
+               retries=0 if preview else 1, user_agent="python-httpx", untrusted_url=True)
     if resp is None:
         return []
     try:

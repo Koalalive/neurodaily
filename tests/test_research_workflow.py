@@ -76,7 +76,7 @@ class ResearchWorkflowTests(unittest.TestCase):
         <title>Memory and circuit</title><link>https://example.test/paper</link>
         <pubDate>Tue, 03 Mar 2020 08:00:00 GMT</pubDate></item></channel></rss>"""
         transport = httpx.MockTransport(lambda _: httpx.Response(200, text=rss))
-        with httpx.Client(transport=transport) as network, patch.object(http, "_client", network):
+        with httpx.Client(transport=transport) as network, patch.object(http, "_source_client", network):
             response = self.client.post("/api/search/preview", json=self.config.to_dict())
         self.assertEqual(response.status_code, 200, response.text)
         result = response.json()

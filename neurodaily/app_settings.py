@@ -122,6 +122,19 @@ def import_settings(document: Any, config_path: str | None = None) -> dict:
     if not isinstance(settings, dict):
         raise ValueError("settings must be an object")
 
+    ai = settings.get("ai")
+    if isinstance(ai, dict):
+        current = ai_summary.load_cfg()
+        incoming = {key: ai[key] for key in AI_KEYS if key in ai}
+        ai, _ = ai_summary._settings_draft(incoming, current)
+        ai.update({key: incoming[key] for key in incoming.keys() - {"base_url", "enabled", "model"}})
+
+    email = settings.get("email")
+    if isinstance(email, dict):
+        saved = mailer.load_cfg()
+        email = {**saved, **{key: value for key, value in email.items() if key in EMAIL_KEYS}}
+        mailer.validate_smtp_change(saved, email)
+
     cfg = Config.load(config_path)
     if "output" in settings:
         cfg.output = _merge(cfg.output, settings["output"], OUTPUT_KEYS)
@@ -136,20 +149,16 @@ def import_settings(document: Any, config_path: str | None = None) -> dict:
         cfg.scheduled = current
     cfg.save(config_path)
 
-    email = settings.get("email")
     if isinstance(email, dict):
-        current = mailer.load_cfg()
-        current.update({key: value for key, value in email.items()
-                        if key in EMAIL_KEYS and key not in SECRET_KEYS})
-        if isinstance(current.get("recipients"), list):
-            current["recipients"] = [
+        if isinstance(email.get("recipients"), list):
+            email["recipients"] = [
                 {"address": str(row.get("address", "")).strip(),
                  "time": str(row.get("time", "")).strip(),
                  "language": str(row.get("language") or "zh")}
-                for row in current["recipients"] if isinstance(row, dict) and row.get("address")
+                for row in email["recipients"] if isinstance(row, dict) and row.get("address")
             ]
-            current["to"] = [row["address"] for row in current["recipients"]]
-        _write(mailer.CFG_PATH, current)
+            email["to"] = [row["address"] for row in email["recipients"]]
+        _write(mailer.CFG_PATH, email)
 
     hooks = settings.get("webhooks")
     if isinstance(hooks, dict):
@@ -158,11 +167,8 @@ def import_settings(document: Any, config_path: str | None = None) -> dict:
                         if key in hooks and hooks[key]})
         _write(webhooks.CFG_PATH, current)
 
-    ai = settings.get("ai")
     if isinstance(ai, dict):
-        current = ai_summary.load_cfg()
-        current.update({key: ai[key] for key in AI_KEYS if key in ai})
-        _write(ai_summary.CFG_PATH, current)
+        _write(ai_summary.CFG_PATH, ai)
 
     ui = settings.get("ui")
     if isinstance(ui, dict) and ui.get("language") in {"zh", "en", "ru"}:

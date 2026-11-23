@@ -490,7 +490,8 @@ def _chat_request(base_url: str, model: str, key: str, messages: list[dict],
                   max_tokens: int, timeout: int, *, purpose: str = "other",
                   run_id: int | None = None, profile: str | None = None,
                   temperature: float = 0.4, response_format: dict | None = None) -> dict:
-    url = base_url.rstrip("/").removesuffix("/chat/completions") + "/chat/completions"
+    base_url = _api_base(base_url)
+    url = base_url + "/chat/completions"
     request = {"model": model, "temperature": temperature, "max_tokens": max_tokens, "messages": messages}
     if response_format is not None:
         request["response_format"] = response_format

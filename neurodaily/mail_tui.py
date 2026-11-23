@@ -33,11 +33,8 @@ def load_cfg() -> dict:
 
 
 def save_cfg(cfg: dict) -> None:
-    os.makedirs(os.path.dirname(CFG_PATH), exist_ok=True)
-    tmp = CFG_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, CFG_PATH)
+    from .app_settings import _write
+    _write(CFG_PATH, cfg)
 
 
 def valid(email: str) -> bool:
@@ -55,6 +52,12 @@ def has_password(cfg: dict | None = None) -> bool:
 
 
 def set_password(pw: str, cfg: dict | None = None) -> str:
+    if cfg is not None and cfg.get("password"):
+        saved = load_cfg()
+        saved["password"] = pw.strip()
+        save_cfg(saved)
+        cfg["password"] = saved["password"]
+        return CFG_PATH
     path = password_file(cfg)
     d = os.path.dirname(path)
     if d:
@@ -66,11 +69,17 @@ def set_password(pw: str, cfg: dict | None = None) -> str:
 
 
 def clear_password(cfg: dict | None = None) -> bool:
+    saved = load_cfg()
+    removed = bool(saved.pop("password", None))
+    if removed:
+        save_cfg(saved)
+        if cfg is not None:
+            cfg.pop("password", None)
     try:
         os.remove(password_file(cfg))
         return True
     except Exception:
-        return False
+        return removed
 
 
 def add_recipient(email: str) -> tuple[bool, str]:
@@ -247,26 +256,25 @@ def _run_tui() -> None:
                 if _confirm(stdscr, "Clear saved SMTP password? (y/n)"):
                     status = "password cleared" if clear_password(cfg) else "no password file"
             elif ch == ord("c"):
+                from .mailer import validate_smtp_change
+
                 host = _input(stdscr, "SMTP host: ", initial=str(cfg.get("smtp_host", "")))
                 port = _input(stdscr, "SMTP port: ", initial=str(cfg.get("smtp_port", 587)))
                 sslf = _input(stdscr, "Use SSL? (y/N): ", initial=("y" if cfg.get("use_ssl") else "n"))
                 user = _input(stdscr, "username: ", initial=str(cfg.get("username", "")))
                 frm = _input(stdscr, "from: ", initial=str(cfg.get("from", "")))
-                if host:
-                    cfg["smtp_host"] = host
-                if port:
-                    try:
-                        cfg["smtp_port"] = int(port)
-                    except ValueError:
-                        status = "bad port"
-                if sslf:
-                    cfg["use_ssl"] = sslf.lower().startswith("y")
-                if user:
-                    cfg["username"] = user
-                if frm:
-                    cfg["from"] = frm
-                dirty = True
-                status = "modified (press s to save)"
+                updated = {**cfg, "smtp_host": host or cfg["smtp_host"], "username": user or cfg["username"],
+                           "use_ssl": sslf.lower().startswith("y") if sslf else cfg["use_ssl"],
+                           "from": frm or cfg["from"]}
+                try:
+                    updated["smtp_port"] = int(port) if port else cfg["smtp_port"]
+                    validate_smtp_change(cfg, updated)
+                except ValueError as exc:
+                    status = str(exc)
+                else:
+                    cfg = updated
+                    dirty = True
+                    status = "modified (press s to save)"
             elif ch == ord("T"):
                 try:
                     from .mailer import send_test

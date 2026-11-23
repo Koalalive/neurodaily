@@ -28,18 +28,19 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - name: Linux dependencies
@@ -120,7 +121,7 @@ jobs:
           xvfb-run -a python desktop/sidecar/smoke.py --desktop --expect-version "$version" /usr/bin/neurodaily-desktop
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: neurodaily-${{ matrix.target }}
           if-no-files-found: error
@@ -141,7 +142,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Install the formula and verify the localhost workspace
@@ -158,11 +159,11 @@ jobs:
     env:
       BASELINE_TAG: v1.0.7
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: neurodaily-x86_64-pc-windows-msvc
           path: installers
@@ -223,8 +224,8 @@ jobs:
     env:
       BASELINE_TAG: v1.0.7
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Locate package artifacts
@@ -241,7 +242,7 @@ jobs:
             test -n "$run_id"
           fi
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.artifacts.outputs.run_id }}
@@ -292,10 +293,10 @@ jobs:
     if: ${{ !startsWith(github.ref, 'refs/heads/verify/') }}
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Verify release metadata and build the wheel
@@ -320,7 +321,7 @@ jobs:
           "$cli/neurodaily" web --help
           "$cli/neurodaily" demo --no-open
           compgen -G "$NEURODAILY_HOME/output/*.html" >/dev/null
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: neurodaily-cli-wheel
           path: cli-dist/*.whl
@@ -341,7 +342,7 @@ jobs:
       DOCKER_IMAGE: docker.io/koalalive/neurodaily
       DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'koalalive' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Verify the tag and check release state
@@ -355,7 +356,7 @@ jobs:
           publish=$(python3 scripts/verify_release_version.py release-state "$GITHUB_REF_NAME" "$RUNNER_TEMP/releases.json")
           printf 'version=%s\nrevision=%s\npublish=%s\n' "$version" "$(git rev-parse HEAD)" "$publish" >> "$GITHUB_OUTPUT"
           if [[ "$publish" == false ]]; then printf 'Release %s is already published.\n' "$GITHUB_REF_NAME"; fi
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         if: steps.release_state.outputs.publish == 'true'
         with:
           pattern: neurodaily-*
@@ -370,7 +371,7 @@ jobs:
           python3 scripts/verify_release_version.py package --tag "$GITHUB_REF_NAME" --wheels installers
       - name: Upload assets to draft release
         if: steps.release_state.outputs.publish == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           draft: true
           generate_release_notes: true
@@ -410,21 +411,21 @@ jobs:
           printf 'exists=%s\n' "$exists" >> "$GITHUB_OUTPUT"
       - name: Log in to Docker Hub
         if: steps.release_state.outputs.publish == 'true'
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Enable arm64 builds
         if: steps.release_state.outputs.publish == 'true' && steps.docker_state.outputs.exists == 'false'
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
         with:
           platforms: arm64
       - name: Set up Docker Buildx
         if: steps.release_state.outputs.publish == 'true' && steps.docker_state.outputs.exists == 'false'
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Build amd64 and arm64 images without publishing
         if: steps.release_state.outputs.publish == 'true' && steps.docker_state.outputs.exists == 'false'
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64

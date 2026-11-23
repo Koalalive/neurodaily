@@ -654,14 +654,21 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     @app.post("/api/push")
     async def api_push_post(request: Request):
         import json as _json
-        from .mailer import CFG_PATH as EMAIL_PATH, load_cfg as _mail_cfg
+        from .app_settings import _write, EMAIL_KEYS
+        from .mailer import CFG_PATH as EMAIL_PATH, load_cfg as _mail_cfg, validate_smtp_change
         from .webhooks import CFG_PATH as HOOK_PATH, load_cfg as _hook_cfg
         try:
             data = await request.json()
         except Exception as exc:
             return JSONResponse({"ok": False, "error": f"invalid json: {exc}"}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"ok": False, "error": "invalid push settings"}, status_code=400)
         email = data.get("email") or {}
         hooks = data.get("webhooks") or {}
+        password = data.get("smtp_password", "")
+        if not isinstance(email, dict) or not isinstance(hooks, dict) or not isinstance(password, str):
+            return JSONResponse({"ok": False, "error": "invalid push settings"}, status_code=400)
+        password = password.strip()
         if isinstance(email.get("recipients"), list):
             cleaned = []
             for row in email["recipients"]:
@@ -685,18 +692,16 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             if not email["to"] and email.get("enabled", True):
                 return JSONResponse({"ok": False, "error": "收件人不能为空"}, status_code=400)
 
-        def _write(path, obj):
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            tmp = path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                _json.dump(obj, f, ensure_ascii=False, indent=2)
-            os.chmod(tmp, 0o600)
-            os.replace(tmp, path)
-
-        if email:
+        if email or password:
             cfg_e = _mail_cfg()
-            cfg_e.update({k: v for k, v in email.items() if v is not None})
-            _write(EMAIL_PATH, cfg_e)
+            updated = {**cfg_e, **{key: value for key, value in email.items() if key in EMAIL_KEYS and value is not None}}
+            try:
+                validate_smtp_change(cfg_e, updated, password)
+            except ValueError as exc:
+                return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+            if password:
+                updated["password"] = password
+            _write(EMAIL_PATH, updated)
         if hooks:
             cfg_w = _hook_cfg()
             cfg_w.update({k: v for k, v in hooks.items() if v is not None})
@@ -705,22 +710,21 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
     @app.post("/api/push/password")
     async def api_push_password(request: Request):
-        from .mailer import load_cfg as _mail_cfg
+        from .app_settings import _write
+        from .mailer import CFG_PATH, load_cfg as _mail_cfg
         try:
             data = await request.json()
         except Exception as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-        pw = (data.get("password") or "").strip()
+        pw = data.get("password") if isinstance(data, dict) else None
+        pw = pw.strip() if isinstance(pw, str) else ""
         if not pw:
             return JSONResponse({"ok": False, "error": "密码不能为空"}, status_code=400)
-        path = os.path.expanduser(_mail_cfg().get("password_file", "~/.neurodaily_smtp"))
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(pw)
-            os.chmod(path, 0o600)
+            _write(CFG_PATH, {**_mail_cfg(), "password": pw})
         except Exception as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-        return JSONResponse({"ok": True, "path": path})
+        return JSONResponse({"ok": True})
 
     async def _service_draft(request: Request) -> dict | None:
         if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":

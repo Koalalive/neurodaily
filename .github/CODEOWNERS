@@ -1,4 +1,7 @@
 # Only the repository owner reviews changes to automation and workflow files.
 /.github/workflows/ @Koalalive
+/.github/dependabot.yml @Koalalive
+/.github/requirements-digest.txt @Koalalive
 /.github/CODEOWNERS @Koalalive
 /scripts/check_secrets.py @Koalalive
+/scripts/verify_demo_snapshot.py @Koalalive

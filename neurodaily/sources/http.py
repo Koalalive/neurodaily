@@ -8,6 +8,8 @@ from threading import Lock
 import time
 import httpx
 
+from ..security import allow_private_sources, public_addresses, validate_http_url
+
 DEFAULT_TIMEOUT = 20.0
 DEFAULT_HEADERS = {
     "User-Agent": "NeuroDaily/0.1 (personal research digest; contact: local)",
@@ -15,6 +17,42 @@ DEFAULT_HEADERS = {
 
 _client = httpx.Client(timeout=DEFAULT_TIMEOUT, headers=DEFAULT_HEADERS,
                         follow_redirects=True)
+
+
+class _BlockedSource(httpx.RequestError):
+    pass
+
+
+class _SourceTransport(httpx.HTTPTransport):
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        # Apply the same policy to the initial request and every redirect. Use
+        # the validated address for the connection while preserving TLS SNI.
+        try:
+            validate_http_url(str(request.url), resolve=False)
+            host = request.url.raw_host.decode("ascii")
+            port = request.url.port or (443 if request.url.scheme == "https" else 80)
+            addresses = public_addresses(host, port, allow_private_sources())
+        except ValueError as exc:
+            raise _BlockedSource("Source destination blocked or unresolved", request=request) from exc
+        for index, address in enumerate(addresses):
+            outbound = httpx.Request(request.method, request.url.copy_with(host=address),
+                                     headers=request.headers, stream=request.stream,
+                                     extensions={**request.extensions, "sni_hostname": host})
+            try:
+                return super().handle_request(outbound)
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                if index == len(addresses) - 1:
+                    raise
+        raise _BlockedSource("No usable source destination", request=request)
+
+
+# Different hosts may share one IP. Reusing a connection by IP would bypass
+# hostname validation for the second host, so disable keep-alive here.
+_source_client = httpx.Client(
+    transport=_SourceTransport(limits=httpx.Limits(max_keepalive_connections=0)),
+    timeout=DEFAULT_TIMEOUT, headers=DEFAULT_HEADERS, follow_redirects=True,
+    max_redirects=10, trust_env=False,
+)
 
 
 @dataclass
@@ -100,7 +138,7 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
         retries: int = 2, backoff: float = 1.2, connect_close: bool = False,
         user_agent: str | None = None,
         accepted_statuses: tuple[int, ...] = (),
-        headers: dict | None = None) -> httpx.Response | None:
+        headers: dict | None = None, *, untrusted_url: bool = False) -> httpx.Response | None:
     """Perform a GET with retry/backoff. Return None on final failure (never raises).
 
     ``connect_close=True`` forces a fresh one-shot connection (no connection pool)
@@ -117,7 +155,9 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
     kind, message = "failed", "HTTP request failed"
     for attempt in range(retries + 1):
         try:
-            if connect_close:
+            if untrusted_url:
+                resp = _source_client.get(url, params=params, timeout=timeout, headers=request_headers)
+            elif connect_close:
                 fresh_headers = {**DEFAULT_HEADERS, **request_headers, "Connection": "close"}
                 with httpx.Client(timeout=timeout, headers=fresh_headers,
                                   follow_redirects=True) as fresh:
@@ -142,6 +182,9 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
         except httpx.TimeoutException:
             kind, message = "timeout", "HTTP request timed out"
             delay = backoff * (attempt + 1)
+        except (_BlockedSource, httpx.InvalidURL, httpx.TooManyRedirects):
+            record_failure("Source URL blocked, unresolved or invalid")
+            return None
         except httpx.TransportError:
             kind, message = "failed", "HTTP transport failure"
             delay = backoff * (attempt + 1)

@@ -1130,17 +1130,15 @@ async function savePush(){
   Object.keys(current).forEach(function(key){
     if(JSON.stringify(current[key])!==JSON.stringify(PUSH_BASELINE[key])) changes[key]=current[key];
   });
+  var pw=el('push_password').value.trim();
+  if(pw) changes.smtp_password=pw;
   if(Object.keys(changes).length){
     var r=await fetch('/api/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(changes)});
     var out=await r.json();
     if(!out.ok) throw new Error(t(out.error||'Failed to save push settings'));
     PUSH_BASELINE=current;
   }
-  var pw=el('push_password').value;
   if(pw){
-    var r2=await fetch('/api/push/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
-    var o2=await r2.json();
-    if(!o2.ok) throw new Error(t(o2.error||'Failed to save password'));
     el('push_password').value=''; el('push_pw_state').textContent='(set)';
   }
 }

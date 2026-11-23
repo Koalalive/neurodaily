@@ -114,6 +114,8 @@ def load_cfg() -> dict:
 
 
 def _password(cfg: dict) -> str:
+    if isinstance(password := cfg.get("password"), str) and password:
+        return password
     pw = os.environ.get(cfg.get("password_env", ""), "")
     if pw:
         return pw
@@ -122,6 +124,23 @@ def _password(cfg: dict) -> str:
             return f.read().strip()
     except Exception:
         return ""
+
+
+def _smtp_identity(cfg: dict) -> tuple:
+    return (str(cfg.get("smtp_host", "")).strip().rstrip(".").casefold(),
+            cfg.get("smtp_port"), cfg.get("use_ssl"), cfg.get("username"))
+
+
+def validate_smtp_change(saved: dict, updated: dict, new_password: str = "") -> None:
+    if _smtp_identity(saved) == _smtp_identity(updated):
+        return
+    host, port, use_ssl, username = _smtp_identity(updated)
+    if (not host or any(c.isspace() or c in "/@\\" for c in host)
+            or type(port) is not int or not 1 <= port <= 65535 or type(use_ssl) is not bool
+            or not isinstance(username, str) or not username.strip()):
+        raise ValueError("请填写有效的 SMTP 主机、端口、加密方式和登录账号。")
+    if not new_password and _password(saved):
+        raise ValueError("更改 SMTP 服务器、端口、加密方式或账号后，请在设置中填写对应的 SMTP 授权码。")
 
 
 def _esc(s) -> str:
@@ -424,8 +443,7 @@ def test_connection(draft: dict) -> dict:
         return {"ok": False, "message": "请输入有效的 SMTP 授权码。"}
     password = password.strip()
     if not password:
-        if (host.lower().rstrip(".") != str(saved.get("smtp_host", "")).lower().rstrip(".")
-                or username != saved.get("username")):
+        if _smtp_identity(cfg) != _smtp_identity(saved):
             return {"ok": False, "message": "更改服务器或账号后，请输入对应的 SMTP 授权码再测试。"}
         password = _password(saved)
     if not password:

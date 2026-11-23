@@ -160,7 +160,7 @@ class LiteratureSourceTests(unittest.TestCase):
                 return httpx.Response(200, text=rss)
             return httpx.Response(429)
 
-        with httpx.Client(transport=httpx.MockTransport(respond)) as client, patch.object(http, "_client", client):
+        with httpx.Client(transport=httpx.MockTransport(respond)) as client, patch.object(http, "_source_client", client):
             with http.capture_requests() as stats:
                 complete, missing = journalpapers.fetch(config)
         report = stats.as_dict(2)

@@ -11,6 +11,8 @@ PATTERNS = [
     re.compile(rb"\bsk-[A-Za-z0-9_-]{20,}\b"),
     re.compile(rb"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(rb"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
+    re.compile(rb"\bgithub_pat_[A-Za-z0-9_]{30,}\b"),
+    re.compile(rb"\bdckr_pat_[A-Za-z0-9_-]{15,}\b"),
     re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     re.compile(rb"(?i)(?:DEEPSEEK|OPENAI|ANTHROPIC|NEURODAILY_LLM)_API_KEY\s*[=:]\s*[^\s\"']{8,}"),
 ]
@@ -46,8 +48,9 @@ def check(paths: list[Path]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--staged", action="store_true", help="scan only staged files")
+    parser.add_argument("paths", nargs="*", type=Path, help="scan the specified files")
     args = parser.parse_args()
-    hits = check(staged_files() if args.staged else tracked_files())
+    hits = check(args.paths or (staged_files() if args.staged else tracked_files()))
     if hits:
         print("Potential secret detected in: " + ", ".join(hits))
         print("Remove and rotate the credential; do not print its value.")

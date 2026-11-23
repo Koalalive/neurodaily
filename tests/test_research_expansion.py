@@ -68,7 +68,7 @@ class ResearchExpansionTests(unittest.TestCase):
             return httpx.Response(200, text='<rss version="2.0"><channel><title>Fixture</title>'
                                   + entries + "</channel></rss>")
 
-        with httpx.Client(transport=httpx.MockTransport(reply)) as client, patch.object(http, "_client", client):
+        with httpx.Client(transport=httpx.MockTransport(reply)) as client, patch.object(http, "_source_client", client):
             output = preview_search(cfg)
         self.assertEqual(output["unique_candidates"], {"match": 3, "unknown": 0, "miss": 1})
         self.assertEqual(set(output["by_kind"]), {"paper", "news", "policy"})

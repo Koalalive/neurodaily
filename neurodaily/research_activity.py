@@ -75,7 +75,7 @@ def enrich_geography(result: DigestResult) -> bool:
                       and not item.extra.get("article_text")][:24]
         for item in candidates:
             response = _get(item.url, timeout=8.0, retries=0,
-                            user_agent="Mozilla/5.0 NeuroDaily")
+                            user_agent="Mozilla/5.0 NeuroDaily", untrusted_url=True)
             if response is not None:
                 text = _strip_html(response.text)
                 if text:
