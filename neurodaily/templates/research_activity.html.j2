@@ -9,11 +9,14 @@
     #research-activity :focus-visible{outline:2px solid #b3d9ff;outline-offset:3px}
     #research-activity .ra-map{width:100%;aspect-ratio:2;position:relative;overflow:hidden;border:1px solid #334f70;border-radius:12px;background:#0b172a}
     #research-activity canvas{width:100%;height:100%;display:block}
-    #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0b172a;border-radius:20px;padding:0 4px;background:#b2c9de;color:#101928;font-size:11px;font-weight:750}
-    #research-activity .ra-marker[data-kind=paper]{background:#74d4ff}
-    #research-activity .ra-marker[data-kind=trial]{background:#8fe4c2}
-    #research-activity .ra-marker[data-kind=news]{background:#ffd080}
-    #research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#fff}
+    #research-activity [data-kind=paper]{--ra-color:#74d4ff}
+    #research-activity [data-kind=trial]{--ra-color:#8fe4c2}
+    #research-activity [data-kind=news]{--ra-color:#ffd080}
+    #research-activity [data-kind=funding]{--ra-color:#f4a9cd}
+    #research-activity [data-kind=conference]{--ra-color:#c5b0ff}
+    #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0b172a;border-radius:20px;padding:0 4px;background:var(--ra-color,#b2c9de);color:#101928;font-size:11px;font-weight:750}
+    #research-activity .ra-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em;background:var(--ra-color,#b2c9de)}
+    #research-activity .ra-marker:hover,#research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#fff;background:var(--ra-color,#b2c9de)}
     #research-activity .ra-caption{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:.85rem;color:#c3cfe0}
     #research-activity .ra-results{margin-block:12px 18px;padding:12px;border:1px solid #3b5574;border-radius:10px;background:#15233a;scroll-margin-top:12px}
     #research-activity .ra-results ol{padding-inline-start:1.4rem;margin-bottom:0}
@@ -40,17 +43,17 @@
     const data = JSON.parse(document.getElementById('nd-research-data').textContent);
     const copies = {
       zh: {map:'🗺️ 研究动态地图', mapNote:'点击地点查看定位依据。研究地点、试验站点与末位作者单位分别标注，城市级点位使用城市中心示意。',
-        all:'全部', paper:'论文', trial:'临床试验', news:'新闻与政策', unknown:'未定位', empty:'当前筛选没有定位结果。',
+        all:'全部', paper:'论文', trial:'临床试验', news:'新闻与政策', funding:'产业融资', conference:'学术会议', unknown:'未定位', empty:'当前筛选没有定位结果。', noRecords:'本期没有这类条目。',
         original:'原文', site:'登记坐标', city:'城市级示意', country:'国家级示意', journal_unknown:'期刊待补', disabled:'研究动态地图需要配置大模型 API；未启用时不会生成地图。',
-        institution:'作者机构', last_author_institution:'末位作者单位', study_site:'研究地点', trial_site:'试验站点', event:'事件发生地', media_outlet:'媒体机构所在地', publisher:'媒体登记', model:'AI 判定', metadata:'来源元数据'},
+        institution:'作者机构', last_author_institution:'末位作者单位', study_site:'研究地点', trial_site:'试验站点', event:'事件发生地', conference_venue:'会议会址', funding_recipient:'获资方所在地', media_outlet:'媒体机构所在地', publisher:'媒体登记', model:'AI 判定', metadata:'来源元数据'},
       en: {map:'🗺️ Research activity map', mapNote:'Select a location to see its evidence. Study sites, trial sites and last-author affiliations are labelled separately. City markers are approximate.',
-        all:'All',paper:'Papers',trial:'Clinical trials',news:'News and policy',unknown:'Unlocated',empty:'No mapped records match this filter.',
+        all:'All',paper:'Papers',trial:'Clinical trials',news:'News and policy',funding:'Industry funding',conference:'Academic conferences',unknown:'Unlocated',empty:'No mapped records match this filter.',noRecords:'No records of this type in this report.',
         original:'Source',site:'Registry coordinates',city:'City-level marker',country:'Country-level marker',journal_unknown:'Journal unavailable',disabled:'The research map requires an LLM API. It is disabled when no model is configured.',
-        institution:'Author affiliation',last_author_institution:'Last-author affiliation',study_site:'Study site',trial_site:'Trial site',event:'Event location',media_outlet:'Media outlet location',publisher:'Publisher registry',model:'AI inference',metadata:'Source metadata'},
+        institution:'Author affiliation',last_author_institution:'Last-author affiliation',study_site:'Study site',trial_site:'Trial site',event:'Event location',conference_venue:'Conference venue',funding_recipient:'Funding recipient location',media_outlet:'Media outlet location',publisher:'Publisher registry',model:'AI inference',metadata:'Source metadata'},
       ru: {map:'🗺️ Карта исследований',mapNote:'Выберите точку, чтобы увидеть источник геоданных. Места исследований, центры испытаний и организации последних авторов подписаны отдельно. Точки городов приблизительны.',
-        all:'Все',paper:'Публикации',trial:'Клинические исследования',news:'Новости и политика',unknown:'Без геоданных',empty:'Для этого фильтра нет точек на карте.',
+        all:'Все',paper:'Публикации',trial:'Клинические исследования',news:'Новости и политика',funding:'Финансирование компаний',conference:'Научные конференции',unknown:'Без геоданных',empty:'Для этого фильтра нет точек на карте.',noRecords:'В этом отчёте нет записей такого типа.',
         original:'Источник',site:'Координаты из реестра',city:'Приблизительная точка города',country:'Приблизительная точка страны',journal_unknown:'Журнал не указан',disabled:'Карта исследований требует API языковой модели; без неё карта не строится.',
-        institution:'Организация авторов',last_author_institution:'Организация последнего автора',study_site:'Место исследования',trial_site:'Центр испытания',event:'Место события',media_outlet:'Местоположение медиа',publisher:'Реестр издателя',model:'Вывод ИИ',metadata:'Метаданные источника'}
+        institution:'Организация авторов',last_author_institution:'Организация последнего автора',study_site:'Место исследования',trial_site:'Центр испытания',event:'Место события',conference_venue:'Место проведения конференции',funding_recipient:'Местоположение получателя средств',media_outlet:'Местоположение медиа',publisher:'Реестр издателя',model:'Вывод ИИ',metadata:'Метаданные источника'}
     };
     const c = copies[document.documentElement.lang] || copies[{{ language|tojson }}] || copies.zh;
     if (!data.enabled) {
@@ -79,18 +82,25 @@
       button.type = 'button';
       return button;
     };
+    const dot = type => {
+      const element = node('span');
+      element.className = 'ra-dot';
+      element.dataset.kind = type;
+      element.setAttribute('aria-hidden', 'true');
+      return element;
+    };
     let localeNames;
     try { localeNames = new Intl.DisplayNames([document.documentElement.lang || 'zh'], {type:'region'}); }
     catch (_) {}
     const placeName = place => place.precision === 'country' && localeNames && place.country
       ? localeNames.of(place.country) : place.name;
-    function show(panel, label, ids, places = []) {
+    function show(panel, label, ids, places = [], moveFocus = true) {
       panel.removeAttribute('role');
       panel.hidden = false;
-      const heading = node('h4', label);
+      const heading = node('h3', label);
       heading.tabIndex = -1;
       panel.replaceChildren(heading);
-      if (!ids.length) {panel.append(node('p', c.empty)); heading.focus(); return;}
+      if (!ids.length) {panel.append(node('p', c.noRecords)); return;}
       const list = node('ol');
       for (const id of ids) {
         const record = data.records[id];
@@ -98,7 +108,9 @@
         const venue = record.kind === 'paper'
           ? (record.journal || c.journal_unknown)
           : (record.venue || record.source || '');
-        li.append(node('strong', record.title), node('p', [c[kind(id)], venue, record.date].filter(Boolean).join(' · ')));
+        const meta = node('p', [c[kind(id)], venue, record.date].filter(Boolean).join(' · '));
+        meta.prepend(dot(kind(id)));
+        li.append(node('strong', record.title), meta);
         if (record.summary) li.append(node('p', record.summary));
         for (const place of places.filter(entry => entry.id === id)) {
           const evidence = node('p', [placeName(place), c[place.role], c[place.precision], c[place.method], place.source, place.evidence].filter(Boolean).join(' · '));
@@ -115,7 +127,7 @@
         list.append(li);
       }
       panel.append(list);
-      heading.focus();
+      if (moveFocus) heading.focus();
     }
     const canvas = root.querySelector('canvas');
     if (data.land.length && canvas) {
@@ -196,14 +208,26 @@
           results.hidden = true;
         }
       }
-      for (const type of ['all','paper','trial','news']) {
-        const button = control(c[type]);
+      const ids = Object.keys(data.records);
+      for (const type of ['all','paper','trial','news','funding','conference']) {
+        const categoryIds = ids.filter(id => kind(id) === type);
+        const hasList = type === 'funding' || type === 'conference';
+        if (hasList) {
+          categoryIds.sort((a, b) => {
+            const left = data.records[a].date, right = data.records[b].date;
+            return type === 'conference' ? (left || '9999').localeCompare(right || '9999') : right.localeCompare(left);
+          });
+        }
+        const button = control(type === 'all' ? c.all : `${c[type]} (${categoryIds.length})`);
+        button.dataset.filter = type;
+        if (type !== 'all') button.prepend(dot(type));
         button.setAttribute('aria-pressed', String(type === selected));
         button.addEventListener('click', () => {
           selected = type;
           filters.querySelectorAll('button').forEach(entry => entry.setAttribute('aria-pressed', String(entry === button)));
           results.hidden = true;
           results.removeAttribute('role');
+          if (hasList) show(results, c[type], categoryIds, data.places.filter(place => matches(place.id)), false);
           drawMarkers();
         });
         filters.append(button);

@@ -72,6 +72,20 @@ _CONTACT_EMAIL = re.compile(
 _AFFILIATION_ROLES = {"last_author_affiliation": "last_author_institution", "affiliation": "institution"}
 _SENTENCES = re.compile(r"(?<=[。！？!?])\s*|(?<=[.])\s+(?=[A-ZА-ЯЁ])")
 _EVENT_KINDS = {"news", "policy", "conference", "funding", "drug", "device"}
+FINANCING_SIGNAL = re.compile(
+    r"\b(?:series\s+[a-z]\d?\s+(?:funding|financing|round)|"
+    r"(?:seed|venture|equity)\s+(?:funding|financing|round)|"
+    r"(?:funding|financing)\s+round)\b"
+    r"|(?:种子轮|種子輪|天使轮|天使輪|[a-h]\+?[轮輪]).{0,8}融[资資]|[轮輪]融[资資]"
+    r"|венчурн\w+\s+финансирован\w+|посевн\w+\s+раунд\w*",
+    re.I,
+)
+_RECEIVED_FINANCING = re.compile(
+    r"\b(?:raises?|raised|received|secured|closed|completed|announced)\b"
+    r"|获[得批]|獲[得批]|完成|宣布|宣佈|привлек\w*|получил\w*",
+    re.I,
+)
+_VIRTUAL_ONLY = re.compile(r"\b(?:online[- ]only|fully virtual)\b|纯线上|全程线上", re.I)
 
 
 @lru_cache(maxsize=1)
@@ -300,6 +314,14 @@ def _metadata(item_id: str, item: Item, names: _CountryNames) -> list[dict]:
         if not places:
             addresses = [{"address": value} for value in item.affiliations]
             places = _affiliation_places(item_id, addresses, "institution", names)
+    elif item.kind == "conference" and isinstance(venue := item.extra.get("venue"), dict):
+        code = names.explicit(_clean(venue.get("country")))
+        city_name = _clean(venue.get("city"), 120)
+        if code and city_name:
+            evidence = _clean(item.extra.get("city"), 160) or f"{city_name}, {names.countries[code]['name']}"
+            places.append(_place(names.countries, {
+                "id": item_id, "country": code, "role": "conference_venue", "evidence": evidence,
+            }, method="metadata", city=_unique_city(city_name, code)))
     return places
 
 
@@ -312,6 +334,10 @@ def _fits_role(role: str, field: str, text: str) -> bool:
         return False
     if role == "study_site":
         return bool(_STUDY.search(text))
+    if role == "funding_recipient":
+        return bool(FINANCING_SIGNAL.search(text) and _RECEIVED_FINANCING.search(text)) and not _BYLINE.search(text)
+    if role == "conference_venue":
+        return bool(_EVENT.search(text)) and not (_BYLINE.search(text) or _VIRTUAL_ONLY.search(text))
     # News/policy RSS often supplies only a headline and a one-line summary;
     # the article page may block bots. Let the model see any country/city
     # sentence, while still rejecting bylines and personal addresses.
@@ -327,6 +353,12 @@ def _candidate(item: Item, known: list[dict], names: _CountryNames) -> dict | No
             roles.append("institution")
     elif item.kind == "trial":
         roles = ["institution"]
+    elif item.kind == "conference":
+        if known:
+            return None
+        roles = ["conference_venue"]
+    elif item.kind == "funding":
+        roles = ["funding_recipient"]
     elif item.kind in _EVENT_KINDS:
         roles = ["event"]
     else:
@@ -335,7 +367,10 @@ def _candidate(item: Item, known: list[dict], names: _CountryNames) -> dict | No
                 or _clean(item.extra.get("article_text"), 1800)
                 or _clean(item.summary, 1500))
     fields = [("title", _clean(item.title, 220))]
-    fields.extend(("summary", sentence) for sentence in _SENTENCES.split(abstract, maxsplit=8))
+    texts = [abstract]
+    if item.kind == "funding" and (summary := _clean(item.summary, 1500)) != abstract:
+        texts.insert(0, summary)
+    fields.extend(("summary", sentence) for text in texts for sentence in _SENTENCES.split(text, maxsplit=8))
     if "last_author_institution" in roles:
         fields.extend(("last_author_affiliation", _institution_address(row.get("address"))[-_MAX_EVIDENCE:])
                       for row in _last_author_addresses(item)[:6])
@@ -432,6 +467,9 @@ _INSTRUCTION = (
     "or collected data. For last_author_institution quote only the last_author_affiliation field. "
     "For institution quote only an affiliation field. For event use where it "
     "happened, never the publisher, dateline, newsroom, headquarters or reporting location. "
+    "For conference_venue use the actual event venue, not the organizer or a virtual event. "
+    "For funding_recipient quote text that explicitly connects the company receiving financing and its "
+    "location to the round, not the investor's location or the place of publication or announcement. "
     "A mention of a country by itself does not establish a location. Omit uncertain records and do "
     "not return coordinates, postal addresses, individual names, or patient locations. "
     "Return no more than four locations per record."

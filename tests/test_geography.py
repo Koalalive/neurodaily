@@ -188,7 +188,7 @@ class GeographyTests(unittest.TestCase):
         event = "The organizers held a meeting in Germany."
         items = {"old": Item("Meeting", kind="conference", summary=event)}
         with TemporaryDirectory() as directory:
-            yields = [{"id": "0", "country": "DE", "role": "event", "evidence": event}]
+            yields = [{"id": "0", "country": "DE", "role": "conference_venue", "evidence": event}]
             chat = Mock(return_value=message(yields))
             first = locate_items(items, chat=chat, cache_dir=directory)
             self.assertEqual(first["places"][0]["id"], "old")
@@ -200,6 +200,18 @@ class GeographyTests(unittest.TestCase):
             self.assertEqual(locate_items(items, chat=chat, cache_dir=directory)["unknown"], ["old"])
             locate_items(items, chat=chat, cache_dir=directory)
             self.assertEqual(chat.call_count, 2)
+
+    def test_funding_maps_recipient_evidence_and_excludes_investor_only_evidence(self, _):
+        recipient = "A company based in Lyon, France raised a Series A round."
+        investor = "Investors in Germany led the Series A round."
+        item = Item("Venture financing", kind="funding", summary=f"{recipient} {investor}")
+        chat = Mock(return_value=message([
+            {"id": "0", "country": "FR", "role": "funding_recipient", "evidence": recipient},
+            {"id": "0", "country": "DE", "role": "funding_recipient", "evidence": investor},
+        ]))
+        point, = locate_items({"round": item}, chat=chat)["places"]
+        self.assertEqual((point["country"], point["name"], point["role"]),
+                         ("FR", "Lyon", "funding_recipient"))
 
     def test_model_budget_leaves_unprocessed_items_visible(self, _):
         items = {str(i): Item(f"Event {i}", kind="news", summary="They held a meeting in France.")

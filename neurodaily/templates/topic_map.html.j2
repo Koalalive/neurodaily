@@ -12,6 +12,7 @@
     #topic-map .tm-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px}
     #topic-map .tm-chip{font:inherit;font-size:.75rem;color:#dbe9f8;background:#1c2b40;border:1px solid #455d79;border-radius:999px;padding:3px 8px;cursor:pointer}
     #topic-map .tm-chip[aria-pressed=true]{background:#264464;border-color:#88bbf0}
+    #topic-map .tm-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em}
     #topic-map .tm-note{font-size:.82rem;color:#9fb3c8}
     @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
   </style>
@@ -52,12 +53,20 @@
     document.querySelectorAll('a[href="#topic-map"]').forEach(link => {link.hidden = false;});
     const canvas = root.querySelector('.tm-canvas');
     const side = root.querySelector('.tm-side');
+    const intro = [...side.childNodes];
     const legend = root.querySelector('.tm-legend');
     const ctx = canvas.getContext('2d');
     let selectedTopic = 'all';
     let selectedPoint = null;
     const hue = id => (Number(id) * 47 + 190) % 360;
     const color = id => `hsl(${hue(id)} 72% 62%)`;
+    const dot = id => {
+      const element = document.createElement('span');
+      element.className = 'tm-dot';
+      element.style.backgroundColor = color(id);
+      element.setAttribute('aria-hidden', 'true');
+      return element;
+    };
     const esc = value => String(value == null ? '' : value);
     const lang = {{ language|tojson }};
     const kindLabel = kind => (tm?.kinds?.[kind] || ({paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}[kind] || kind));
@@ -94,7 +103,9 @@
     }
     function detail(p) {
       side.replaceChildren();
-      const h = document.createElement('h3'); h.textContent = (p.labels && p.labels[lang]) || p.label || ((tm?.topic || '主题') + ' ' + p.topic); side.append(h);
+      const h = document.createElement('h3'); h.textContent = (p.labels && p.labels[lang]) || p.label || ((tm?.topic || '主题') + ' ' + p.topic);
+      h.prepend(dot(p.topic));
+      side.append(h);
       const title = document.createElement('p'); title.textContent = p.title || ''; title.style.fontWeight = '700'; side.append(title);
       const meta = document.createElement('p'); meta.textContent = [kindLabel(p.kind), p.venue, p.date].filter(Boolean).join(' · '); side.append(meta);
       if (p.summary) { const summary = document.createElement('p'); summary.textContent = p.summary; side.append(summary); }
@@ -117,8 +128,9 @@
     }
     function chip(label, id) {
       const b = document.createElement('button'); b.type='button'; b.className='tm-chip'; b.textContent=label;
+      if (id !== 'all') b.prepend(dot(id));
       b.setAttribute('aria-pressed', String(selectedTopic === id));
-      b.onclick = () => { selectedTopic = id; selectedPoint = null; legend.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); draw(); };
+      b.onclick = () => { selectedTopic = id; selectedPoint = null; side.replaceChildren(...intro); legend.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); draw(); };
       return b;
     }
     legend.append(chip(tm?.all || '全部', 'all'));

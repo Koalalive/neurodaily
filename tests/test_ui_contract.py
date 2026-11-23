@@ -1,8 +1,13 @@
 import unittest
+from unittest.mock import Mock
 
+from neurodaily.config import DEFAULT_CONFIG
 from neurodaily.demo import build_result
 from neurodaily.desktop_page import render_workspace
+from neurodaily.geography import locate_items
+from neurodaily.models import Item
 from neurodaily.research_activity import report_activity
+from neurodaily.sources import conferences
 from neurodaily.task_page import render_task
 
 
@@ -24,6 +29,35 @@ class DesktopTabsTests(unittest.TestCase):
 
 
 class ResearchMapContractTests(unittest.TestCase):
+    def test_curated_conferences_use_metadata_without_model_calls(self):
+        items = {item.title: item for item in conferences.fetch(DEFAULT_CONFIG())}
+        chat = Mock()
+        points = locate_items(items, chat=chat)["places"]
+        self.assertTrue(items)
+        self.assertEqual({point["id"] for point in points}, set(items))
+        self.assertEqual({point["role"] for point in points}, {"conference_venue"})
+        self.assertEqual({point["precision"] for point in points}, {"city"})
+        chat.assert_not_called()
+
+    def test_includes_conferences_and_funding_without_promoting_regulatory_releases(self):
+        result = build_result()
+        result.items = [
+            Item("Curated venue", kind="conference"),
+            Item("RSS financing item", kind="funding"),
+            Item("Alpha closes Series A round", kind="news"),
+            Item("FDA approval", kind="funding", source="policy",
+                 extra={"source_url": "https://www.fda.gov/press/rss.xml"}),
+            Item("Medical device", kind="device"),
+        ]
+        result.geography = {"places": [], "unknown": []}
+        activity = report_activity(result, lambda url: url or "")
+        self.assertEqual({record["title"]: record["kind"] for record in activity["records"].values()}, {
+            "Curated venue": "conference", "RSS financing item": "funding",
+            "Alpha closes Series A round": "funding", "FDA approval": "policy",
+        })
+        self.assertEqual(set(activity["unknown"]), set(activity["records"]))
+        self.assertEqual(result.items[2].kind, "news")
+
     def test_map_disabled_without_llm_geography(self):
         result = build_result()
         result.geography = None

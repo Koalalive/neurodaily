@@ -1,10 +1,10 @@
 [
-  {"name":"SPIE Medical Imaging 2027","full":"医学影像与图像处理","start":"2027-02-14","end":"2027-02-18","city":"加拿大 温哥华","url":"https://spie.org/conferences-and-exhibitions/medical-imaging","deadlines":[]},
-  {"name":"ISMRM 2027","full":"国际医学磁共振学会年会","start":"2027-05-08","end":"2027-05-13","city":"加拿大 温哥华","url":"https://www.ismrm.org/27m/","deadlines":[{"label":"摘要截止","date":"2026-10-28"}]},
-  {"name":"ISBI 2027","full":"IEEE 国际生物医学成像研讨会","start":"2027-05-25","end":"2027-05-28","city":"瑞士 洛桑","url":"https://biomedicalimaging.org/2027/","deadlines":[{"label":"论文截止","date":"2026-10-26"},{"label":"摘要截止","date":"2027-02-01"}]},
-  {"name":"International BCI Meeting 2027","full":"国际脑机接口大会","start":"2027-06-07","end":"2027-06-10","city":"克罗地亚 希贝尼克","url":"https://bcisociety.org/bci-meeting/","deadlines":[{"label":"摘要截止","date":"2027-01-15"}]},
-  {"name":"OHBM 2027","full":"人脑图谱组织年会","start":"2027-06-26","end":"2027-06-30","city":"加拿大多伦多","url":"https://www.humanbrainmapping.org/ohbm-2027/","deadlines":[{"label":"摘要截止（约）","date":"2026-12-15"}]},
-  {"name":"IPMI 2027","full":"医学影像信息处理","start":"2027-06-27","end":"2027-07-02","city":"加拿大 魁北克","url":"https://2027.ipmi-conf.org/","deadlines":[{"label":"论文截止","date":"2026-12-07"}]},
-  {"name":"MIDL 2027","full":"医学影像深度学习","start":"2027-07-14","end":"2027-07-16","city":"葡萄牙 波尔图","url":"https://2027.midl.io/","deadlines":[]},
-  {"name":"MICCAI 2027","full":"医学图像计算与计算机辅助介入","start":"2027-09-26","end":"2027-10-01","city":"新西兰 奥克兰","url":"https://miccai.org/upcoming-conferences/","deadlines":[]}
+  {"name":"SPIE Medical Imaging 2027","full":"医学影像与图像处理","start":"2027-02-14","end":"2027-02-18","city":"加拿大 温哥华","venue":{"city":"Vancouver","country":"CA"},"url":"https://spie.org/conferences-and-exhibitions/medical-imaging","deadlines":[]},
+  {"name":"ISMRM 2027","full":"国际医学磁共振学会年会","start":"2027-05-08","end":"2027-05-13","city":"加拿大 温哥华","venue":{"city":"Vancouver","country":"CA"},"url":"https://www.ismrm.org/27m/","deadlines":[{"label":"摘要截止","date":"2026-10-28"}]},
+  {"name":"ISBI 2027","full":"IEEE 国际生物医学成像研讨会","start":"2027-05-25","end":"2027-05-28","city":"瑞士 洛桑","venue":{"city":"Lausanne","country":"CH"},"url":"https://biomedicalimaging.org/2027/","deadlines":[{"label":"论文截止","date":"2026-10-26"},{"label":"摘要截止","date":"2027-02-01"}]},
+  {"name":"International BCI Meeting 2027","full":"国际脑机接口大会","start":"2027-06-07","end":"2027-06-10","city":"克罗地亚 希贝尼克","venue":{"city":"Šibenik","country":"HR"},"url":"https://bcisociety.org/bci-meeting/","deadlines":[{"label":"摘要截止","date":"2027-01-15"}]},
+  {"name":"OHBM 2027","full":"人脑图谱组织年会","start":"2027-06-26","end":"2027-06-30","city":"加拿大多伦多","venue":{"city":"Toronto","country":"CA"},"url":"https://www.humanbrainmapping.org/ohbm-2027/","deadlines":[{"label":"摘要截止（约）","date":"2026-12-15"}]},
+  {"name":"IPMI 2027","full":"医学影像信息处理","start":"2027-06-27","end":"2027-07-02","city":"加拿大 魁北克","venue":{"city":"Québec","country":"CA"},"url":"https://2027.ipmi-conf.org/","deadlines":[{"label":"论文截止","date":"2026-12-07"}]},
+  {"name":"MIDL 2027","full":"医学影像深度学习","start":"2027-07-14","end":"2027-07-16","city":"葡萄牙 波尔图","venue":{"city":"Porto","country":"PT"},"url":"https://2027.midl.io/","deadlines":[]},
+  {"name":"MICCAI 2027","full":"医学图像计算与计算机辅助介入","start":"2027-09-26","end":"2027-10-01","city":"新西兰 奥克兰","venue":{"city":"Auckland","country":"NZ"},"url":"https://miccai.org/upcoming-conferences/","deadlines":[]}
 ]

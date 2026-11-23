@@ -58,6 +58,7 @@ def fetch(config, logger=None) -> list[Item]:
             source="conferences", kind="conference", date=start.isoformat(),
             extra={"start": start.isoformat(), "end": end.isoformat(),
                    "city": str(row.get("city") or ""), "deadlines": deadlines,
+                   "venue": row.get("venue"),
                    "full": str(row.get("full") or "")},
         ))
         if len(out) >= limit:
