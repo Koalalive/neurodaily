@@ -7,6 +7,7 @@
 ## 1. 一键运行
 
 ```bash
+.venv/bin/python -m pip install -e '.[test]'
 bash scripts/test_all.sh     # 推荐
 make test                    # 等价
 ```
@@ -20,7 +21,7 @@ make test                    # 等价
 5. `export --demo --format both`（JSON + BibTeX）
 6. `profile new` + `config apply --dry-run`
 
-全部离线，不联网、不发邮件、不调用 AI（AI 相关用 mock）。
+安装测试依赖后，测试离线运行。测试依赖需要 Python 3.11.5 或更高版本。
 
 单独跑：
 
@@ -85,7 +86,7 @@ make test                    # 等价
 
 - 触发：push / PR
 - 矩阵：Python **3.12 / 3.13**
-- 步骤：`pip install -e .` → `bash scripts/test_all.sh`
+- 步骤：`pip install -e '.[test]'` → `bash scripts/test_all.sh`
 
 `.github/workflows/release-tauri.yml` 在发布前检查各平台的发行方式。
 

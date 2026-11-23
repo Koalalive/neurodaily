@@ -502,6 +502,7 @@ neurodaily/
 ## 测试
 
 ```bash
+.venv/bin/python -m pip install -e '.[test]'
 bash scripts/test_all.sh      # 编译、测试、配置、离线日报、导出与 profile
 make test                     # 同上
 ```
@@ -637,6 +638,7 @@ printf '%s' 'SMTP-CODE' > ~/.neurodaily_smtp && chmod 600 ~/.neurodaily_smtp
 ### Tests
 
 ```bash
+.venv/bin/python -m pip install -e '.[test]'
 bash scripts/test_all.sh
 ```
 
@@ -733,5 +735,6 @@ printf '%s' 'SMTP-CODE' > ~/.neurodaily_smtp && chmod 600 ~/.neurodaily_smtp
 ### Тесты
 
 ```bash
+.venv/bin/python -m pip install -e '.[test]'
 bash scripts/test_all.sh
 ```
