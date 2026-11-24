@@ -45,7 +45,7 @@ html,body{height:100%;overflow:hidden}
   let serial = 0;
   const tabs = [];
   const announced = new Set();
-  const unfinished = new Set();
+  const pendingReports = new Map();
   const tablist = document.getElementById('tabs');
   const panes = document.getElementById('panes');
   const pinned = ['/', '/history', '/run', '/settings'];
@@ -224,13 +224,15 @@ html,body{height:100%;overflow:hidden}
 
   function updateReport(task) {
     if (!task?.report_ready) return;
-    // Wait for the task to finish, so the report tab opens once, fully rendered.
-    if (task.status === 'running') {
-      unfinished.add(task.id);
-      return;
-    }
-    unfinished.delete(task.id);
     showReport(task.id);
+    const revision = task.report_revision || 1;
+    const previous = pendingReports.get(task.id);
+    if (previous && revision > previous) {
+      tabs.filter(tab => tab.path === `/history/${task.id}/report` ||
+                         (tab.path === '/' && tab.iframe.hasAttribute('src'))).forEach(refresh);
+    }
+    if (task.status === 'running' && revision === 1) pendingReports.set(task.id, revision);
+    else pendingReports.delete(task.id);
   }
 
   async function checkTasks() {
@@ -244,10 +246,10 @@ html,body{height:100%;overflow:hidden}
           scanAfter = task.id;
         }
       }
-      for (const id of unfinished) {
-        const state = await fetch(`/api/history/${id}`, {cache: 'no-store'});
-        if (state.ok) updateReport((await state.json()).task);
-        else if (state.status === 404) unfinished.delete(id);
+      for (const id of pendingReports.keys()) {
+        const response = await fetch(`/api/history/${id}`, {cache: 'no-store'});
+        if (response.ok) updateReport((await response.json()).task);
+        else if (response.status === 404) pendingReports.delete(id);
       }
     } catch (_) { /* Keep the current tabs through a temporary sidecar error. */ }
     finally { busy = false; }
@@ -271,8 +273,7 @@ html,body{height:100%;overflow:hidden}
       tabs.filter(tab => tab.iframe.hasAttribute('src')).forEach(refresh);
     }
     if (data?.type === 'nd-report' && Number.isSafeInteger(data.taskId) && data.taskId > 0) {
-      showReport(data.taskId);
-      unfinished.add(data.taskId);
+      updateReport({id:data.taskId, report_ready:true, status:data.status, report_revision:data.revision});
     }
     if (data?.type === 'nd-navigate' && data.path === '/run') openTab('/run');
   });

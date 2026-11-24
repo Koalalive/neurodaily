@@ -101,11 +101,24 @@
       ctx.fillStyle = '#9fb3c8'; ctx.font = '18px -apple-system,Segoe UI,sans-serif';
       ctx.fillText(visible.length + ' ' + (tm?.items || '个条目') + ' · ' + topics.length + ' ' + (tm?.topics || '个主题'), 18, 28);
     }
+    const topicById = new Map(topics.map(topic => [topic.id, topic]));
+    const labelFor = topic => topic?.labels?.[lang] || topic?.label || ((tm?.topic || '主题') + ' ' + topic?.id);
+    function topicHeading(topic) {
+      const h = document.createElement('h3');
+      h.textContent = labelFor(topic);
+      h.prepend(dot(topic.id));
+      side.append(h);
+      const meaning = topic.descriptions?.[lang];
+      if (meaning) {
+        const note = document.createElement('p');
+        note.className = 'tm-meaning';
+        note.textContent = meaning;
+        side.append(note);
+      }
+    }
     function detail(p) {
       side.replaceChildren();
-      const h = document.createElement('h3'); h.textContent = (p.labels && p.labels[lang]) || p.label || ((tm?.topic || '主题') + ' ' + p.topic);
-      h.prepend(dot(p.topic));
-      side.append(h);
+      topicHeading(topicById.get(p.topic) || {...p, id:p.topic});
       const title = document.createElement('p'); title.textContent = p.title || ''; title.style.fontWeight = '700'; side.append(title);
       const meta = document.createElement('p'); meta.textContent = [kindLabel(p.kind), p.venue, p.date].filter(Boolean).join(' · '); side.append(meta);
       if (p.summary) { const summary = document.createElement('p'); summary.textContent = p.summary; side.append(summary); }
@@ -130,11 +143,11 @@
       const b = document.createElement('button'); b.type='button'; b.className='tm-chip'; b.textContent=label;
       if (id !== 'all') b.prepend(dot(id));
       b.setAttribute('aria-pressed', String(selectedTopic === id));
-      b.onclick = () => { selectedTopic = id; selectedPoint = null; side.replaceChildren(...intro); legend.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); draw(); };
+      b.onclick = () => { selectedTopic = id; selectedPoint = null; side.replaceChildren(); if (id === 'all') side.append(...intro); else topicHeading(topicById.get(id)); legend.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); draw(); };
       return b;
     }
     legend.append(chip(tm?.all || '全部', 'all'));
-    for (const t of topics.slice(0, 14)) { const label=(t.labels&&t.labels[lang])||t.label||('主题 '+t.id); legend.append(chip(label + ' · ' + t.size, t.id)); }
+    for (const t of topics.filter(topic => topic.size)) legend.append(chip(labelFor(t) + ' · ' + t.size, t.id));
     canvas.addEventListener('click', pick);
     draw();
   })();

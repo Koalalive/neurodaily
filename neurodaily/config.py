@@ -7,11 +7,13 @@ and KEYWORDS once, and the app turns it into:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import sys
 from dataclasses import dataclass, field, asdict
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
@@ -27,6 +29,30 @@ OPTIONAL_SOURCES = {
     "nih_brain": {"enabled": False, "max_results": 25, "lookback_days": 7},
     "crossref": {"enabled": False, "max_results": 20, "lookback_days": 2},
 }
+
+
+class ConfigurationChanged(ValueError):
+    """The configuration no longer matches the version that was reviewed."""
+
+
+def config_lock_path(path: str) -> Path:
+    canonical = os.path.normcase(str(Path(path).resolve()))
+    key = hashlib.sha256(os.fsencode(canonical)).hexdigest()
+    return Path(DEFAULT_DIRS["output"]) / ".config-locks" / key
+
+
+def write_config(path: str, data: dict) -> None:
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    temporary = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory, delete=False) as stream:
+            temporary = stream.name
+            json.dump(data, stream, indent=2, ensure_ascii=False)
+        os.replace(temporary, path)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 # ---------------------------------------------------------------------------
@@ -65,13 +91,20 @@ class Journal:
     url: str = ""                   # official site
     rss: str = ""                   # optional RSS feed
     category: str = "neuroscience"  # grouping label in the UI
-    # Optional user-hardcoded metrics (override official import / OpenAlex).
+    # Optional profile metrics, with a shared year for legacy configurations.
     impact_factor: float | None = None
     jcr: str = ""
     cas: str = ""
     metric_year: int | None = None
     aliases: list[str] = field(default_factory=list)
     issns: list[str] = field(default_factory=list)
+    impact_factor_year: int | None = None
+    jcr_year: int | None = None
+    cas_year: int | None = None
+    cas_top: bool = False
+    sci: bool | None = None
+    ssci: bool | None = None
+    tags: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -83,11 +116,19 @@ class Journal:
             impact_factor = float(raw_if) if raw_if not in (None, "") else None
         except (TypeError, ValueError):
             impact_factor = None
-        raw_year = d.get("metric_year", d.get("year"))
-        try:
-            year = int(raw_year) if raw_year not in (None, "") else None
-        except (TypeError, ValueError):
-            year = None
+        def year(value):
+            try:
+                return int(value) if value not in (None, "") and not isinstance(value, bool) else None
+            except (TypeError, ValueError):
+                return None
+
+        def indexed(key):
+            value = d.get(key)
+            return value if isinstance(value, bool) else None
+
+        raw_tags = d.get("tags")
+        tags = list(dict.fromkeys(tag.strip() for tag in raw_tags
+                                  if isinstance(tag, str) and tag.strip())) if isinstance(raw_tags, list) else []
         return Journal(
             name=d["name"],
             url=d.get("url", ""),
@@ -96,9 +137,16 @@ class Journal:
             impact_factor=impact_factor,
             jcr=str(d.get("jcr", "") or "").strip(),
             cas=str(d.get("cas", "") or "").strip(),
-            metric_year=year,
+            metric_year=year(d.get("metric_year", d.get("year"))),
             aliases=list(d.get("aliases", [])),
             issns=list(d.get("issns", [])),
+            impact_factor_year=year(d.get("impact_factor_year", d.get("if_year"))),
+            jcr_year=year(d.get("jcr_year")),
+            cas_year=year(d.get("cas_year")),
+            cas_top=d.get("cas_top") is True,
+            sci=indexed("sci"),
+            ssci=indexed("ssci"),
+            tags=tags,
         )
 
 
@@ -162,19 +210,18 @@ class Config:
             search=dict(data.get("search") or {}),
         )
 
-    def save(self, path: str | None = None) -> str:
+    def version(self) -> str:
+        data = json.dumps(self.to_dict(), sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+    def save(self, path: str | None = None, *, expected_version: str | None = None) -> str:
+        from .file_lock import file_lock
+
         p = path or self.default_path()
-        directory = os.path.dirname(p) or "."
-        os.makedirs(directory, exist_ok=True)
-        temporary = None
-        try:
-            with NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory, delete=False) as f:
-                temporary = f.name
-                json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-            os.replace(temporary, p)
-        finally:
-            if temporary and os.path.exists(temporary):
-                os.unlink(temporary)
+        with file_lock(config_lock_path(p)):
+            if expected_version is not None and self.load(p).version() != expected_version:
+                raise ConfigurationChanged("The configuration changed since the trial. Start a new comparison.")
+            write_config(p, self.to_dict())
         return p
 
     # ------------------------------------------------------------- accessors

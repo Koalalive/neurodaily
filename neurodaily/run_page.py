@@ -58,9 +58,10 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
     task.hidden=!run.id;
     if(run.id) task.href='/history/'+run.id;
     var sources=Object.values(run.sources||{});
-    var done=sources.filter(function(source){return source.status!=='pending';}).length;
-    var status=t(run.scheduled_for?'定时检索正在运行':'检索正在运行');
-    set(status+(sources.length?' · '+t('已处理 {done}/{total} 个来源',{done:done,total:sources.length}):''));
+    var done=sources.filter(function(source){return !['pending','running'].includes(source.status);}).length;
+    var phases={metrics:'正在更新期刊指标…',ai:'正在生成 AI 摘要…',geolocation:'正在定位地图条目…',topics:'正在生成主题景观…',report:'正在保存日报…',index:'正在更新历史索引…',delivery:'日报已生成，正在投递…'};
+    var status=t(phases[run.phase]||(run.scheduled_for?'定时检索正在运行':'检索正在运行'));
+    set(status+(run.phase==='search'&&sources.length?' · '+t('已处理 {done}/{total} 个来源',{done:done,total:sources.length}):''));
   }
   async function refresh(){
     if(submitting||checking||document.hidden) return;
@@ -70,6 +71,11 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
       if(submitting) return;
       var next=!!run&&run.status==='running';
       if(next) progress(run);
+      else if(run&&run.workflow&&run.status==='interrupted'){
+        task.hidden=false;
+        task.href='/history/'+run.id;
+        set(t('上次检索中断。打开任务详情继续。'));
+      }
       else if(sharedBusy) set('');
       sharedBusy=next;
       updateButton();
@@ -84,14 +90,14 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
         if(response.ok) run=(await response.json()).task;
       }
       if(run && run.id===id){
-        if(run.report_ready && run.status!=='running' && announcedReport!==id){
+        if(run.report_ready && announcedReport!==id){
           announcedReport=id;
           if(window.parent===window){
             set(t('已生成日报（{count} 条），正在打开…',{count:run.item_count}),true);
             location.href='/history/'+id+'/report';
             return;
           }
-          window.parent.postMessage({type:'nd-report',taskId:id},location.origin);
+          window.parent.postMessage({type:'nd-report',taskId:id,status:run.status,revision:run.report_revision},location.origin);
         }
         if(run.status!=='running'){
           submitting=false;

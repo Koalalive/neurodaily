@@ -6,11 +6,12 @@ import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
+from datetime import datetime
 from pathlib import Path
 from threading import Event
 from unittest.mock import patch
 
-from neurodaily import history
+from neurodaily import delivery, delivery_receipts, history
 from neurodaily.delivery import _destination, deliver_report, list_receipts, retry_delivery
 from neurodaily.digest import DigestResult
 from neurodaily.models import Item
@@ -135,6 +136,29 @@ class DeliveryReceiptTests(unittest.TestCase):
         self.send_hook.return_value = {"wecom": "ok"}
         updated = retry_delivery(self.result, self.report, self.task_id, destination)
         self.assertEqual((updated["status"], updated["attempts"]), ("accepted", 1))
+
+    def test_queued_email_keeps_its_pending_receipt_while_destination_is_busy(self):
+        address = "lab@example.test"
+        profile = self.result.config_profile
+        destination = _destination("email", address)
+        self.email.update(enabled=True, to=[address])
+        delivery_receipts.prepare(self.task_id, profile, [(destination, "email", "email 1")])
+        Path(self.report).write_text("<html>Queued report</html>", encoding="utf-8")
+        queued = Path(self.report).with_name("queue.json")
+        now = datetime.fromisoformat("2026-11-21T14:00:00")
+        with (patch("neurodaily.delivery._queue_path", return_value=queued),
+              patch("neurodaily.task_runs.load_result", return_value=self.result)):
+            delivery._queue_email(self.task_id, self.report, profile,
+                                  {"address": address}, "2026-11-21T13:00:00")
+            with history.delivery_lease(profile, destination) as acquired:
+                self.assertTrue(acquired)
+                self.assertEqual(delivery.run_email_queue(now), {})
+                self.assertEqual(len(delivery._read_queue()), 1)
+            self.assertEqual(delivery.run_email_queue(now), {address: "ok"})
+            self.assertEqual(delivery.run_email_queue(now), {})
+        self.send_mail.assert_called_once()
+        receipt, = list_receipts(self.task_id)
+        self.assertEqual((receipt["status"], receipt["attempts"]), ("accepted", 1))
 
     def test_retry_with_stale_attempt_cannot_send_after_another_retry_failed(self):
         self.send_hook.return_value = {"wecom": "failed"}

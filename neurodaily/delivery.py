@@ -142,35 +142,33 @@ def run_email_queue(now: datetime | None = None) -> dict:
         if recipient is None or result is None or not Path(report_path).is_file():
             continue
         destination = _destination("email", address.strip().casefold())
-        if not delivery_receipts.transition(str(entry["task_id"]), entry.get("profile") or result.config_profile,
-                                            destination, "pending", "checking"):
-            continue
+        task_id = str(entry["task_id"])
+        profile = entry.get("profile") or result.config_profile
         limits = {key: _limit(email.get("max_other"), 15) for key in result.sections}
         if (email.get("body_mode") or "summary") == "summary":
             limits["papers"] = _limit(email.get("summary_papers"), 12)
         else:
             limits["papers"] = _limit(email.get("max_papers"), 40)
-        with history.delivery_lease(entry.get("profile") or result.config_profile, destination) as acquired:
+        with history.delivery_lease(profile, destination) as acquired:
             if not acquired:
                 remain.append(entry)
                 continue
+            if not delivery_receipts.transition(task_id, profile, destination, "pending", "checking"):
+                continue
             subset, sent = _increment(result, destination, limits, None)
             if not sent:
-                delivery_receipts.transition(str(entry["task_id"]), entry.get("profile") or result.config_profile,
-                                             destination, "checking", "no_new")
+                delivery_receipts.transition(task_id, profile, destination, "checking", "no_new")
                 outcomes[address] = "no_new"
                 continue
-            delivery_receipts.transition(str(entry["task_id"]), entry.get("profile") or result.config_profile,
-                                         destination, "checking", "sending")
+            if not delivery_receipts.transition(task_id, profile, destination, "checking", "sending"):
+                continue
             try:
                 _send_email(subset, result, report_path, email, address, attempts=1,
                             language=recipient.get("language") or "zh")
-                delivery_receipts.transition(str(entry["task_id"]), entry.get("profile") or result.config_profile,
-                                             destination, "sending", "accepted", sent=sent)
+                delivery_receipts.transition(task_id, profile, destination, "sending", "accepted", sent=sent)
                 outcomes[address] = "ok"
             except Exception as exc:
-                delivery_receipts.transition(str(entry["task_id"]), entry.get("profile") or result.config_profile,
-                                             destination, "sending", "failed", error=_email_error(exc))
+                delivery_receipts.transition(task_id, profile, destination, "sending", "failed", error=_email_error(exc))
                 outcomes[address] = "failed"
     _write_queue(remain)
     return outcomes
@@ -210,7 +208,8 @@ def retry_delivery(result: DigestResult, report_path: str, task_id: str, destina
 
 
 def deliver_report(result: DigestResult, report_path: str, *, task_id: str | None = None,
-                   retry_destination: str | None = None) -> dict:
+                   retry_destination: str | None = None, resuming: bool = False,
+                   check_cancelled=None) -> dict:
     """Send each destination's new items and record its task-scoped delivery status."""
     retrying = retry_destination is not None
     if retrying and not task_id:
@@ -240,6 +239,13 @@ def deliver_report(result: DigestResult, report_path: str, *, task_id: str | Non
         if not targets:
             raise ValueError("该投递目标已从当前设置中移除或变更。")
     else:
+        existing = {row["destination"]: row["status"] for row in list_receipts(task_id)} if resuming and task_id else {}
+        if existing:
+            current = {row[0] for row in targets}
+            targets = [row for row in targets if existing.get(row[0]) == "pending"]
+            for destination in existing.keys() - current:
+                delivery_receipts.transition(task_id, profile, destination, "pending", "failed",
+                                             error="该投递目标已从当前设置中移除或变更。")
         if task_id is not None and targets:
             delivery_receipts.prepare(task_id, profile, [(destination, channel, label)
                                                        for destination, channel, label, _, _ in targets])
@@ -255,6 +261,8 @@ def deliver_report(result: DigestResult, report_path: str, *, task_id: str | Non
         email_limits["papers"] = _limit(email.get("max_papers"), 40)
     hook_cap = _limit(hooks.get("max_items"), 8)
     for destination, channel, label, address, recipient in targets:
+        if check_cancelled:
+            check_cancelled()
         is_email = channel == "email"
         has_password = not is_email or bool(mailer._password(email))
         if task_id is None and not has_password:

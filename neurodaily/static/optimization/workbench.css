@@ -1,0 +1,83 @@
+#optimization-workbench {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.optimization-heading, .optimization-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.optimization-heading { justify-content: space-between; margin-bottom: .75rem; }
+.optimization-heading h3 { margin: 0; font-size: 1rem; }
+.optimization-heading p { margin: .125rem 0 0; }
+.optimization-switch { color: var(--text); }
+.optimization-switch input { accent-color: var(--accent); }
+.optimization-muted { color: var(--muted); }
+.optimization-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: .75rem;
+}
+.optimization-chat-column, .optimization-evidence-column, .optimization-card {
+  min-width: 0;
+  padding: .75rem;
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  background: var(--panel2);
+}
+.optimization-actions select { width: auto; max-width: 100%; }
+#optimization-chat {
+  min-height: 8rem;
+  margin: .5rem 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+}
+#optimization-chat deep-chat { width: 100%; height: 15rem; }
+.optimization-transcript { margin: 0; list-style: none; padding: .75rem; max-height: 15rem; overflow-y: auto; }
+.optimization-transcript li { margin-bottom: .5rem; white-space: pre-wrap; }
+#optimization-form textarea { margin: .25rem 0 .4rem; resize: vertical; line-height: 1.5; }
+#optimization-form button[type=submit] { color: var(--accent); border-color: var(--accent); }
+#optimization-budget label { display: block; margin: .25rem 0; }
+#optimization-budget input[type=number] { width: 4rem; margin-left: .25rem; }
+.optimization-evidence-column h4, .optimization-card h5 { margin: 0; font-size: .9rem; }
+.optimization-evidence-column p { margin: .375rem 0; }
+#optimization-categories button { padding: .3rem .5rem; }
+#optimization-findings { max-height: 25rem; overflow-y: auto; margin-top: .25rem; }
+#optimization-findings details, .optimization-card details {
+  padding: .4rem 0;
+  border-top: 1px solid var(--line);
+}
+#optimization-findings details:first-child { border-top: 0; }
+#optimization-workbench summary { cursor: pointer; }
+#optimization-workbench :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#optimization-status:empty, #optimization-controls:empty { display: none; }
+#optimization-status { margin: .65rem 0 .4rem; }
+#optimization-error { color: #fca5a5; }
+#optimization-review h4 { margin: .75rem 0 .5rem; }
+.optimization-card + .optimization-card { margin-top: .5rem; }
+.optimization-card pre, #optimization-findings pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.optimization-metrics {
+  display: grid;
+  grid-template-columns: minmax(8rem, 2fr) minmax(4rem, 1fr) minmax(4rem, 1fr);
+  gap: .25rem .5rem;
+  padding: .4rem 0;
+  font-size: .85rem;
+}
+.optimization-metrics dt, .optimization-metrics dd { margin: 0; }
+.optimization-row { display: contents; }
+.optimization-records { padding-left: 1.125rem; }
+.optimization-records li { margin: .35rem 0; }
+.optimization-records .optimization-actions { margin-top: .2rem; }
+.optimization-records button { padding: .2rem .4rem; }
+.optimization-health { color: var(--muted); }
+@media (max-width: 700px) {
+  .optimization-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+  .optimization-metrics { grid-template-columns: minmax(0, 1.5fr) minmax(0, .8fr) minmax(0, .8fr); }
+}

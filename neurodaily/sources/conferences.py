@@ -31,9 +31,13 @@ def fetch(config, logger=None) -> list[Item]:
     today = date.today()
     horizon = today + timedelta(days=730)
     limit = max(1, int(opts.get("max_results", 50)))
+    profiles = {"neuro", "oncology", "critical-care"}
+    profile = (opts.get("query") or config.profile).casefold().strip()
     out = []
     for row in rows:
         if not isinstance(row, dict):
+            continue
+        if profile in profiles and profile not in row.get("profiles", ["neuro"]):
             continue
         start, end = _date(row.get("start")), _date(row.get("end"))
         if not start or not end or end < today or start > horizon:

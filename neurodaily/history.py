@@ -160,7 +160,8 @@ def search_snapshot(config, mode, health, items, windows) -> dict:
         "journals": [{"name": j.name, "aliases": j.aliases, "issns": j.issns}
                      for j in config.journals],
         "records": [{"ids": item.extra.get("record_ids") or record_ids(item),
-                     "title": item.title, "url": item.url,
+                     "title": item.title, "url": item.url, "kind": item.kind, "source": item.source,
+                     "journal": item.extra.get("journal", ""), "tags": item.tags, "date": item.date,
                      "matched_rules": item.extra.get("matched_rules", []),
                      "missing_fields": item.extra.get("missing_fields", [])} for item in items],
     }

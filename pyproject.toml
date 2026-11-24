@@ -12,10 +12,13 @@ dependencies = [
     "feedparser>=6.0",
     "jinja2>=3.1",
     "python-dateutil>=2.9",
+    "langgraph>=1.2.24,<2",
+    "langgraph-checkpoint-sqlite>=3.1.3,<4",
 ]
 
 [project.optional-dependencies]
 topics = ["scikit-learn>=1.4"]
+mcp = ["mcp>=1.30,<2"]
 test = ["beautifulsoup4>=4.12", "soupsieve>=4.0"]
 
 [project.scripts]
@@ -29,4 +32,4 @@ build-backend = "setuptools.build_meta"
 include = ["neurodaily*"]
 
 [tool.setuptools.package-data]
-neurodaily = ["templates/*.j2", "data/presets/*.json", "data/conferences.json", "data/search_quality_sample.json", "data/natural_earth_*.json"]
+neurodaily = ["templates/*.j2", "data/presets/*.json", "data/conferences.json", "data/search_quality_sample.json", "data/natural_earth_*.json", "static/optimization/*"]

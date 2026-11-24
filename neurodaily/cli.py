@@ -68,7 +68,7 @@ def cmd_run(args) -> int:
             from .research_activity import enrich_geography
             enrich_geography(result)
         except Exception:
-            print("[neurodaily] ⚠ AI geography unavailable; the research map is disabled.")
+            print("[neurodaily] ⚠ AI geography unavailable; the map will use source metadata.")
         try:
             from .topic_map import enrich_topics
             if enrich_topics(result):
@@ -733,6 +733,20 @@ def cmd_search_quality(args) -> int:
     return 0
 
 
+def cmd_mcp(args) -> int:
+    from .optimization_mcp import make_server
+
+    try:
+        server = make_server(args.config)
+    except ModuleNotFoundError as exc:
+        if exc.name != "mcp":
+            raise
+        print("[neurodaily] Install NeuroDaily with its MCP extra (neurodaily[mcp]).", file=sys.stderr)
+        return 2
+    server.run(transport="stdio")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="neurodaily",
                                 description="Daily neuroscience/psychiatry digest → HTML.")
@@ -878,6 +892,9 @@ def build_parser() -> argparse.ArgumentParser:
     quality_p.add_argument("--baseline", help="path to a baseline config JSON for comparison")
     quality_p.add_argument("--top", type=int, default=20, help="size of the ranking cutoff (default: 20)")
     quality_p.set_defaults(func=cmd_search_quality)
+
+    mcp_p = sub.add_parser("mcp", help="serve local read-only search evidence over MCP stdio")
+    mcp_p.set_defaults(func=cmd_mcp)
 
     return p
 

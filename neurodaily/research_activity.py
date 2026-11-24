@@ -3,46 +3,28 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from .config import DEFAULT_DIRS
 from .digest import DigestResult
-from .geography import FINANCING_SIGNAL, locate_items
+from .geography import locate_items
 from .models import Item
 from .records import normalize_doi, record_ids
 
-_MAP_KINDS = {"paper", "trial", "news", "policy", "funding", "conference"}
-
-
-def _index(items: list[Item]) -> dict[str, Item]:
-    result = {}
-    for item in items:
-        identifiers = item.extra.get("record_ids") or record_ids(item)
-        record_id = identifiers[0]
-        if record_id in result and result[record_id].kind != item.kind:
-            record_id = f"{item.kind}:{record_id}"
-        result.setdefault(record_id, item)
-    return result
-
-
-def _mapped(items: dict[str, Item]) -> dict[str, Item]:
-    mapped = {}
-    for record_id, item in items.items():
-        if item.kind not in _MAP_KINDS:
-            continue
-        kind = item.kind
-        if kind == "funding" and item.source == "policy":
-            host = urlsplit(item.extra.get("source_url") or "").hostname or ""
-            if host == "fda.gov" or host.endswith(".fda.gov"):
-                kind = "policy"
-        elif kind == "news" and FINANCING_SIGNAL.search(item.title):
-            kind = "funding"
-        mapped[record_id] = item if kind == item.kind else replace(item, kind=kind)
-    return mapped
+def _index(result: DigestResult) -> dict[str, tuple[str, Item]]:
+    indexed = {}
+    for category, items in result.report_categories().items():
+        for item in items:
+            identifiers = item.extra.get("record_ids") or record_ids(item)
+            record_id = identifiers[0]
+            if record_id in indexed:
+                record_id = f"{item.kind}:{record_id}"
+                if record_id in indexed:
+                    record_id = f"{record_id}:{len(indexed)}"
+            indexed[record_id] = (category, item)
+    return indexed
 
 
 @lru_cache(maxsize=1)
@@ -65,13 +47,13 @@ def enrich_geography(result: DigestResult) -> bool:
     model = cfg["model"]
     cache_key = hashlib.sha256(json.dumps([base, model]).encode()).hexdigest()
     cache_dir = Path(DEFAULT_DIRS["output"], "geography_cache", cache_key)
-    mapped = _mapped(_index(result.items))
+    mapped = _index(result)
     # News/policy feeds often carry only a headline. Fetch the article text so the
     # geolocation model can trace the event location instead of leaving it unknown.
     try:
         from .sources.http import get as _get, strip_html as _strip_html
-        candidates = [item for item in mapped.values()
-                      if item.kind in {"news", "policy", "funding"} and item.url
+        candidates = [item for _, item in mapped.values()
+                      if item.kind in {"news", "policy", "funding", "drug", "device"} and item.url
                       and not item.extra.get("article_text")][:24]
         for item in candidates:
             response = _get(item.url, timeout=8.0, retries=0,
@@ -104,19 +86,17 @@ def enrich_geography(result: DigestResult) -> bool:
 
     # Process the full candidate set for a real report. The low-level helper keeps
     # its small default for callers that want a bounded preview.
-    result.geography = locate_items(mapped, chat=chat,
+    result.geography = locate_items({key: item for key, (_, item) in mapped.items()}, chat=chat,
                                     cache_dir=cache_dir, max_model_items=400,
                                     batch_size=6)
     return True
 
 
 def report_activity(result: DigestResult, external_url) -> dict:
-    mapped = _mapped(_index(result.items))
-    if result.geography is None:
-        # The map is an AI feature: without an LLM run it stays unavailable.
-        return {"enabled": False, "reason": "llm_required", "land": [], "places": [],
-                "unknown": [], "deferred": [], "records": {}}
+    mapped = _index(result)
     geo = result.geography
+    if geo is None:
+        geo = locate_items({key: item for key, (_, item) in mapped.items()})
     places = [place for place in geo["places"] if place["id"] in mapped]
     covered = {place["id"] for place in places}
     return {
@@ -125,14 +105,15 @@ def report_activity(result: DigestResult, external_url) -> dict:
         "places": places,
         "unknown": [record_id for record_id in mapped if record_id not in covered],
         "deferred": [record_id for record_id in geo.get("deferred", []) if record_id in mapped],
+        "order": list(mapped),
         "records": {
             record_id: {
-                "title": item.title, "source": item.source, "kind": item.kind,
+                "title": item.title, "source": item.source, "kind": item.kind, "category": category,
                 "journal": (item.extra.get("journal") if item.kind == "paper" else "") or "",
                 "venue": (item.extra.get("journal") if item.kind == "paper" else
                           (item.extra.get("feed") or item.source)),
                 "date": item.date_display, "url": external_url(item.url),
                 "summary": " ".join((item.summary or "").split())[:240].strip(),
-            } for record_id, item in mapped.items()
+            } for record_id, (category, item) in mapped.items()
         },
     }

@@ -20,9 +20,14 @@
       "name": "Organ Support and ICU Recovery",
       "mesh_terms": ["Multiple Organ Failure", "Acute Kidney Injury", "Delirium"],
       "keywords": ["multiple organ dysfunction", "acute kidney injury", "CRRT", "ICU delirium", "post-intensive care syndrome"]
+    },
+    {
+      "name": "Neurocritical and Pediatric Intensive Care",
+      "mesh_terms": ["Intensive Care Units, Pediatric", "Intracranial Pressure", "Brain Injuries, Traumatic"],
+      "keywords": ["neurocritical care", "pediatric intensive care", "intracranial pressure monitoring", "ICU sedation", "pediatric sepsis"]
     }
   ],
-  "global_keywords": ["intensive care", "sepsis", "septic shock", "ARDS", "mechanical ventilation", "ECMO"],
+  "global_keywords": ["intensive care", "sepsis", "septic shock", "ARDS", "mechanical ventilation", "ECMO", "hemodynamic monitoring", "ICU rehabilitation"],
   "journals": [
     {
       "name": "Intensive Care Medicine",
@@ -58,6 +63,20 @@
       "aliases": ["Crit Care Explor"],
       "issns": ["2639-8028"],
       "category": "clinical"
+    },
+    {
+      "name": "CHEST",
+      "url": "https://www.sciencedirect.com/journal/chest",
+      "aliases": ["Chest"],
+      "issns": ["0012-3692", "1931-3543"],
+      "category": "clinical"
+    },
+    {
+      "name": "Annals of the American Thoracic Society",
+      "url": "https://academic.oup.com/annalsats",
+      "aliases": ["Ann Am Thorac Soc", "AnnalsATS"],
+      "issns": ["2329-6933", "2325-6621"],
+      "category": "clinical"
     }
   ],
   "sources": {
@@ -65,10 +84,20 @@
     "pubmed": {"enabled": true, "max_results": 500, "lookback_days": 2},
     "arxiv": {"enabled": false, "max_results": 200, "lookback_days": 2},
     "biorxiv": {"enabled": false, "max_results": 300, "lookback_days": 2},
-    "fda_drugs": {"enabled": false, "max_results": 200, "lookback_days": 7},
-    "fda_devices": {"enabled": false, "max_results": 100, "lookback_days": 7},
+    "fda_drugs": {"enabled": true, "max_results": 60, "lookback_days": 7, "filter_keywords": ["norepinephrine", "vasopressin", "epinephrine", "dexmedetomidine", "sedation", "sepsis"]},
+    "fda_devices": {"enabled": true, "max_results": 60, "lookback_days": 7, "filter_keywords": ["ventilator", "respiratory support", "extracorporeal", "oxygenator", "hemodynamic", "infusion pump", "dialysis"]},
     "trials": {"enabled": true, "max_results": 300, "lookback_days": 7},
+    "europe_pmc": {"enabled": true, "max_results": 40, "lookback_days": 2},
+    "conferences": {"enabled": true, "max_results": 30, "lookback_days": 365, "query": "critical-care"},
+    "google_news_zh": {"enabled": false},
+    "critical_care_news": {"enabled": true, "type": "rss", "kind": "news", "url": "https://www.nih.gov/news-releases/feed.xml", "filter_keywords": ["critical care", "intensive care", "sepsis", "acute respiratory distress", "mechanical ventilation"], "max_results": 20, "lookback_days": 14},
+    "critical_care_regulatory": {"enabled": true, "type": "rss", "kind": "policy", "url": "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml", "filter_keywords": ["ventilator", "infusion pump", "extracorporeal", "sepsis", "dialysis"], "max_results": 20, "lookback_days": 14},
     "policy": {"enabled": false, "max_results": 200, "lookback_days": 2}
   },
-  "policy_feeds": []
+  "policy_feeds": [],
+  "search": {
+    "rules": {
+      "trial": "TS=\"intensive care\" OR TS=\"critical care\" OR TS=sepsis OR TS=\"septic shock\" OR TS=ARDS OR TS=\"mechanical ventilation\" OR TS=ECMO OR TS=\"post-intensive care syndrome\""
+    }
+  }
 }

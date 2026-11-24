@@ -48,11 +48,19 @@
       "bio_cats": ["epidemiology"],
       "keywords": ["cancer epidemiology", "screening", "risk factors", "survival"],
       "enabled": true
+    },
+    {
+      "name": "Hematologic Malignancies and Cell Therapy",
+      "mesh_terms": ["Hematologic Neoplasms", "Leukemia", "Lymphoma", "Multiple Myeloma"],
+      "bio_cats": ["cancer biology", "immunology"],
+      "keywords": ["hematologic malignancy", "leukemia", "lymphoma", "multiple myeloma", "CAR T-cell therapy", "bispecific antibody"],
+      "enabled": true
     }
   ],
   "global_keywords": [
     "cancer", "tumor", "oncology", "carcinoma", "metastasis", "chemotherapy",
-    "immunotherapy", "biomarker", "ctDNA", "CAR-T", "checkpoint inhibitor"
+    "immunotherapy", "biomarker", "ctDNA", "CAR-T", "checkpoint inhibitor",
+    "antibody-drug conjugate", "cancer screening", "germline predisposition"
   ],
   "journals": [
     {"name": "Nature Cancer", "url": "https://www.nature.com/natcancer", "rss": "https://www.nature.com/natcancer.rss", "category": "general"},
@@ -75,9 +83,14 @@
     "pubmed": {"enabled": true, "max_results": 500, "lookback_days": 2},
     "arxiv": {"enabled": true, "max_results": 200, "lookback_days": 2},
     "biorxiv": {"enabled": true, "max_results": 300, "lookback_days": 2},
-    "fda_drugs": {"enabled": true, "max_results": 200, "lookback_days": 7},
-    "fda_devices": {"enabled": true, "max_results": 100, "lookback_days": 7},
+    "fda_drugs": {"enabled": true, "max_results": 200, "lookback_days": 7, "filter_keywords": ["oncology", "cancer", "tumor", "pembrolizumab", "nivolumab", "trastuzumab", "cisplatin", "paclitaxel", "doxorubicin", "leucel"]},
+    "fda_devices": {"enabled": true, "max_results": 100, "lookback_days": 7, "filter_keywords": ["oncology", "cancer", "tumor", "biopsy", "radiotherapy", "mammograph", "carcinoma"]},
     "trials": {"enabled": true, "max_results": 300, "lookback_days": 7},
+    "europe_pmc": {"enabled": true, "max_results": 40, "lookback_days": 2},
+    "conferences": {"enabled": true, "max_results": 30, "lookback_days": 365, "query": "oncology"},
+    "google_news_zh": {"enabled": false},
+    "nci_cancer_currents": {"enabled": true, "type": "rss", "kind": "news", "url": "https://www.cancer.gov/publishedcontent/rss/news-events/cancer-currents-blog.rss", "max_results": 20, "lookback_days": 7},
+    "oncology_regulatory": {"enabled": true, "type": "rss", "kind": "policy", "url": "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml", "filter_keywords": ["oncology", "cancer", "tumor", "carcinoma", "leukemia", "lymphoma"], "max_results": 20, "lookback_days": 7},
     "policy": {"enabled": true, "max_results": 200, "lookback_days": 2}
   },
   "policy_feeds": [
@@ -86,5 +99,10 @@
     "https://www.nature.com/nrc.rss",
     "https://www.nature.com/natcancer.rss",
     "https://www.cell.com/action/showFeed?type=etoc&feed=rss&jc=can"
-  ]
+  ],
+  "search": {
+    "rules": {
+      "trial": "TS=cancer OR TS=oncology OR TS=neoplasm OR TS=carcinoma OR TS=leukemia OR TS=lymphoma OR TS=myeloma OR TS=melanoma OR TS=sarcoma"
+    }
+  }
 }

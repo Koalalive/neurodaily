@@ -1,9 +1,28 @@
+{% macro journal_badges(m, cas_label) -%}
+  {% if m %}
+    {% set if_year = m.get('if_year', m.get('year')) %}
+    {% set jcr_year = m.get('jcr_year', m.get('year')) %}
+    {% set cas_year = m.get('cas_year', m.get('year')) %}
+    {% if m.get('if') is not none %}<span class="tag tj" title="期刊影响因子">{% if if_year %}{{ if_year }} {% endif %}IF {{ m['if'] }}</span>{% endif %}
+    {% if m.get('jcr') %}<span class="tag t">{% if jcr_year %}{{ jcr_year }} {% endif %}JCR {{ m['jcr'] }}</span>{% endif %}
+    {% if m.get('cas') or m.get('cas_top') %}<span class="tag t">{% if cas_year %}{{ cas_year }} {% endif %}{{ cas_label }}{% if m.get('cas') %} {{ m['cas'] }}{% endif %}{% if m.get('cas_top') and 'top' not in (m.get('cas') or '')|lower %} Top{% endif %}</span>{% endif %}
+    {% for index in ['sci', 'ssci'] %}
+      {% if m.get(index) is true %}<span class="tag t" title="已收录">{{ index|upper }}</span>
+      {% elif m.get(index) is false %}<span class="tag t">{{ index|upper }} <span>未收录</span></span>{% endif %}
+    {% endfor %}
+    {% for tag in m.get('tags') or [] %}<span class="tag t journal-mark" data-no-i18n>{{ tag }}</span>{% endfor %}
+    {% if m.get('if') is none and m.get('oa_2yr') is not none %}<span class="tag t" title="OpenAlex 两年平均被引次数（非 JCR IF）">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}
+  {% endif %}
+{%- endmacro %}
+
 {% macro tags_meta(it, badge_class) -%}
 <div class="meta">
   <span class="badge {{ badge_class }}">{{ it.kind_label }}</span>
   {% if "top-journal" in it.tags and it.source != "pubmed" and it.source != "arxiv" %}<span class="badge b-journal" data-no-i18n>★ {{ it.source }}</span>{% endif %}
-  {% if it.extra.get('journal') and it.extra.get('journal') != it.source %}<span class="tag tj" data-no-i18n>{{ it.extra.get('journal') }}</span>{% endif %}
-  {% if it.extra.get('metrics') %}{% set m = it.extra.get('metrics') %}{% if m.get('if') %}<span class="tag tj" title="官方 JCR 影响因子">IF {{ m['if'] }}</span>{% endif %}{% if m.get('jcr') %}<span class="tag t">JCR {{ m['jcr'] }}</span>{% endif %}{% if m.get('cas') %}<span class="tag t">中科院 {{ m['cas'] }}</span>{% endif %}{% if not m.get('if') and m.get('oa_2yr') %}<span class="tag t" title="OpenAlex 2yr mean citedness（非 JCR IF）">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}{% endif %}
+  {% set m = it.extra.get('metrics') or {} %}
+  {% set journal_name = m.get('name') or it.extra.get('journal') %}
+  {% if journal_name and journal_name != it.source %}<span class="tag tj" data-no-i18n>{{ journal_name }}</span>{% endif %}
+  {{ journal_badges(m, {'en': 'CAS', 'ru': 'КАН'}.get(language, '中科院')) }}
   <span class="tag t" data-no-i18n>{{ it.source }}</span>
   {% if it.extra.get('search_match') == 'unknown' %}<span class="tag bad">待确认</span>{% endif %}
   {% if it.date_display %}<span class="tag t">{{ it.date_display }}</span>{% endif %}
@@ -162,6 +181,7 @@
          padding:2px 8px; border-radius:999px; }
   .tag.t { color: var(--muted); }
   .tag.tj { background:#38260a; color:#fbbf24; border:1px solid #5a3d12; }
+  .journal-mark { max-width:100%; overflow-wrap:anywhere; }
   .card-body { padding: 0 18px 14px 42px; }
   .summary { color: var(--muted); font-size:.88rem; margin:0 0 8px; }
   .evidence { margin:0 0 10px; padding:8px 12px; border-left:2px solid var(--accent);
@@ -241,6 +261,13 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 </style>
 </head>
 <body>
+{% set categories = result.report_categories() %}
+{% set category_labels = {
+  'zh': {'paper': '论文', 'trial': '临床试验', 'news': '新闻与政策', 'industry': '产业', 'conference': '学术会议'},
+  'en': {'paper': 'Papers', 'trial': 'Clinical trials', 'news': 'News and policy', 'industry': 'Industry', 'conference': 'Academic conferences'},
+  'ru': {'paper': 'Публикации', 'trial': 'Клинические исследования', 'news': 'Новости и политика', 'industry': 'Индустрия', 'conference': 'Научные конференции'}
+} %}
+{% set category_labels = category_labels.get(language, category_labels['zh']) %}
 {% set ui_labels = {
   'zh': {'window':'检索时间窗','trials':'🧪 临床试验','trials_desc':'新增或更新的临床研究。','conferences':'🗓️ 学术会议','conferences_desc':'即将召开的会议、截止日期与官网链接。','trials_stat':'试验','conf_stat':'会议'},
   'en': {'window':'Search window','trials':'🧪 Clinical Trials','trials_desc':'New or updated clinical studies.','conferences':'🗓️ Academic Conferences','conferences_desc':'Upcoming conferences, deadlines and official links.','trials_stat':'Trials','conf_stat':'Conferences'},
@@ -276,11 +303,9 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     {% endif %}
     <div class="stats">
       <div class="stat"><b>{{ result.items|length }}</b><span>Items</span></div>
-      <div class="stat"><b>{{ result.sections.get('papers', [])|length }}</b><span>Papers</span></div>
-      <div class="stat"><b>{{ result.sections.get('industry', [])|length }}</b><span>Industry</span></div>
-      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'trial')|list|length }}</b><span>{{ ui_labels.get('trials_stat', 'Trials') }}</span></div>
-      <div class="stat"><b>{{ result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'conference')|list|length }}</b><span>{{ ui_labels.get('conf_stat', 'Conferences') }}</span></div>
-      <div class="stat"><b>{{ result.sections.get('policy', [])|length }}</b><span>Policy / News</span></div>
+      {% for category, entries in categories.items() %}
+      <div class="stat" data-category="{{ category }}"><b>{{ entries|length }}</b><span data-no-i18n>{{ category_labels[category] }}</span></div>
+      {% endfor %}
     </div>
     <div class="toolbar">
       <button class="btn" id="runNow" type="button">▶ Run now</button>
@@ -297,19 +322,19 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 
 <main class="wrap">
   {{ block_section('papers', '📄 Latest Papers', 'New PubMed, arXiv, and bioRxiv preprints matching your focus.', 'b-doc') }}
-  {{ block_section('industry', '💊 Commercial & Regulatory Progress', 'Recent FDA drug approvals and 510(k) device clearances.', 'b-drug') }}
-  {% set trial_items = result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'trial')|list %}
-  {% set conference_items = result.sections.get('trials_conferences', [])|selectattr('kind', 'equalto', 'conference')|list %}
+  {{ block_section('industry', '💊 Commercial & Regulatory Progress', 'Drug approvals, device clearances, and funding records.', 'b-drug') }}
+  {% set trial_items = categories['trial'] %}
+  {% set conference_items = categories['conference'] %}
   {{ block_section('trials', ui_labels.get('trials', '🧪 Clinical Trials'), ui_labels.get('trials_desc', 'New + updated clinical studies.'), 'b-trial', trial_items) }}
   {{ block_section('conferences', ui_labels.get('conferences', '🗓️ Academic Conferences'), ui_labels.get('conferences_desc', 'Upcoming conferences, deadlines and official links.'), 'b-conference', conference_items) }}
-  {{ block_section('policy', '🏛️ Policy, Funding & News', 'Institutional press, agency announcements, and news.', 'b-policy') }}
+  {{ block_section('policy', '🏛️ News and policy', 'Institutional press, agency announcements, and news.', 'b-policy') }}
 
   {% if result.config and result.config.journals %}
   <section id="journals">
     <h2 class="sec-title"><span class="dot"></span>Top Journals
       <span class="count">({{ result.config.journals|length }})</span></h2>
     <p class="sec-desc"><span>Curated watch-list of leading journals — click to browse each site.</span>
-      <span>IF、JCR 和中科院分区来自导入的官方表。</span>
+      <span>期刊指标优先采用当前配置的录入值。</span>
       <code>OA 2yr</code>: <span>OpenAlex 两年平均被引次数（非 JCR IF）</span></p>
     <div class="journals">
       {% for j in result.config.journals %}
@@ -317,12 +342,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
         <div class="cat" data-no-i18n>{{ j.category }}</div>
         <h4 data-no-i18n>{% if j.url %}<a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.name }}</a>{% else %}{{ j.name }}{% endif %}</h4>
         {% set m = jm(j.name) %}
-        {% if m %}<div class="meta" style="margin-top:6px">
-          {% if m.get('if') %}<span class="tag tj">IF {{ m['if'] }}</span>{% endif %}
-          {% if m.get('jcr') %}<span class="tag t">JCR {{ m['jcr'] }}</span>{% endif %}
-          {% if m.get('cas') %}<span class="tag t"><span>中科院分区</span> {{ m['cas'] }}</span>{% endif %}
-          {% if not m.get('if') and m.get('oa_2yr') %}<span class="tag t" title="OpenAlex 两年平均被引次数（非 JCR IF）">OA 2yr {{ m['oa_2yr'] }}</span>{% endif %}
-        </div>{% endif %}
+        {% if m %}<div class="meta" style="margin-top:6px">{{ journal_badges(m, {'en': 'CAS', 'ru': 'КАН'}.get(language, '中科院分区')) }}</div>{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -425,7 +445,7 @@ if (runBtn) {
     if (IS_FILE) { window.gotoServer('/run'); return; }
     location.href = '/run';
   });
-  if (!IS_FILE) {
+    if (!IS_FILE) {
     runBtn.disabled = true;
     var runStatusPending = false;
     async function refreshRunButton() {
@@ -447,7 +467,7 @@ if (runBtn) {
             runMsg.textContent = window.ndT ? t('{kind} #{id} 进行中', {kind:kind,id:run.id}) : kind + ' #' + run.id + ' 进行中';
           }
         }
-        if (run && reportTask && run.id === Number(reportTask.dataset.task) &&
+        if (window.parent === window && run && reportTask && run.id === Number(reportTask.dataset.task) &&
             run.report_revision > Number(reportTask.dataset.revision)) location.reload();
       } catch (e) { /* Retain the last known state during a short interruption. */ }
       finally { runStatusPending = false; }

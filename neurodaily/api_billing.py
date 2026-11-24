@@ -14,7 +14,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .config import DEFAULT_DIRS
 
-PURPOSES = ("summary", "connection_test", "geolocation", "other")
+PURPOSES = ("summary", "connection_test", "geolocation", "search_optimization", "other")
 _TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "output_tokens", "total_tokens")
 _RATE_FIELDS = ("currency", "input", "output", "cached_input")
 _RESPONSE_ID = re.compile(r"[A-Za-z0-9_.:-]{1,200}\Z")

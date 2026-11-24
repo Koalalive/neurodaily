@@ -52,7 +52,13 @@ class SearchTaskTests(unittest.TestCase):
                 self.assertTrue(entered.wait(5))
                 task = self.client.get("/api/search/status").json()["search"]
                 self.assertEqual((task["status"], task["phase"]), ("running", "ai"))
-                self.assertFalse(task["report_ready"])
+                self.assertTrue(task["report_ready"])
+                self.assertEqual(task["report_revision"], 1)
+                listing = self.client.get("/api/ui/reports?after=0").json()["reports"]
+                self.assertEqual(listing[0]["report_revision"], 1)
+                initial = self.client.get(f"/history/{task['id']}/report")
+                self.assertEqual(initial.status_code, 200)
+                self.assertNotIn("Summary added", initial.text)
                 with TestClient(create_app(self.config_path)) as second:
                     self.assertEqual(second.post("/api/run?force=1").status_code, 409)
                     self.assertEqual(second.get("/api/search/status").json()["search"]["status"], "running")
@@ -63,11 +69,12 @@ class SearchTaskTests(unittest.TestCase):
             self.assertIn("Summary added", restarted.get("/").text)
             status = restarted.get("/api/status").json()
             self.assertEqual(status["item_count"], len(self.result.items))
-            self.assertEqual(status["search"]["report_revision"], 1)
+            self.assertEqual(status["search"]["report_revision"], 2)
 
     def test_recovery_keeps_ready_scheduled_report_and_marks_interrupted_work(self):
         due = datetime(2026, 11, 20, 8, 0)
         ready = task_runs.begin(self.cfg, "daily", due)
+        ready.pop("workflow")  # A pre-upgrade task remains readable but cannot be resumed.
         report_path = self.folder / "completed.html"
         report_path.write_text("<html>Previous real report</html>", encoding="utf-8")
         ready.update(report_ready=True, report_file=str(report_path), item_count=len(self.result.items))
@@ -89,6 +96,123 @@ class SearchTaskTests(unittest.TestCase):
                              {"wecom": "unknown", "feishu": "failed"})
             self.assertEqual(history.desktop_schedule_result(self.cfg.profile, due)["status"], "completed")
             self.assertEqual(history.get_run(interrupted["id"])["status"], "interrupted")
+
+    def test_resumes_same_task_and_fetches_only_unfinished_sources(self):
+        from neurodaily.digest import run
+        from neurodaily.models import Item
+
+        first = Item(title="First source already finished", source="fixture_one")
+        second = Item(title="Second source finished after restart", source="fixture_two")
+        attempt = task_runs.begin(self.cfg, "manual", None, force=True)
+        run_id = attempt["id"]
+        task_runs.save_source(run_id, "primary", first.source, [first], {
+            "source": first.source, "status": "ok", "ok": True, "count": 1,
+            "fetched": 1, "ms": 1, "lookback_days": 4,
+        })
+        self.digest.side_effect = run
+        restored = mock.Mock(side_effect=AssertionError("completed source requested twice"))
+        unfinished = mock.Mock(return_value=[second])
+        with mock.patch("neurodaily.digest.registry_for", return_value={first.source: restored, second.source: unfinished}):
+            with TestClient(create_app(self.config_path)) as restarted:
+                self.assertIn("继续检索", restarted.get(f"/history/{run_id}").text)
+                self.assertEqual(restarted.post(f"/api/run/{run_id}/resume").json()["task_id"], run_id)
+                details = restarted.get(f"/api/history/{run_id}").json()["task"]
+                self.assertEqual(details["status"], "completed")
+                self.assertEqual(details["item_count"], 2)
+                self.assertEqual(restarted.post(f"/api/run/{run_id}/resume").status_code, 409)
+        restored.assert_not_called()
+        unfinished.assert_called_once()
+        self.assertEqual(history.count_runs(self.cfg.profile), 1)
+
+    def test_resume_refuses_changed_search_inputs(self):
+        attempt = task_runs.begin(self.cfg, "manual", None, force=True)
+        self.cfg.global_keywords = [*self.cfg.global_keywords, "new-keyword"]
+        self.cfg.save(self.config_path)
+        with TestClient(create_app(self.config_path)) as restarted:
+            response = restarted.post(f"/api/run/{attempt['id']}/resume")
+            self.assertEqual(response.status_code, 409)
+            self.assertIn("配置已更改", response.json()["error"])
+        self.assertEqual(history.get_run(attempt["id"])["status"], "interrupted")
+        self.digest.assert_not_called()
+
+    def test_scheduled_resume_preserves_confirmed_and_uncertain_receipts(self):
+        from neurodaily.delivery import _destination
+
+        due = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
+        attempt = task_runs.begin(self.cfg, "daily", due, force=True)
+        run_id = attempt["id"]
+        report_path = self.folder / "planned.html"
+        report_path.write_text("<html>Existing complete report</html>", encoding="utf-8")
+        attempt.update(report_ready=True, report_revision=2, report_file=str(report_path),
+                       item_count=len(self.result.items))
+        for stage in ("search", "report", "metrics", "ai", "geolocation", "topics", "index"):
+            task_runs.stage(attempt, stage, "completed")
+        task_runs.stage(attempt, "delivery", "running")
+        task_runs.save(attempt, result=self.result)
+        address = "already-sent@example.test"
+        self.hooks.return_value = {"feishu": "https://example.test/one", "wecom": "https://example.test/two"}
+        sent = _destination("email", address)
+        uncertain = _destination("feishu", self.hooks.return_value["feishu"])
+        pending = _destination("wecom", self.hooks.return_value["wecom"])
+        task_id = str(run_id)
+        profile = self.cfg.profile
+        delivery_receipts.prepare(task_id, profile, [(sent, "email", "email 1"),
+                                                     (uncertain, "feishu", "feishu"),
+                                                     (pending, "wecom", "wecom")])
+        delivery_receipts.transition(task_id, profile, sent, "pending", "sending")
+        delivery_receipts.transition(task_id, profile, sent, "sending", "accepted")
+        delivery_receipts.transition(task_id, profile, uncertain, "pending", "sending")
+        finished = Event()
+
+        def run_schedule_once(_stop, load, start):
+            try:
+                start(load(), due)
+            finally:
+                finished.set()
+
+        with (mock.patch("neurodaily.webapp.run_schedule", side_effect=run_schedule_once),
+              mock.patch("neurodaily.mailer.load_cfg", return_value={"enabled": True, "to": [address]}),
+              mock.patch("neurodaily.delivery._send_email") as mail,
+              mock.patch("neurodaily.webhooks.send_all", return_value={"wecom": "ok"}) as sender,
+              TestClient(create_app(self.config_path, desktop=True)) as restarted):
+            self.assertTrue(finished.wait(5))
+            detail = restarted.get(f"/api/history/{run_id}").json()
+            self.assertEqual(detail["status"], "completed")
+            self.assertEqual(detail["task"]["stages"]["delivery"]["status"], "partial")
+            self.assertEqual({row["channel"]: row["status"] for row in detail["receipts"]},
+                             {"email": "accepted", "feishu": "unknown", "wecom": "accepted"})
+            mail.assert_not_called()
+            sender.assert_called_once()
+            self.assertNotIn("feishu", sender.call_args.args[1])
+        self.digest.assert_not_called()
+        self.ai.assert_not_called()
+        self.assertEqual(history.count_runs(profile), 1)
+        self.assertEqual(history.desktop_schedule_result(profile, due)["status"], "completed")
+
+    def test_cancel_running_task_before_report_or_delivery(self):
+        entered, release = Event(), Event()
+
+        def search(*_args, **_kwargs):
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError("test did not release the active search")
+            return self.result
+
+        self.digest.side_effect = search
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            request = executor.submit(self.client.post, "/api/run?force=1")
+            try:
+                self.assertTrue(entered.wait(5))
+                run_id = self.client.get("/api/search/status").json()["search"]["id"]
+                self.assertEqual(self.client.post(f"/api/run/{run_id}/cancel").status_code, 202)
+            finally:
+                release.set()
+            self.assertEqual(request.result(5).status_code, 200)
+        detail = self.client.get(f"/api/history/{run_id}").json()
+        self.assertEqual(detail["status"], "cancelled")
+        self.assertFalse(detail["task"]["report_ready"])
+        self.assertEqual(detail["receipts"], [])
+        self.assertEqual(self.client.post(f"/api/run/{run_id}/cancel").status_code, 409)
 
     def test_delivery_retry_uses_checkpoint_after_restart_and_sends_to_one_target(self):
         self.hooks.return_value = {"feishu": "https://example.test/one", "wecom": "https://example.test/two"}
@@ -146,7 +270,7 @@ class SearchTaskTests(unittest.TestCase):
             self.assertIn('let scanAfter = 0', restarted.get("/desktop").text)
             new = restarted.post("/api/run?force=1").json()["task_id"]
             self.assertEqual(restarted.get("/api/ui/reports?after=0").json()["reports"],
-                             [{"id": new, "status": "completed", "report_ready": True}])
+                             [{"id": new, "status": "completed", "report_ready": True, "report_revision": 2}])
             self.assertIn(f'let scanAfter = {new}', restarted.get("/desktop").text)
             self.assertEqual(restarted.get(f"/api/ui/reports?after={new}").json(), {"reports": []})
             self.assertIn('lang="ru"', restarted.get(f"/history/{new}/report?ui=1").text)

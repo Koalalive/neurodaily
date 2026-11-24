@@ -47,6 +47,15 @@ _MESSAGES = """
 查看任务进度|View progress|Ход выполнения
 定时检索正在运行|Scheduled search is running|Идёт поиск по расписанию
 检索正在运行|Search is running|Идёт поиск
+正在更新期刊指标…|Updating journal metrics…|Обновление показателей журналов…
+正在生成 AI 摘要…|Generating the AI summary…|Создание резюме ИИ…
+正在定位地图条目…|Locating records on the map…|Геолокация записей…
+正在生成主题景观…|Building the topic landscape…|Построение тематического ландшафта…
+正在保存日报…|Saving the report…|Сохранение отчёта…
+正在更新历史索引…|Updating the history index…|Обновление индекса истории…
+日报已生成，正在投递…|Report ready. Delivery in progress…|Отчёт готов. Идёт доставка…
+主题建模|Topic modelling|Тематическое моделирование
+用大模型标注主题|Label topics with the language model|Размечать темы языковой моделью
 已处理 {done}/{total} 个来源|Processed {done}/{total} sources|Обработано источников: {done}/{total}
 已生成日报（{count} 条），正在打开…|Report ready ({count} items), opening…|Сводка готова ({count}), открытие…
 已生成日报（{count} 条）。|Report ready ({count} items).|Сводка готова ({count}).
@@ -75,6 +84,14 @@ AI 摘要|AI summary|ИИ-резюме
 失败|Failed|Ошибка
 部分完成|Partially completed|Частично завершено
 中断|Interrupted|Прервано
+历史索引|History index|Индекс истории
+已停止|Stopped|Остановлено
+停止检索|Stop search|Остановить поиск
+继续检索|Resume search|Продолжить поиск
+正在停止检索，等待当前操作结束…|Stopping after the current operation…|Остановка после завершения текущей операции…
+上次检索中断。打开任务详情继续。|The previous search was interrupted. Open its details to resume.|Предыдущий поиск прерван. Откройте сведения о задаче, чтобы продолжить.
+检索已停止。|Search stopped.|Поиск остановлен.
+任务操作失败。|Task action failed.|Не удалось выполнить действие с задачей.
 已跳过|Skipped|Пропущено
 服务器已接受|Accepted by the server|Принято сервером
 没有新内容|No new items|Нет новых материалов
@@ -155,6 +172,8 @@ AI 摘要|AI summary|ИИ-резюме
 选择是否启用，并设置每次抓取上限和回溯天数。|Enable, max results per fetch, lookback days.|Включение, лимит результатов на запрос и глубина поиска в днях.
 输出|Output|Вывод
 报告内容|Report content|Содержание отчёта
+显示 LDA + t-SNE 主题景观|Include LDA + t-SNE topic map|Показывать карту тем LDA + t-SNE
+药品获批、器械许可与融资记录。|Drug approvals, device clearances, and funding records.|Одобрения препаратов, допуски устройств и финансирование.
 报告目录|Report directory|Папка сводок
 文件名格式|Filename format|Формат имени файла
 完成后打开报告|Open report when finished|Открыть готовую сводку
@@ -287,6 +306,17 @@ bioRxiv 分类|bioRxiv categories|Категории bioRxiv
 RSS（可选）|RSS (optional)|RSS (необязательно)
 类别|Category|Категория
 中科院分区|中科院|Категория Китайской академии наук
+录入期刊指标、收录情况和自定义标签后，会显示在匹配的论文旁。|Enter publication metrics, indexing and custom tags to show them beside matching papers.|Укажите показатели, индексацию и свои метки журнала. Они появятся рядом с подходящими статьями.
+期刊指标与标签|Journal metrics and tags|Показатели и метки журнала
+IF 年份|IF year|Год IF
+JCR 年份|JCR year|Год JCR
+中科院分区年份|CAS year|Год категории КАН
+通用指标年份|Shared metric year|Общий год показателей
+中科院 Top|CAS Top|Топ КАН
+自定义期刊标签|Custom journal tags|Свои метки журнала
+多个标签以逗号分隔|Separate tags with commas|Разделите метки запятыми
+已收录|Indexed|Индексируется
+未收录|Not indexed|Не индексируется
 期刊别名|Journal aliases|Другие названия журнала
 重症医学|Critical care|Интенсивная терапия
 已应用「{preset}」。{hint}|{preset} applied. {hint}|Применено: {preset}. {hint}
@@ -382,7 +412,7 @@ Academic Conferences|Academic Conferences|Академические конфе�
 政策与新闻|Policy / News|Политика и новости
 🧪 临床试验与会议动态|🧪 Trials & Conference Signals|🧪 Клинические исследования и конференции
 💊 产业与监管进展|💊 Commercial & Regulatory Progress|💊 Индустрия и регуляторные новости
-🏛️ 政策、融资与新闻|🏛️ Policy, Funding & News|🏛️ Политика, финансирование и новости
+🏛️ 新闻与政策|🏛️ News and policy|🏛️ Новости и политика
 聚焦领域内的 PubMed、arXiv 和 bioRxiv 最新论文。|New PubMed, arXiv, and bioRxiv preprints matching your focus.|Новые публикации по вашим темам из PubMed, arXiv и bioRxiv.
 近期 FDA 药品审批和 510(k) 医疗器械许可。|Recent FDA drug approvals and 510(k) device clearances.|Недавние одобрения лекарств FDA и разрешения на устройства по процедуре 510(k).
 新增与更新的临床研究及会议动态。|New + updated clinical studies and event signals.|Новые и обновлённые клинические исследования, а также новости мероприятий.
@@ -411,6 +441,8 @@ OpenAlex 两年平均被引次数（非 JCR IF）|OpenAlex two-year mean citatio
 重点期刊列表|Top Journals|Ведущие журналы
 点击期刊名称访问网站。|Curated watch-list of leading journals — click to browse each site.|Нажмите на название журнала, чтобы открыть его сайт.
 IF、JCR 和中科院分区来自导入的官方表。|IF, JCR and CAS rankings come from the imported official table.|IF, JCR и категории КАН взяты из импортированной официальной таблицы.
+期刊指标优先采用当前配置的录入值。|Journal metrics use the values entered in this profile when available.|При наличии используются показатели, заданные в текущем профиле.
+期刊影响因子|Journal impact factor|Импакт-фактор журнала
 各来源检索状态|Search status by source|Состояние поиска по источникам
 候选|Candidates|Кандидаты
 已抓取|Fetched|Получено

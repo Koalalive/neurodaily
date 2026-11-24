@@ -15,6 +15,23 @@ from .models import Item
 from .profile_exchange import export_profile
 
 
+class Cancelled(Exception):
+    pass
+
+
+class ResumeConflict(ValueError):
+    pass
+
+
+def _workflow_tables(conn) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS search_task_controls ("
+                 "run_id INTEGER PRIMARY KEY REFERENCES search_history(id) ON DELETE CASCADE)")
+    conn.execute("CREATE TABLE IF NOT EXISTS search_task_sources ("
+                 "run_id INTEGER REFERENCES search_history(id) ON DELETE CASCADE, "
+                 "pass TEXT NOT NULL, source TEXT NOT NULL, payload TEXT NOT NULL, "
+                 "PRIMARY KEY (run_id, pass, source))")
+
+
 def acquire():
     """Hold through delivery. The OS releases the lock if a sidecar exits."""
     path = Path(history.db_path()).with_suffix(".run.lock")
@@ -40,13 +57,16 @@ def acquire():
     return lock
 
 
-def begin(config: Config, mode: str, due: datetime | None) -> dict:
+def begin(config: Config, mode: str, due: datetime | None, *, force: bool = False,
+          hours: int | None = None) -> dict:
     task = {"profile": config.profile, "mode": mode, "status": "running", "phase": "search",
             "started_at": datetime.now().isoformat(), "scheduled_for": due.isoformat() if due else None,
-            "finished_at": None, "sources": {}, "stages": {}, "report_ready": False}
+            "finished_at": None, "sources": {}, "stages": {}, "report_ready": False,
+            "workflow": 1, "force": force, "hours": hours}
     stage(task, "search", "running")
     history.init_db()
     with history._LOCK, closing(history._connect()) as conn, conn:
+        _workflow_tables(conn)
         cur = conn.execute("INSERT INTO search_history (fingerprint, profile, started_at, status, task) "
                            "VALUES (?, ?, ?, ?, ?)", (history.compute_fingerprint(config, mode),
                            config.profile, task["started_at"], task["status"], _json(task)))
@@ -61,6 +81,8 @@ def stage(task: dict, name: str, status: str, error: str = "") -> None:
                            "status": status, "updated_at": datetime.now().isoformat()}
     if error:
         task["stages"][name]["error"] = error
+    else:
+        task["stages"][name].pop("error", None)
 
 
 def _json(data) -> str:
@@ -74,6 +96,7 @@ def _checkpoint(result: DigestResult) -> str:
         "sections": {key: [positions[id(item)] for item in items] for key, items in result.sections.items()},
         "health": result.health, "generated_at": result.generated_at,
         "config_profile": result.config_profile, "config": export_profile(result.config)["config"],
+        "errors": result.errors, "fingerprint": result.fingerprint,
         "on_this_day": result.on_this_day, "on_this_day_lang": result.on_this_day_lang,
         "ai_summary": result.ai_summary, "ai_summaries": result.ai_summaries,
         "ai_summary_meta": result.ai_summary_meta,
@@ -112,7 +135,7 @@ def _write(conn, task: dict) -> None:
 
 
 def save(task: dict, *, result: DigestResult | None = None, snapshot: dict | None = None) -> None:
-    checkpoint = _checkpoint(result) if result is not None and task["report_ready"] else None
+    checkpoint = _checkpoint(result) if result is not None else None
     with history._LOCK, closing(history._connect()) as conn, conn:
         _write(conn, task)
         if result is not None:
@@ -129,25 +152,106 @@ def finish(task: dict, status: str, error: str = "") -> None:
         task["error"] = error
     task.update(status=status, finished_at=datetime.now().isoformat())
     with history._LOCK, closing(history._connect()) as conn, conn:
-        if task["stages"].get("delivery", {}).get("status") == "failed":
+        if status == "cancelled" or task["stages"].get("delivery", {}).get("status") == "failed":
             delivery_receipts.close_interrupted(conn, str(task["id"]))
         _write(conn, task)
+        _workflow_tables(conn)
+        if status != "interrupted":
+            conn.execute("DELETE FROM search_task_sources WHERE run_id=?", (task["id"],))
+            conn.execute("DELETE FROM search_task_controls WHERE run_id=?", (task["id"],))
 
 
 def recover() -> None:
     """Call while holding the lock, so active work in another process is untouched."""
     history.init_db()
     with history._LOCK, closing(history._connect()) as conn, conn:
+        _workflow_tables(conn)
         rows = conn.execute("SELECT task FROM search_history WHERE status='running' AND task IS NOT NULL")
         for row in rows.fetchall():
             task = json.loads(row[0])
             ready = task["report_ready"] and Path(task["report_file"]).is_file()
             message = "上次退出时任务中断。"
-            stage(task, task["phase"], "interrupted", message)
-            task.update(status="completed" if ready else "interrupted", report_ready=ready,
-                        finished_at=datetime.now().isoformat(), error=message)
-            delivery_receipts.close_interrupted(conn, str(task["id"]))
+            if task.get("workflow"):
+                cancelled = _cancel_requested(conn, task["id"])
+                status = "cancelled" if cancelled else "interrupted"
+                if cancelled:
+                    message = "检索已停止。"
+                    conn.execute("DELETE FROM search_task_sources WHERE run_id=?", (task["id"],))
+                    conn.execute("DELETE FROM search_task_controls WHERE run_id=?", (task["id"],))
+                    delivery_receipts.close_interrupted(conn, str(task["id"]))
+                else:
+                    delivery_receipts.recover_for_resume(conn, str(task["id"]))
+            else:
+                status = "completed" if ready else "interrupted"
+                delivery_receipts.close_interrupted(conn, str(task["id"]))
+            if task["stages"].get(task["phase"], {}).get("status") == "running":
+                stage(task, task["phase"], status if task.get("workflow") else "interrupted", message)
+            task.update(status=status, report_ready=ready, finished_at=datetime.now().isoformat(), error=message)
             _write(conn, task)
+
+
+def resume(config: Config, mode: str, *, run_id: int | None = None,
+           due: datetime | None = None) -> dict | None:
+    """Claim an interrupted run while holding the global run guard."""
+    history.init_db()
+    due_iso = due.isoformat() if due else None
+    fingerprint = history.compute_fingerprint(config, mode)
+    with history._LOCK, closing(history._connect()) as conn, conn:
+        where = " AND id=?" if run_id is not None else ""
+        values = (config.profile, run_id) if run_id is not None else (config.profile,)
+        rows = conn.execute("SELECT task, fingerprint FROM search_history WHERE status='interrupted' "
+                            f"AND profile=? AND task IS NOT NULL{where} ORDER BY id DESC", values)
+        for row in rows:
+            task = json.loads(row["task"])
+            if (not task.get("workflow") or task["mode"] != mode or task["scheduled_for"] != due_iso):
+                continue
+            if row["fingerprint"] != fingerprint:
+                raise ResumeConflict("检索配置已更改，请恢复原配置后继续此任务。")
+            task.pop("error", None)
+            task.update(status="running", finished_at=None)
+            _write(conn, task)
+            return task
+    return None
+
+
+def _cancel_requested(conn, run_id: int) -> bool:
+    return conn.execute("SELECT 1 FROM search_task_controls WHERE run_id=?", (run_id,)).fetchone() is not None
+
+
+def request_cancel(run_id: int) -> bool:
+    history.init_db()
+    with history._LOCK, closing(history._connect()) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _workflow_tables(conn)
+        row = conn.execute("SELECT task FROM search_history WHERE id=? AND status='running'", (run_id,)).fetchone()
+        if row is None or not row["task"] or not json.loads(row["task"]).get("workflow"):
+            return False
+        conn.execute("INSERT OR IGNORE INTO search_task_controls VALUES (?)", (run_id,))
+        return True
+
+
+def check_cancelled(run_id: int) -> None:
+    with history._LOCK, closing(history._connect()) as conn:
+        if _cancel_requested(conn, run_id):
+            raise Cancelled("检索已停止。")
+
+
+def save_source(run_id: int, pass_name: str, source: str, items: list[Item], diagnostics: dict) -> None:
+    payload = _json({"items": [item.to_dict() for item in items], "diagnostics": diagnostics})
+    with history._LOCK, closing(history._connect()) as conn, conn:
+        conn.execute("INSERT OR REPLACE INTO search_task_sources VALUES (?, ?, ?, ?)",
+                     (run_id, pass_name, source, payload))
+
+
+def load_sources(run_id: int) -> dict:
+    with history._LOCK, closing(history._connect()) as conn:
+        rows = conn.execute("SELECT pass, source, payload FROM search_task_sources WHERE run_id=?", (run_id,))
+        checkpoints = {}
+        for row in rows:
+            data = json.loads(row["payload"])
+            checkpoints.setdefault(row["pass"], {})[row["source"]] = (
+                [Item(**item) for item in data["items"]], data["diagnostics"])
+    return checkpoints
 
 
 def latest(*, profile: str | None = None, ready: bool = False) -> dict | None:
@@ -155,13 +259,17 @@ def latest(*, profile: str | None = None, ready: bool = False) -> dict | None:
     with history._LOCK, closing(history._connect()) as conn:
         if ready:
             rows = conn.execute("SELECT task FROM search_history WHERE task IS NOT NULL AND profile=? "
-                                "AND checkpoint IS NOT NULL ORDER BY id DESC", (profile,))
+                                "AND checkpoint IS NOT NULL AND report_path IS NOT NULL ORDER BY id DESC", (profile,))
             for row in rows:
                 task = json.loads(row[0])
                 if task["report_ready"] and Path(task["report_file"]).is_file():
                     return task
             return None
-        row = conn.execute("SELECT task FROM search_history WHERE task IS NOT NULL ORDER BY id DESC LIMIT 1").fetchone()
+        row = conn.execute("SELECT task FROM search_history WHERE status='running' AND task IS NOT NULL "
+                           "ORDER BY id DESC LIMIT 1").fetchone()
+        if row is None:
+            row = conn.execute("SELECT task FROM search_history WHERE task IS NOT NULL "
+                               "ORDER BY id DESC LIMIT 1").fetchone()
     return json.loads(row[0]) if row else None
 
 
@@ -169,8 +277,9 @@ def reports_since(after: int) -> list[dict]:
     history.init_db()
     with history._LOCK, closing(history._connect()) as conn:
         rows = conn.execute("SELECT task FROM search_history WHERE id>? AND checkpoint IS NOT NULL "
-                            "AND task IS NOT NULL ORDER BY id LIMIT 100", (after,)).fetchall()
-    return [{key: task[key] for key in ("id", "status", "report_ready")}
+                            "AND report_path IS NOT NULL AND task IS NOT NULL ORDER BY id LIMIT 100", (after,)).fetchall()
+    return [{**{key: task[key] for key in ("id", "status", "report_ready")},
+             "report_revision": task.get("report_revision", 1)}
             for row in rows if (task := json.loads(row[0]))["report_ready"]]
 
 
@@ -178,5 +287,5 @@ def archived_run_ids(profile: str) -> list[int]:
     history.init_db()
     with history._LOCK, closing(history._connect()) as conn:
         rows = conn.execute("SELECT id FROM search_history WHERE profile=? AND checkpoint IS NOT NULL "
-                            "AND finished_at IS NOT NULL ORDER BY id", (profile,))
+                            "AND report_path IS NOT NULL AND finished_at IS NOT NULL ORDER BY id", (profile,))
         return [row[0] for row in rows]

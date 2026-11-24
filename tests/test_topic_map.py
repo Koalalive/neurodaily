@@ -1,11 +1,36 @@
+import json
 import unittest
+from unittest.mock import Mock, patch
 
 from neurodaily.digest import DigestResult
 from neurodaily.models import Item
-from neurodaily.topic_map import available, build_topics, tokenize
+from neurodaily.demo import build_result
+from neurodaily.topic_map import _labels, available, build_topics, enrich_topics, tokenize
 
 
 class TopicMapTests(unittest.TestCase):
+    def test_model_annotations_are_language_specific_and_skip_empty_topics(self):
+        topics = [{"id": 0, "size": 4, "label": "default", "terms": ["stimulation"], "examples": ["A study"]},
+                  {"id": 1, "size": 0, "label": "empty", "terms": [], "examples": []}]
+        chat = Mock(return_value={"content": json.dumps([{"id": 0,
+            "zh": {"label": "脑刺激", "description": "研究脑刺激与运动控制。"},
+            "en": {"label": "Brain stimulation", "description": "Studies of brain stimulation and movement."}}])})
+        _labels(topics, chat)
+        self.assertEqual(topics[0]["labels"]["zh"], "脑刺激")
+        self.assertEqual(topics[0]["labels"]["ru"], "default")
+        self.assertIn("movement", topics[0]["descriptions"]["en"])
+        self.assertEqual(topics[1]["descriptions"], {})
+        self.assertEqual([row["id"] for row in json.loads(chat.call_args.args[0][1]["content"])], [0])
+
+    def test_annotation_switch_leaves_local_model_available(self):
+        result = build_result()
+        result.config.output["topic_ai_labels"] = False
+        with patch("neurodaily.topic_map.build_topics", return_value={"enabled": True}) as build, \
+             patch("neurodaily.ai_summary.load_cfg") as settings:
+            self.assertTrue(enrich_topics(result))
+        settings.assert_not_called()
+        self.assertIsNone(build.call_args.kwargs["chat"])
+
     def test_tokenizer_handles_mixed_text(self):
         tokens = tokenize("Deep brain stimulation 用于抑郁症 treatment")
         self.assertIn("brain", tokens)

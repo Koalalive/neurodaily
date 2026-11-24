@@ -47,7 +47,7 @@ class ResearchExpansionTests(unittest.TestCase):
         result.ai_summary = ""
         result.geography = None
         plain = BeautifulSoup(render_html(result), "html.parser")
-        self.assertIsNone(plain.select_one("#research-activity"))
+        self.assertEqual(plain.main.find("section")["id"], "research-activity")
 
     def test_scoped_preview_classifies_news_policy_and_papers_independently(self):
         cfg = DEFAULT_CONFIG()

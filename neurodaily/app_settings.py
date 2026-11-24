@@ -20,7 +20,7 @@ from . import ai_summary, mailer, webhooks
 
 FORMAT = "neurodaily.app-settings"
 VERSION = 1
-OUTPUT_KEYS = {"dir", "filename_format", "open_on_finish", "keep_reports", "extra_formats", "topic_map"}
+OUTPUT_KEYS = {"dir", "filename_format", "open_on_finish", "keep_reports", "extra_formats", "topic_map", "topic_ai_labels"}
 SCHEDULE_KEYS = {"enabled", "hour", "minute"}
 AI_KEYS = {"enabled", "base_url", "model", "max_papers", "max_other", "max_input_chars", "max_tokens"}
 EMAIL_KEYS = {"enabled", "to", "recipients", "language", "smtp_host", "smtp_port", "use_ssl",

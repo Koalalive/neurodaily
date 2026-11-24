@@ -27,6 +27,8 @@ from datetime import date, datetime
 
 import httpx
 
+from .search import _as_values, _issn_key, _journal_key
+
 ROOT = os.environ.get("NEURODAILY_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AUTO_PATH = os.path.join(ROOT, "output", "journal_metrics_auto.json")
 OFFICIAL_PATH = os.path.join(ROOT, "config", "journal_metrics.json")
@@ -134,107 +136,92 @@ def _age_days(fetched_at: str | None) -> float:
         return 1e9
 
 
+def _name_keys(name: str) -> set[str]:
+    alias = _ALIASES.get(_norm(name))
+    return {_journal_key(value) for value in (name, alias) if value}
+
+
 def _find_key(name: str, mapping: dict) -> str | None:
-    n = _norm(name)
-    for key in mapping:
-        if _norm(key) == n:
-            return key
-    alias = _ALIASES.get(n)
-    if alias and alias in mapping:
-        return alias
-    for key in mapping:
-        kn = _norm(key)
-        if kn and len(kn) >= 5 and (kn in n or n in kn):
-            return key
+    keys = _name_keys(name)
+    return next((key for key in mapping if keys & _name_keys(key)), None)
+
+
+def _matching_journal(names, issns, config):
+    journals = getattr(config, "journals", [])
+    identifiers = {_issn_key(value) for value in issns if value}
+    by_id = [journal for journal in journals if identifiers.intersection(
+        _issn_key(value) for value in [*journal.issns, _ISSN_MAP.get(journal.name)] if value)]
+    if len(by_id) == 1:
+        return by_id[0]
+    names = {key for name in names for key in _name_keys(name)}
+    candidates = by_id or journals
+    for journal in candidates:
+        if _journal_key(journal.name) in names:
+            return journal
+    for journal in candidates:
+        if any(names & _name_keys(value) for value in [journal.name, *journal.aliases]):
+            return journal
     return None
 
 
-def _config_metrics(name: str, config) -> dict | None:
-    """User-hardcoded metrics in config.journals take precedence over everything."""
-    if config is None:
+def _lookup(names, journal=None) -> dict | None:
+    if journal:
+        names = [journal.name, *names, *journal.aliases]
+    if not names:
         return None
-    n = _norm(name)
-    alias = _ALIASES.get(n)
-    for j in getattr(config, "journals", []) or []:
-        jn = _norm(getattr(j, "name", ""))
-        if not jn:
-            continue
-        # Exact / known alias only: "Nature" must not match "Nature Medicine".
-        if not (jn == n
-                or (alias is not None and _norm(alias) == jn)
-                or (_ALIASES.get(jn) is not None and _norm(_ALIASES[jn]) == n)):
-            continue
-        if j.impact_factor or j.jcr or j.cas:
-            return {
-                "name": j.name,
-                "if": j.impact_factor,
-                "jcr": j.jcr or None,
-                "cas": j.cas or None,
-                "year": j.metric_year,
-                "official": True,
-                "source": "config",
-            }
+    official = load_official()
+    auto = load_auto()
+    off_key = next((key for name in names if (key := _find_key(name, official)) is not None), None)
+    auto_key = next((key for name in names if (key := _find_key(name, auto)) is not None), None)
+    imported = official.get(off_key) or {}
+    automatic = auto.get(auto_key) or {}
+    recorded = {
+        "if": journal.impact_factor, "jcr": journal.jcr or None, "cas": journal.cas or None,
+        "cas_top": journal.cas_top, "sci": journal.sci, "ssci": journal.ssci, "tags": journal.tags,
+    } if journal else {}
+    years = {
+        "if": journal.impact_factor_year, "jcr": journal.jcr_year, "cas": journal.cas_year,
+    } if journal else {}
+    out = {key: automatic.get(key) for key in ("oa_2yr", "h_index", "works", "openalex_id", "fetched_at")}
+    out["name"] = journal.name if journal else off_key or auto_key
+    for key in ("if", "jcr", "cas"):
+        year_key = f"{key}_year"
+        if recorded.get(key) is not None or (key == "cas" and recorded.get("cas_top")):
+            out[key] = recorded[key]
+            out[year_key] = years[key] or journal.metric_year
+        else:
+            out[key] = imported.get(key)
+            out[year_key] = imported.get(year_key) or imported.get("year")
+    out.update({key: recorded.get(key) for key in ("cas_top", "sci", "ssci", "tags")})
+    has_metrics = any(out[key] is not None for key in ("if", "jcr", "cas")) or bool(out["cas_top"])
+    has_config = any(recorded.get(key) is not None for key in ("if", "jcr", "cas", "sci", "ssci")) or bool(
+        recorded.get("cas_top") or recorded.get("tags"))
+    out["year"] = (journal.metric_year if has_config and journal else None) or imported.get("year")
+    out["official"] = has_metrics
+    if has_config:
+        out["source"] = "config"
+    if has_metrics or has_config or out["oa_2yr"] is not None:
+        return out
     return None
 
 
 def lookup(name: str | None, config=None) -> dict | None:
     if not name:
         return None
-    official = load_official()
-    auto = load_auto()
-
-    hard = _config_metrics(name, config)
-    if hard:
-        off_key = _find_key(hard["name"], official) or _find_key(name, official)
-        off = official.get(off_key, {}) if off_key else {}
-        auto_key = _find_key(hard["name"], auto) or _find_key(name, auto)
-        aut = auto.get(auto_key, {}) if auto_key else {}
-        out = {
-            "name": hard["name"],
-            # per-field merge: hardcoded wins, official fills missing fields
-            "if": hard.get("if") if hard.get("if") is not None else off.get("if"),
-            "jcr": hard.get("jcr") or off.get("jcr"),
-            "cas": hard.get("cas") or off.get("cas"),
-            "year": hard.get("year") or off.get("year"),
-            "official": True,
-            "source": "config",
-            "oa_2yr": aut.get("oa_2yr"),
-            "h_index": aut.get("h_index"),
-            "works": aut.get("works"),
-            "openalex_id": aut.get("openalex_id"),
-            "fetched_at": aut.get("fetched_at"),
-        }
-        return out
-
-    canon = _find_key(name, {**official, **auto})
-    if canon is None:
-        return None
-
-    off = official.get(canon, {}) or {}
-    aut = auto.get(canon, {}) or {}
-    out = {
-        "name": canon,
-        "if": off.get("if"),
-        "jcr": off.get("jcr"),
-        "cas": off.get("cas"),
-        "year": off.get("year"),
-        "official": bool(off),
-        "oa_2yr": aut.get("oa_2yr"),
-        "h_index": aut.get("h_index"),
-        "works": aut.get("works"),
-        "openalex_id": aut.get("openalex_id"),
-        "fetched_at": aut.get("fetched_at"),
-    }
-    return out if any(out[k] is not None for k in ("if", "jcr", "cas", "oa_2yr")) else None
+    names = [name]
+    return _lookup(names, _matching_journal(names, (), config))
 
 
 def for_item(item, config=None) -> dict | None:
-    extra = getattr(item, "extra", None) or {}
-    for key in ("journal", "journal_abbrev", "container", "venue"):
-        m = lookup(extra.get(key), config=config)
-        if m:
-            return m
-    return None
+    if item.kind != "paper":
+        return None
+    extra = item.extra or {}
+    names = list(dict.fromkeys(name for key in
+                              ("journal", "journal_abbrev", "journal_abbreviation", "journal_aliases", "container", "venue")
+                              for name in _as_values(extra.get(key))))
+    issns = [identifier for key in ("issn", "issns", "issn_l", "issn_linking")
+             for identifier in _as_values(extra.get(key))]
+    return _lookup(names, _matching_journal(names, issns, config))
 
 
 def _pick(name: str, results: list[dict]) -> dict | None:

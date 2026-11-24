@@ -2,7 +2,7 @@
 # Run from the repository root.
 import os
 import sys
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules, copy_metadata
 
 ROOT = os.getcwd()
 datas = [
@@ -15,6 +15,8 @@ examples = os.path.join(ROOT, "config", "examples")
 if os.path.isdir(examples):
     datas.append((examples, "config/examples"))
 datas += collect_data_files("neurodaily")
+datas += copy_metadata("langgraph", recursive=True)
+datas += copy_metadata("langgraph-checkpoint-sqlite", recursive=True)
 
 hiddenimports = []
 for pkg in ("uvicorn", "fastapi", "starlette", "pydantic", "jinja2",
@@ -26,7 +28,7 @@ for pkg in ("uvicorn", "fastapi", "starlette", "pydantic", "jinja2",
 a = Analysis(
     [os.path.join(ROOT, "desktop", "sidecar", "launcher.py")],
     pathex=[ROOT],
-    binaries=[],
+    binaries=collect_dynamic_libs("sqlite_vec"),
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

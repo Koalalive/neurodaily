@@ -74,7 +74,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       rateNote:'按每百万 token 填写费率。缓存费率如留空，统一使用输入费率。费率修改从下一次请求起生效。',
       add:'添加费率',save:'保存',remove:'移除',saved:'已保存',base_url:'API 基础地址',model:'模型 ID',currency:'币种',
       input:'输入费率',output:'输出费率',cached_input:'缓存输入费率',all:'全部',summary:'AI 摘要',
-      connection_test:'连通性测试',geolocation:'AI 地理定位',other:'其他',success:'成功',http_error:'HTTP 错误',timeout:'超时',
+      connection_test:'连通性测试',geolocation:'AI 地理定位',search_optimization:'检索优化',other:'其他',success:'成功',http_error:'HTTP 错误',timeout:'超时',
       network_error:'连接失败',invalid_response:'响应无效',request_error:'请求失败',empty:'该时段没有调用记录。',unknown:'未知',
       loadError:'暂时无法读取账单。',saveError:'无法保存设置。请检查费率和服务地址。',days:n=>'过去 '+n+' 天',
       totals:t=>['调用 '+t.calls+' 次','有用量 '+t.usage_reported_calls+' 次','已报告 token '+t.total_tokens,
@@ -88,7 +88,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       rateNote:'Enter prices per million tokens. Leave the cached rate blank to use the input rate. Changes apply to future requests.',
       add:'Add rate',save:'Save',remove:'Remove',saved:'Saved',base_url:'API base URL',model:'Model ID',currency:'Currency',
       input:'Input rate',output:'Output rate',cached_input:'Cached input rate',all:'All',summary:'AI summary',
-      connection_test:'Connection test',geolocation:'AI geography',other:'Other',success:'Succeeded',http_error:'HTTP error',timeout:'Timed out',
+      connection_test:'Connection test',geolocation:'AI geography',search_optimization:'Search optimisation',other:'Other',success:'Succeeded',http_error:'HTTP error',timeout:'Timed out',
       network_error:'Connection failed',invalid_response:'Invalid response',request_error:'Request failed',empty:'No calls in this period.',unknown:'Unknown',
       loadError:'The billing data could not be loaded.',saveError:'Could not save settings. Check the rates and API base URL.',days:n=>'Last '+n+' days',
       totals:t=>[t.calls+' calls',t.usage_reported_calls+' with usage',t.total_tokens+' tokens reported',t.unknown_cost_calls+' without a cost estimate'],
@@ -102,7 +102,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       rateNote:'Укажите цену за миллион токенов. Если ставка для кеша не указана, применяется входная ставка. Изменения применяются к новым запросам.',
       add:'Добавить тариф',save:'Сохранить',remove:'Убрать',saved:'Сохранено',base_url:'Базовый URL API',model:'ID модели',currency:'Валюта',
       input:'Входной тариф',output:'Выходной тариф',cached_input:'Тариф кеша',all:'Все',summary:'Резюме ИИ',
-      connection_test:'Проверка связи',geolocation:'Геолокация ИИ',other:'Другое',success:'Успешно',http_error:'Ошибка HTTP',timeout:'Тайм-аут',
+      connection_test:'Проверка связи',geolocation:'Геолокация ИИ',search_optimization:'Оптимизация поиска',other:'Другое',success:'Успешно',http_error:'Ошибка HTTP',timeout:'Тайм-аут',
       network_error:'Сбой соединения',invalid_response:'Недопустимый ответ',request_error:'Ошибка запроса',empty:'За этот период запросов нет.',unknown:'Неизвестно',
       loadError:'Не удалось получить данные о расходах.',saveError:'Ошибка сохранения. Проверьте тарифы и URL API.',days:n=>'Последние '+n+' дней',
       totals:t=>['Запросов '+t.calls,'С данными '+t.usage_reported_calls,'Токенов '+t.total_tokens,'Без оценки '+t.unknown_cost_calls],
@@ -123,7 +123,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
     return response.json();
   }
   for (const days of [7,30,90,365]) el('days').add(new Option(copy.days(days), days, days === 30, days === 30));
-  for (const key of ['all','summary','connection_test','geolocation','other']) el('purpose').add(new Option(copy[key], key === 'all' ? '' : key));
+  for (const key of ['all','summary','connection_test','geolocation','search_optimization','other']) el('purpose').add(new Option(copy[key], key === 'all' ? '' : key));
   const limit = 50;
   let offset = 0;
   let loadRevision = 0;

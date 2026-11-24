@@ -3,10 +3,10 @@ from html import escape
 
 
 _PHASES = {"search": "检索", "report": "日报", "metrics": "期刊指标", "ai": "AI 摘要",
-           "geolocation": "AI 地理定位", "delivery": "投递"}
+           "geolocation": "AI 地理定位", "topics": "主题建模", "index": "历史索引", "delivery": "投递"}
 _STATES = {
     "running": "进行中", "pending": "等待中", "sending": "发送中", "completed": "完成",
-    "failed": "失败", "partial": "部分完成", "interrupted": "中断", "skipped": "已跳过",
+    "failed": "失败", "partial": "部分完成", "interrupted": "中断", "skipped": "已跳过", "cancelled": "已停止",
     "accepted": "服务器已接受", "no_new": "没有新内容", "unknown": "结果未确认",
     "ok": "成功", "empty": "无匹配", "timeout": "超时", "limited": "触发限流",
 }
@@ -41,10 +41,14 @@ def render_task(task: dict, receipts: list[dict], css: str) -> str:
         destinations.append((escape(row["label"]), state(row), str(row["attempts"]),
                              timestamp(row["updated_at"]), escape(row["error"] or ""), action))
     link = f"<a href='/history/{run_id}/report'>打开本次日报</a>" if task["report_ready"] else ""
+    action = ""
+    if task.get("workflow") and task["status"] in {"running", "interrupted"}:
+        command, label = ("cancel", "停止检索") if task["status"] == "running" else ("resume", "继续检索")
+        action = f"<button data-task-action='{command}'>{label}</button>"
     error = f"<p role='status'>{escape(task['error'])}</p>" if task.get("error") else ""
     kind = "定时检索" if task["scheduled_for"] else "手动检索"
     report_date = ((task.get("started_at") or task.get("scheduled_for") or "")[:10])
-    refresh = "setTimeout(() => location.reload(), 3000);" if task["status"] == "running" else ""
+    refresh = "setTimeout(() => location.reload(), 3000)" if task["status"] == "running" else "null"
     return f"""<!doctype html><html lang='zh'><head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
 <meta name='nd-report-date' content='{escape(report_date)}'>
@@ -55,7 +59,7 @@ def render_task(task: dict, receipts: list[dict], css: str) -> str:
 <dl><dt>计划执行</dt><dd>{timestamp(task['scheduled_for'])}</dd>
 <dt>实际开始</dt><dd>{timestamp(task['started_at'])}</dd>
 <dt>记录结束</dt><dd>{timestamp(task['finished_at'])}</dd></dl>
-{error}<p>{link}</p>
+{error}<p>{link} {action}</p>
 {table('处理阶段', ('阶段', '状态', '更新时间', '详情'), stages, '暂无处理阶段。')}
 {table('来源进度', ('来源', '状态', '抓取', '匹配'), sources, '暂无来源进度。')}
 {table('投递记录', ('渠道', '状态', '尝试次数', '更新时间', '详情', ''), destinations, '暂无投递记录。')}
@@ -63,7 +67,32 @@ def render_task(task: dict, receipts: list[dict], css: str) -> str:
 </main><script>
 const t=window.ndT||String;
 
-{refresh}
+const reloadTimer = {refresh};
+const taskAction = document.querySelector('[data-task-action]');
+if (taskAction) taskAction.addEventListener('click', async () => {{
+  clearTimeout(reloadTimer);
+  taskAction.disabled = true;
+  const message = document.getElementById('retry-message');
+  const action = taskAction.dataset.taskAction;
+  try {{
+    const response = await fetch('/api/run/{run_id}/' + action, {{method: 'POST'}});
+    if (response.ok && action === 'resume') {{ setTimeout(() => location.reload(), 500); return; }}
+    if (response.ok) {{
+      message.textContent = t('正在停止检索，等待当前操作结束…');
+      const poll = setInterval(async () => {{
+        try {{
+          const r = await fetch('/api/history/{run_id}', {{cache: 'no-store'}});
+          if (r.ok && (await r.json()).task?.status !== 'running') {{
+            clearInterval(poll); location.reload();
+          }}
+        }} catch (_) {{}}
+      }}, 2000);
+      return;
+    }}
+    message.textContent = (await response.json()).error || t('任务操作失败。');
+  }} catch (_) {{ message.textContent = t('无法连接服务。'); }}
+  taskAction.disabled = false;
+}});
 document.querySelectorAll('[data-retry]').forEach(button => {{
   button.addEventListener('click', async () => {{
     const message = document.getElementById('retry-message');

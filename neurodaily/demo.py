@@ -78,7 +78,7 @@ def build_result(config=None) -> DigestResult:
     try:
         from .journal_metrics import for_item
         for it in items:
-            m = for_item(it)
+            m = for_item(it, cfg)
             if m:
                 it.extra["metrics"] = m
     except Exception:

@@ -72,6 +72,11 @@ def _cfg_with_hours(cfg: Config, hours: int) -> Config:
 
 def create_app(config_path: str | None = None, *, desktop: bool = False,
                open_report_browser: bool = True) -> FastAPI:
+    from .optimization import Optimizer
+    from .optimization_api import router as optimization_router, worker as optimization_worker
+
+    optimizer = Optimizer(config_path)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         stop = Event()
@@ -86,12 +91,17 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         from .delivery import run_email_queue_loop
         Thread(target=run_email_queue_loop, args=(stop,),
                name="neurodaily-email-queue", daemon=True).start()
+        Thread(target=optimization_worker, args=(optimizer, stop),
+               name="neurodaily-search-optimization", daemon=True).start()
         try:
             yield
         finally:
             stop.set()
 
     app = FastAPI(title="NeuroDaily", version=__version__, lifespan=lifespan)
+    app.include_router(optimization_router(optimizer))
+    assets = Path(__file__).resolve().parent / "static" / "optimization"
+    app.mount("/static/optimization", StaticFiles(directory=assets, check_dir=False), name="optimization_assets")
     app.state.last_run = None
     app.state.search_attempt = None
 
@@ -170,7 +180,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     def desktop_workspace():
         latest = task_runs.latest()
         after = latest["id"] if latest else 0
-        if latest and latest["status"] == "running" and not latest["report_ready"]:
+        if latest and latest["status"] == "running":
             after -= 1
         report = _latest_report(_cfg(), include_demo=False)
         date = _saved_report_date(report) if report else ""
@@ -183,13 +193,16 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     @app.get("/", response_class=HTMLResponse)
     def dashboard(ui: bool = False):
         cfg = _cfg()
+        previous = _latest_report(cfg, include_demo=False)
+        if previous is not None:
+            if ui:
+                return _report(previous, ui)
+            html = previous.read_text(encoding="utf-8", errors="replace")
+            return _page(html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1))
         result = app.state.last_run
         if result is not None and result.config_profile != cfg.profile:
             result = None
         if result is None:
-            previous = _latest_report(cfg, include_demo=False)
-            if previous is not None:
-                return _report(previous, ui)
             if os.environ.get("NEURODAILY_DEMO"):
                 from .demo import build_result
                 result = build_result(cfg)
@@ -212,7 +225,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     def run_now_page():
         return _page(RUN_HTML)
 
-    def _begin_search(cfg: Config, mode: str, scheduled_for: datetime | None = None):
+    def _begin_search(cfg: Config, mode: str, scheduled_for: datetime | None = None,
+                      *, force: bool = False, hours: int | None = None, resume_id: int | None = None):
         with search_lock:
             current = app.state.search_attempt
             if current and current["status"] == "running":
@@ -224,11 +238,17 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 task_runs.recover()
                 if scheduled_for is not None:
                     previous = hist.desktop_schedule_result(cfg.profile, scheduled_for)
-                    if previous and (previous["status"] == "completed" or datetime.now() <
+                    if previous and (previous["status"] in {"completed", "cancelled"} or datetime.now() <
                                      datetime.fromisoformat(previous["finished_at"]) + RETRY_DELAY):
                         guard.close()
                         return None
-                attempt = task_runs.begin(cfg, mode, scheduled_for)
+                attempt = None
+                if scheduled_for is not None or resume_id is not None:
+                    attempt = task_runs.resume(cfg, mode, run_id=resume_id, due=scheduled_for)
+                if attempt is None:
+                    if resume_id is not None:
+                        raise task_runs.ResumeConflict("此任务当前无法继续。")
+                    attempt = task_runs.begin(cfg, mode, scheduled_for, force=force, hours=hours)
             except BaseException:
                 guard.close()
                 raise
@@ -238,121 +258,169 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     def _search_and_deliver(cfg: Config, attempt: dict, force: bool, mode: str):
         from .digest import index_saved_report, save_report, snapshot
 
+        def check_cancelled():
+            task_runs.check_cancelled(attempt["id"])
+
+        def complete(name):
+            return attempt["stages"].get(name, {}).get("status") in {"completed", "skipped", "partial", "failed"}
+
         def sources(changes):
             attempt["sources"].update(changes)
             task_runs.save(attempt)
 
-        def stage(name, status, error=""):
+        def stage(name, status, error="", *, checkpoint=None):
             task_runs.stage(attempt, name, status, error)
-            task_runs.save(attempt)
+            task_runs.save(attempt, result=checkpoint)
+            if status == "running":
+                check_cancelled()
 
-        result = run_digest(cfg, check_duplicate=True, record=False, force=force,
-                            mode=mode, progress=sources)
-        if result.skipped:
-            stage("search", "skipped")
-            task_runs.finish(attempt, "skipped", result.skipped_reason)
-            return
+        result = task_runs.load_result(attempt["id"]) if complete("search") else None
+        if result is None:
+            stage("search", "running")
+            result = run_digest(cfg, check_duplicate=True, record=False, force=force,
+                                mode=mode, progress=sources, cached=task_runs.load_sources(attempt["id"]),
+                                checkpoint=lambda *entry: task_runs.save_source(attempt["id"], *entry),
+                                check_cancelled=check_cancelled)
+            if result.skipped:
+                stage("search", "skipped")
+                task_runs.finish(attempt, "skipped", result.skipped_reason)
+                return
 
-        sources({row["source"]: {"status": row.get("status", "ok" if row["ok"] else "failed"),
-                                 **{key: row[key] for key in ("count", "fetched", "ms") if key in row}}
-                 for row in result.health})
-        attempt["item_count"] = len(result.items)
-        if not any(row["ok"] for row in result.health):
-            error = "All enabled sources failed." if result.health else "No sources are enabled."
-            stage("search", "failed", error)
+            sources({row["source"]: {"status": row.get("status", "ok" if row["ok"] else "failed"),
+                                     **{key: row[key] for key in ("count", "fetched", "ms") if key in row}}
+                     for row in result.health})
+            attempt["item_count"] = len(result.items)
+            if not any(row["ok"] for row in result.health):
+                error = "All enabled sources failed." if result.health else "No sources are enabled."
+                stage("search", "failed", error)
+                task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
+                task_runs.finish(attempt, "failed", error)
+                return
+            result.config = cfg
+            task_runs.stage(attempt, "search", "completed")
             task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
-            task_runs.finish(attempt, "failed", error)
-            return
-        stage("search", "completed")
-        fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d_%H%M%S.html"
-        path = Path(cfg.output_dir(), datetime.now().strftime(fmt)).absolute()
-        if not within(cfg.output_dir(), path):
-            raise ValueError("report output must stay inside the configured output directory")
-        if path.exists():
-            path = path.with_name(f"{path.stem}-{attempt['id']}{path.suffix}")
+        else:
+            result.config = cfg
+        check_cancelled()
+        stored_path = attempt.get("report_file")
+        if stored_path:
+            path = Path(stored_path)
+        else:
+            fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d_%H%M%S.html"
+            path = Path(cfg.output_dir(), datetime.now().strftime(fmt)).absolute()
+            if not within(cfg.output_dir(), path):
+                raise ValueError("report output must stay inside the configured output directory")
+            if path.exists():
+                path = path.with_name(f"{path.stem}-{attempt['id']}{path.suffix}")
+            attempt["report_file"] = str(path)
         result.history_id = attempt["id"]
         base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
         result.report_base_url = base
         result.report_locale = _language()
 
-        stage("metrics", "running")
-        try:
-            from .journal_metrics import ensure_fresh, for_item
-            if ensure_fresh([j.name for j in cfg.journals]):
-                for item in result.items:
-                    metrics = for_item(item, cfg)
-                    if metrics:
-                        item.extra["metrics"] = metrics
-            stage("metrics", "completed")
-        except Exception:
-            stage("metrics", "failed", "期刊指标更新失败。")
+        def publish_report(revision):
+            stage("report", "running")
+            result.report_revision = revision
+            save_report(result, str(path))
+            attempt.update(report_ready=True, report_file=str(path), report_revision=revision)
+            task_runs.stage(attempt, "report", "completed")
+            task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
+            app.state.last_run = result
 
-        stage("ai", "running")
-        try:
-            from .ai_summary import generate_all, load_cfg
-            summaries = generate_all(result, load_cfg())
-            if summaries:
-                result.ai_summary_meta = {"model": load_cfg().get("model", ""),
-                                          "languages": sorted(summaries)}
-            stage("ai", "completed" if summaries else "skipped")
-        except Exception:
-            stage("ai", "failed", "AI 摘要生成失败，请检查设置中的 AI 连通性。")
-
-        try:
-            from .research_activity import enrich_geography
-            if enrich_geography(result):
-                partial = bool(result.geography.get("deferred"))
-                stage("geolocation", "partial" if partial else "completed")
-            else:
-                stage("geolocation", "skipped", "未启用或缺少大模型 API。")
-        except Exception:
-            stage("geolocation", "failed", "AI 地理定位未完成。")
-
-        stage("topics", "running")
-        try:
-            from .topic_map import enrich_topics
-            if enrich_topics(result):
-                stage("topics", "completed")
-            else:
-                stage("topics", "skipped", "LDA/scikit-learn 未启用或语料不足。")
-        except Exception:
-            stage("topics", "failed", "主题图生成失败。")
-
-        # Render the whole HTML once, atomically. The UI waits for the task to
-        # finish before opening it, so a complete file is shown exactly once.
-        stage("report", "running")
-        result.report_revision = 1
-        save_report(result, str(path))
-        attempt.update(report_ready=True, report_file=str(path), report_revision=1)
-        task_runs.stage(attempt, "report", "completed")
-        task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
-        index_saved_report(result)
-        app.state.last_run = result
-
-        stage("delivery", "running")
-        try:
-            from .delivery import deliver_report
-            attempt["delivery"] = deliver_report(result, str(path), task_id=str(attempt["id"]))
-            failures = any(value == "failed" for value in attempt["delivery"].values())
-            stage("delivery", "partial" if failures else "completed",
-                  "部分投递失败，可在任务详情中重试。" if failures else "")
-        except Exception:
-            logging.getLogger(__name__).exception("Could not deliver report")
-            stage("delivery", "failed", "投递未完成，请查看任务详情。")
-
-        task_runs.finish(attempt, "completed")
-        if (open_report_browser and cfg.output.get("open_on_finish", True)
+        revision = attempt.get("report_revision", 0)
+        if not attempt["report_ready"]:
+            publish_report(max(1, revision))
+        else:
+            result.report_revision = revision or 1
+            app.state.last_run = result
+        if (revision == 0 and open_report_browser and cfg.output.get("open_on_finish", True)
                 and os.environ.get("NEURODAILY_NO_OPEN") != "1"):
             try:
                 from webbrowser import open as open_browser
                 open_browser(base.rstrip("/") + f"/history/{attempt['id']}/report")
             except Exception:
-                logging.getLogger(__name__).debug("Could not open completed report", exc_info=True)
+                logging.getLogger(__name__).debug("Could not open saved report", exc_info=True)
+
+        if not complete("metrics"):
+            stage("metrics", "running")
+            try:
+                from .journal_metrics import ensure_fresh, for_item
+                if ensure_fresh([j.name for j in cfg.journals]):
+                    for item in result.items:
+                        metrics = for_item(item, cfg)
+                        if metrics:
+                            item.extra["metrics"] = metrics
+                stage("metrics", "completed", checkpoint=result)
+            except Exception:
+                stage("metrics", "failed", "期刊指标更新失败。")
+
+        if not complete("ai"):
+            stage("ai", "running")
+            try:
+                from .ai_summary import generate_all, load_cfg
+                summaries = generate_all(result, load_cfg())
+                if summaries:
+                    result.ai_summary_meta = {"model": load_cfg().get("model", ""),
+                                              "languages": sorted(summaries)}
+                stage("ai", "completed" if summaries else "skipped", checkpoint=result)
+            except Exception:
+                stage("ai", "failed", "AI 摘要生成失败，请检查设置中的 AI 连通性。")
+
+        if not complete("geolocation"):
+            stage("geolocation", "running")
+            try:
+                from .research_activity import enrich_geography
+                if enrich_geography(result):
+                    partial = bool(result.geography.get("deferred"))
+                    stage("geolocation", "partial" if partial else "completed", checkpoint=result)
+                else:
+                    stage("geolocation", "skipped", "未启用或缺少大模型 API。")
+            except Exception:
+                stage("geolocation", "failed", "AI 地理定位未完成。")
+
+        if not complete("topics"):
+            stage("topics", "running")
+            try:
+                from .topic_map import enrich_topics
+                if enrich_topics(result):
+                    stage("topics", "completed", checkpoint=result)
+                else:
+                    stage("topics", "skipped", "LDA/scikit-learn 未启用或语料不足。")
+            except Exception:
+                stage("topics", "failed", "主题图生成失败。")
+
+        if attempt.get("report_revision", 0) < 2:
+            publish_report(2)
+        if not complete("index"):
+            stage("index", "running")
+            index_saved_report(result)
+            stage("index", "completed")
+
+        if not complete("delivery"):
+            resumed_delivery = "delivery" in attempt["stages"]
+            stage("delivery", "running")
+            try:
+                from .delivery import deliver_report, list_receipts
+                attempt["delivery"] = deliver_report(result, str(path), task_id=str(attempt["id"]),
+                                                     resuming=resumed_delivery, check_cancelled=check_cancelled)
+                receipt_states = {row["status"] for row in list_receipts(str(attempt["id"]))}
+                failures = bool({"failed", "unknown"} & receipt_states)
+                stage("delivery", "partial" if failures else "completed",
+                      "部分投递尚未确认，请查看任务详情。" if failures else "")
+            except task_runs.Cancelled:
+                raise
+            except Exception:
+                logging.getLogger(__name__).exception("Could not deliver report")
+                stage("delivery", "failed", "投递未完成，请查看任务详情。")
+        task_runs.finish(attempt, "completed")
 
     def _execute_search(cfg: Config, attempt: dict, guard, force: bool = False, mode: str = "manual"):
         with guard:
             try:
                 _search_and_deliver(cfg, attempt, force, mode)
+            except task_runs.Cancelled as exc:
+                task_runs.stage(attempt, attempt["phase"], "cancelled", str(exc))
+                task_runs.finish(attempt, "cancelled", str(exc))
             except Exception:
                 logging.getLogger(__name__).exception("Search or report generation failed")
                 error = "报告处理失败，请查看运行日志。"
@@ -360,12 +428,16 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 task_runs.finish(attempt, "completed" if attempt["report_ready"] else "failed", error)
 
     def _start_scheduled_search(cfg: Config, due: datetime) -> bool:
-        started = _begin_search(cfg, "daily", due)
+        try:
+            started = _begin_search(cfg, "daily", due, force=True)
+        except task_runs.ResumeConflict:
+            # The old slot remains available for manual review if its config changed.
+            return True
         if started is None:
             previous = hist.desktop_schedule_result(cfg.profile, due)
-            return bool(previous and previous["status"] == "completed")
+            return bool(previous and previous["status"] in {"completed", "cancelled"})
         _execute_search(cfg, *started, force=True, mode="daily")
-        return started[0]["status"] == "completed"
+        return started[0]["status"] in {"completed", "cancelled"}
 
     @app.post("/api/run")
     def api_run(background_tasks: BackgroundTasks, force: bool = False,
@@ -374,7 +446,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         if hours is not None and not (1 <= hours <= 8760):
             return JSONResponse({"error": "hours must be 1..8760"}, status_code=400)
         cfg = _cfg_with_hours(cfg, hours) if hours else cfg
-        started = _begin_search(cfg, "manual")
+        started = _begin_search(cfg, "manual", force=force, hours=hours)
         if started is None:
             return JSONResponse({"error": "A search is already running"}, status_code=409)
 
@@ -382,6 +454,33 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         background_tasks.add_task(_execute_search, cfg, attempt, guard, force)
         return JSONResponse({"status": "started", "profile": cfg.profile, "task_id": attempt["id"],
                              "force": force, "started_at": attempt["started_at"]})
+
+    @app.post("/api/run/{run_id}/resume")
+    def api_resume_run(run_id: int, background_tasks: BackgroundTasks):
+        cfg = _cfg()
+        row = hist.get_run(run_id)
+        task = row and row["task"]
+        if not task or task["profile"] != cfg.profile:
+            return JSONResponse({"error": "找不到当前配置下的此项任务。"}, status_code=404)
+        hours = task.get("hours")
+        if hours is not None:
+            cfg = _cfg_with_hours(cfg, hours)
+        due = datetime.fromisoformat(task["scheduled_for"]) if task["scheduled_for"] else None
+        try:
+            started = _begin_search(cfg, task["mode"], due, resume_id=run_id)
+        except task_runs.ResumeConflict as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        if started is None:
+            return JSONResponse({"error": "当前已有检索正在运行，或定时段已处理。"}, status_code=409)
+        attempt, guard = started
+        background_tasks.add_task(_execute_search, cfg, attempt, guard, attempt.get("force", False), attempt["mode"])
+        return JSONResponse({"status": "started", "task_id": run_id})
+
+    @app.post("/api/run/{run_id}/cancel")
+    def api_cancel_run(run_id: int):
+        if not task_runs.request_cancel(run_id):
+            return JSONResponse({"error": "此任务当前无法停止。"}, status_code=409)
+        return JSONResponse({"status": "cancelling", "task_id": run_id}, status_code=202)
 
     @app.get("/api/status")
     def api_status():
@@ -781,16 +880,23 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             except OSError:
                 return ""
 
+        output = Path(cfg.output_dir())
         task = task_runs.latest(profile=cfg.profile, ready=True)
-        if task and "(demo)" not in header(task["report_file"]):
-            return Path(task["report_file"])
-
-        files = sorted((f for f in Path(cfg.output_dir()).glob("*.html") if f.is_file()),
-                       key=os.path.getmtime, reverse=True)
+        if task:
+            # CLI and launchd reports use history rows without a desktop checkpoint.
+            candidates = {Path(task["report_file"])}
+            for run in hist.list_runs(profile=cfg.profile):
+                name = run.get("report_path")
+                if not run.get("task") and name and Path(name).name == name:
+                    candidates.add((output / name).absolute())
+        else:
+            candidates = output.glob("*.html")
+        files = sorted((f for f in candidates if f.is_file()), key=os.path.getmtime, reverse=True)
+        task_path = Path(task["report_file"]) if task else None
         demo = None
         for file in files:
             text = header(file)
-            if not (file.name.startswith("neurodaily_") or 'name="nd-base"' in text
+            if not (file == task_path or file.name.startswith("neurodaily_") or 'name="nd-base"' in text
                     or "<title>NeuroDaily</title>" in text):
                 continue
             if "(demo)" not in text:
@@ -814,10 +920,11 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             current = datetime.now()
             due = datetime.combine(current.date(), schedule) if schedule is not None else None
             slot = hist.desktop_schedule_result(cfg.profile, due) if due is not None else None
+            slot_done = slot and slot["status"] in {"completed", "cancelled"}
             next_run = due
-            if slot and slot["status"] == "completed":
+            if slot_done:
                 next_run += timedelta(days=1)
-            if slot and slot["status"] != "completed":
+            elif slot:
                 next_run = max(current, datetime.fromisoformat(slot["finished_at"]) + RETRY_DELAY)
                 if next_run.date() != current.date():
                     next_run = due + timedelta(days=1)
@@ -826,7 +933,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             if due is not None and due <= current:
                 if attempt.get("status") == "running" and attempt.get("scheduled_for") == due.isoformat():
                     state = "running"
-                elif slot and slot["status"] != "completed":
+                elif slot and not slot_done:
                     state = "retrying"
                 elif not slot:
                     state = "waiting"

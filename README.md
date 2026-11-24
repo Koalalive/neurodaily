@@ -400,29 +400,32 @@ neurodaily run --no-open        # 或网页里点 Run now
 
 **创投源示例**（已内置在 `config.example.json`）：BCI 融资、neurotech 融资、MedTech Dive、Crunchbase。
 
-### 期刊指标硬编码（IF / JCR / 中科院分区）
+### 期刊指标与自定义标签
 
-可以直接在 `config/config.json` 的 `journals` 里写死指标：
+在 **设置 → 重点期刊 → 期刊指标与标签** 录入指标、收录状态和备注。匹配的论文和日报期刊列表会显示这些字段。下面是用于配置文件的示例：
 
 ```json
 "journals": [
   {
-    "name": "Nature",
-    "url": "https://www.nature.com/",
+    "name": "Example Journal",
     "category": "general",
-    "impact_factor": 50.5,
-    "jcr": "Q1",
+    "impact_factor": 4.6,
+    "impact_factor_year": 2025,
+    "jcr": "Q3",
+    "jcr_year": 2025,
     "cas": "1区",
-    "year": 2024
+    "cas_year": 2025,
+    "cas_top": true,
+    "sci": true,
+    "ssci": false,
+    "tags": ["国产期刊", "重点关注"]
   }
 ]
 ```
 
-- `impact_factor` 也接受别名 `if`
-- `jcr`：`Q1`/`Q2`…；`cas`：`1区`/`2区`…；`year` 可选
-- 优先级：**用户配置 > `config/journal_metrics.json` 官方导入 > OpenAlex 自动 `OA 2yr`**
-- 设置页的期刊行也有 `IF / JCR / 中科院` 三个输入框，可直接编辑保存
-- IF/JCR/中科院分区是 Clarivate / 中科院文献情报中心的专有数据，硬编码值由用户自行负责
+- IF、JCR 和中科院分区可以填写各自的年份。旧配置中的 `metric_year` 或 `year` 可作为共用年份，旧字段 `if` 仍可读取。
+- SCI 和 SSCI 分别录入。留空时省略相应标记。`tags` 可以填写多项，配置导出与导入会保留这些字段。
+- 指标优先采用当前学科配置。未填写的指标可以从已有导入记录补齐。OpenAlex 两年被引指标单独显示为 `OA 2yr`。
 
 ---
 

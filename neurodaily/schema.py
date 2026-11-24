@@ -42,6 +42,13 @@ class JournalModel(BaseModel):
     jcr: str = ""
     cas: str = ""
     metric_year: int | None = None
+    impact_factor_year: int | None = Field(default=None, ge=1900, le=9999)
+    jcr_year: int | None = Field(default=None, ge=1900, le=9999)
+    cas_year: int | None = Field(default=None, ge=1900, le=9999)
+    cas_top: bool = Field(default=False, strict=True)
+    sci: bool | None = Field(default=None, strict=True)
+    ssci: bool | None = Field(default=None, strict=True)
+    tags: list[str] = Field(default_factory=list)
     year: int | None = None
     aliases: list[str] = Field(default_factory=list)
     issns: list[str] = Field(default_factory=list)

@@ -16,8 +16,10 @@ import copy
 import difflib
 import json
 import os
+from contextlib import nullcontext
 
-from .config import Config, DEFAULT_CONFIG
+from .config import Config, DEFAULT_CONFIG, config_lock_path, write_config
+from .file_lock import file_lock
 from .schema import ConfigModel, validate
 
 
@@ -56,6 +58,12 @@ def apply_patch(path: str, patch: dict, dry_run: bool = False) -> tuple[bool, li
     """Merge `patch` into the config at `path`. Returns (ok, errors, diff)."""
     if not isinstance(patch, dict):
         return False, ["patch must be a JSON object"], ""
+    lock = nullcontext() if dry_run else file_lock(config_lock_path(path))
+    with lock:
+        return _apply_patch(path, patch, dry_run)
+
+
+def _apply_patch(path, patch, dry_run):
     if os.path.exists(path):
         try:
             with open(path, encoding="utf-8") as f:
@@ -71,9 +79,7 @@ def apply_patch(path: str, patch: dict, dry_run: bool = False) -> tuple[bool, li
     if errs:
         return False, errs, diff
     if not dry_run:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(merged, f, ensure_ascii=False, indent=2)
+        write_config(path, merged)
     return True, [], diff
 
 

@@ -55,7 +55,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -e . pyinstaller
+          .venv/bin/python -m pip install -e ".[topics]" pyinstaller
 
       - name: Python venv (Windows)
         if: runner.os == 'Windows'
@@ -63,7 +63,7 @@ jobs:
         run: |
           python -m venv .venv
           .\.venv\Scripts\python -m pip install --upgrade pip
-          .\.venv\Scripts\python -m pip install -e . pyinstaller
+          .\.venv\Scripts\python -m pip install -e ".[topics]" pyinstaller
 
       - name: Install Tauri CLI
         working-directory: desktop/tauri

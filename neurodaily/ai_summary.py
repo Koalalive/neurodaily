@@ -510,7 +510,13 @@ def _chat_request(base_url: str, model: str, key: str, messages: list[dict],
         return value
 
     try:
-        response = httpx.post(url, headers={"Authorization": f"Bearer {key}"}, json=request, timeout=timeout)
+        host = urlsplit(base_url).hostname
+        try:
+            local = ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            local = host == "localhost"
+        response = httpx.post(url, headers={"Authorization": f"Bearer {key}"}, json=request,
+                              timeout=timeout, trust_env=not local)
         response.raise_for_status()
         status = "invalid_response"
         body = response.json()

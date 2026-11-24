@@ -57,7 +57,8 @@ def _portable(data: dict) -> dict:
                 continue
             for key in list(item):
                 if key not in {"name", "url", "rss", "category", "impact_factor", "if", "jcr", "cas",
-                               "metric_year", "year", "aliases", "issns"}:
+                               "metric_year", "year", "aliases", "issns", "impact_factor_year", "if_year",
+                               "jcr_year", "cas_year", "cas_top", "sci", "ssci", "tags"}:
                     del item[key]
                 elif key in ("url", "rss"):
                     item[key] = _url(item[key])

@@ -1,5 +1,7 @@
 """Settings GUI page for NeuroDaily (dependency-free vanilla JS)."""
 
+from .optimization_ui import OPTIMIZATION_HEAD, OPTIMIZATION_WORKBENCH
+
 DASHBOARD_SETTINGS_LINK = (
     '<a href="/settings" style="position:fixed;top:12px;right:16px;z-index:9999;'
     'background:#171f2f;border:1px solid #38bdf8;color:#38bdf8;padding:6px 12px;'
@@ -29,9 +31,14 @@ input:focus{outline:none;border-color:var(--accent)}
 .row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
 .row.grid{display:grid;grid-template-columns:1.1fr 1fr 1fr 1fr 1.2fr auto auto;gap:6px}
 .row.src{display:grid;grid-template-columns:1.2fr auto 90px 100px;gap:8px}
-.row.j{display:grid;grid-template-columns:1fr 1.4fr 1.4fr .8fr .7fr .6fr .7fr auto;gap:6px}
-.row.j .j-aliases{grid-column:1 / 5}
-.row.j .j-issns{grid-column:5 / -1}
+.row.j{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,.7fr) auto;gap:6px;margin:0 0 14px}
+.row.j .j-aliases{grid-column:1 / 3}
+.row.j .j-issns{grid-column:3 / -1}
+.j-metrics{grid-column:1 / -1;border-bottom:1px solid var(--line);padding:4px 0 8px}
+.j-metrics summary{cursor:pointer;color:var(--accent);font-size:.82rem}
+.j-metrics-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+.j-metrics-fields label{min-width:0}
+.j-metrics-fields .j-tags-label{grid-column:1 / -1}
 .row.feed{display:grid;grid-template-columns:minmax(10ch,1fr) auto auto}
 .row.recipient{display:grid;grid-template-columns:minmax(180px,1.5fr) 110px 120px auto;gap:6px;margin-bottom:6px}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -50,6 +57,7 @@ button.warn{border-color:#7a2b2b;color:#fca5a5}
   .row.grid,.row.j,.row.src,.grid2{grid-template-columns:1fr}
   .row.j .j-aliases,.row.j .j-issns{grid-column:auto}
 }
+@media(max-width:580px){.j-metrics-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .search-controls{display:grid;gap:12px}
 .search-controls label{color:var(--text)}
 .search-controls :is(input,select,button,summary,textarea):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -87,7 +95,9 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 ::-webkit-scrollbar-track { background: #0b0b0c; }
 ::-webkit-scrollbar-thumb { background: #3a4352; border: 2px solid #0b0b0c; border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: #58647a; }
-</style></head>
+</style>
+<!-- OPTIMIZATION_HEAD -->
+</head>
 <body>
 <header><h1>⚙ NeuroDaily Settings</h1><a href="/">← Back to dashboard</a><span class="mini" id="cfgpath"></span></header>
 <main>
@@ -225,6 +235,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
       </div>
       <div class="search-preview" id="search_preview_results" aria-label="Search preview by source"></div>
     </div>
+    <!-- OPTIMIZATION_WORKBENCH -->
   </section>
 
   <section>
@@ -261,6 +272,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
       <label><input type="checkbox" id="otd_enabled"> Include "On This Day" (neuroscience history)</label>
       <label><input type="checkbox" id="otd_notify"> Desktop notification daily</label>
       <label><input type="checkbox" id="topic_map_enabled"> Include LDA + t-SNE topic map</label>
+      <label><input type="checkbox" id="topic_ai_labels"> 用大模型标注主题</label>
     </div>
     <div class="inline" style="margin-top:10px">
       <label>"On This Day" language</label>
@@ -300,6 +312,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
   <section>
     <h2>Top journals watch-list</h2>
     <p class="desc">Journals with RSS are fetched for the papers section. Add aliases and ISSNs to recognize the same journal across sources.</p>
+    <p class="desc">Enter publication metrics, indexing and custom tags to show them beside matching papers.</p>
     <div id="journals"></div>
     <button onclick="addJournal()">+ Add journal</button>
   </section>
@@ -372,6 +385,9 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 </footer>
 <script>
 var BASE=null;
+var savedResearchFingerprint=null;
+var displayedSearchProfile=null;
+var RESEARCH_SETTINGS_FIELDS=['profile','disciplines','global_keywords','journals','sources','policy_feeds','search'];
 var PUSH_BASELINE=null;
 var AI_BASELINE=null;
 var SEARCH_PREVIEW=null;
@@ -756,17 +772,33 @@ function addFeed(){el('policy_feeds').appendChild(feedRow(''));}
 
 function journalRow(x){
   x=x||{}; var d=document.createElement('div'); d.className='row j';
-  d.dataset.metricYear=x.metric_year==null?'':x.metric_year;
+  function yearField(css,label,value){
+    return '<label>'+label+'<input class="'+css+'" type="number" inputmode="numeric" min="1900" max="9999" step="1" value="'+esc(value)+'"></label>';
+  }
+  function indexing(css,label,value){
+    return '<label>'+label+'<select class="'+css+'">'+
+      '<option value="">Not set</option><option value="yes" '+(value===true?'selected':'')+'>Indexed</option>'+
+      '<option value="no" '+(value===false?'selected':'')+'>Not indexed</option></select></label>';
+  }
   d.innerHTML='<input class="j-name" placeholder="Journal name" value="'+esc(x.name)+'">'+
     '<input class="j-url" placeholder="Website URL" value="'+esc(x.url)+'">'+
     '<input class="j-rss" placeholder="RSS (optional)" value="'+esc(x.rss)+'">'+
     '<input class="j-cat" placeholder="Category" value="'+esc(x.category)+'">'+
-    '<input class="j-if" type="number" step="0.01" placeholder="IF" value="'+(x.impact_factor!=null?x.impact_factor:'')+'">'+
-    '<input class="j-jcr" placeholder="JCR" value="'+esc(x.jcr)+'">'+
-    '<input class="j-cas" placeholder="中科院" value="'+esc(x.cas)+'">'+
     '<button class="del" onclick="this.closest(\'.row\').remove();markPreviewStale();">✕</button>'+
     '<label class="j-aliases">Journal aliases<input class="j-alias" value="'+esc(csv(x.aliases))+'"></label>'+
-    '<label class="j-issns">ISSNs<input class="j-issn" value="'+esc(csv(x.issns))+'"></label>';
+    '<label class="j-issns">ISSNs<input class="j-issn" value="'+esc(csv(x.issns))+'"></label>'+
+    '<details class="j-metrics"><summary>Journal metrics and tags</summary><div class="j-metrics-fields">'+
+    '<label>IF<input class="j-if" type="number" min="0" step="any" value="'+esc(x.impact_factor)+'"></label>'+
+    '<label>JCR<input class="j-jcr" placeholder="Q1" value="'+esc(x.jcr)+'"></label>'+
+    '<label>中科院<input class="j-cas" value="'+esc(x.cas)+'"></label>'+
+    yearField('j-if-year','IF year',x.impact_factor_year)+
+    yearField('j-jcr-year','JCR year',x.jcr_year)+
+    yearField('j-cas-year','CAS year',x.cas_year)+
+    yearField('j-metric-year','Shared metric year',x.metric_year)+
+    indexing('j-sci','SCI',x.sci)+indexing('j-ssci','SSCI',x.ssci)+
+    '<label><input class="j-cas-top" type="checkbox" '+(x.cas_top===true?'checked':'')+'> CAS Top</label>'+
+    '<label class="j-tags-label">Custom journal tags<input class="j-tags" placeholder="Separate tags with commas" value="'+
+    esc(csv(x.tags))+'"></label></div></details>';
   return d;
 }
 function addJournal(){el('journals').appendChild(journalRow({category:'neuroscience'}));}
@@ -789,6 +821,7 @@ function render(){
   el('sch_hour').value=(sc.hour!=null?sc.hour:8); el('sch_minute').value=(sc.minute!=null?sc.minute:0);
   el('otd_enabled').checked=(otd.enabled!==false); el('otd_notify').checked=(otd.notify!==false);
   el('topic_map_enabled').checked=(o.topic_map!==false);
+  el('topic_ai_labels').checked=(o.topic_ai_labels!==false);
   el('otd_lang').value = otd.lang || 'zh';
   var w = BASE.windows || {};
   el('win_daily').value = (w.daily_paper_hours != null ? w.daily_paper_hours : 36);
@@ -842,6 +875,7 @@ async function load(){
     var r=await fetch('/api/config');
     if(!r.ok) throw new Error(t('Could not load settings'));
     BASE=await r.json(); render();
+    rememberSavedResearch(collect());
     el('cfgpath').textContent=t('Config: {path}',{path:'~/neurodaily/config/config.json'});
     el('msg').textContent=''; el('msg').className='';
     loadPresets();
@@ -958,6 +992,7 @@ function collect(){
   data.output.open_on_finish=el('out_open').checked;
   data.output.seen_dedup=el('out_seen_dedup').checked;
   data.output.topic_map=el('topic_map_enabled').checked;
+  data.output.topic_ai_labels=el('topic_ai_labels').checked;
   data.scheduled=Object.assign({},data.scheduled||{});
   data.scheduled.enabled=el('sch_enabled').checked;
   data.scheduled.hour=parseInt(el('sch_hour').value||'8',10);
@@ -981,6 +1016,11 @@ function collect(){
   else if(data.sources.policy) delete data.sources.policy.feed_kinds;
   data.journals=[].slice.call(el('journals').querySelectorAll('.row')).map(function(r){
     var iv=r.querySelector('.j-if').value.trim();
+    function year(selector){var v=r.querySelector(selector).value; return v?Number(v):null;}
+    function indexState(selector){
+      var v=r.querySelector(selector).value;
+      return v ? v==='yes' : null;
+    }
     return {name:r.querySelector('.j-name').value.trim(),
       url:r.querySelector('.j-url').value.trim(),
       rss:r.querySelector('.j-rss').value.trim(),
@@ -988,12 +1028,47 @@ function collect(){
       impact_factor: iv?parseFloat(iv):null,
       jcr:r.querySelector('.j-jcr').value.trim(),
       cas:r.querySelector('.j-cas').value.trim(),
+      impact_factor_year:year('.j-if-year'),
+      jcr_year:year('.j-jcr-year'),
+      cas_year:year('.j-cas-year'),
+      metric_year:year('.j-metric-year'),
+      cas_top:r.querySelector('.j-cas-top').checked,
+      sci:indexState('.j-sci'),
+      ssci:indexState('.j-ssci'),
+      tags:split(r.querySelector('.j-tags').value),
       aliases:split(r.querySelector('.j-alias').value),
-      issns:split(r.querySelector('.j-issn').value),
-      metric_year:r.dataset.metricYear?Number(r.dataset.metricYear):null};
+      issns:split(r.querySelector('.j-issn').value)};
   }).filter(function(x){return x.name;});
   return data;
 }
+
+function researchFingerprint(data){
+  return JSON.stringify(RESEARCH_SETTINGS_FIELDS.map(function(key){return data[key];}));
+}
+
+function rememberSavedResearch(data){
+  savedResearchFingerprint=researchFingerprint(data);
+  if(displayedSearchProfile!==null&&displayedSearchProfile!==data.profile){
+    document.dispatchEvent(new Event('nd:search-profile-changed'));
+  }
+  displayedSearchProfile=data.profile;
+}
+
+window.ndCanUpdateSearch=function(){
+  return BASE!==null&&savedResearchFingerprint===researchFingerprint(collect());
+};
+
+window.ndRefreshSearchSettings=async function(){
+  var response=await fetch('/api/config',{cache:'no-store'});
+  if(!response.ok) return false;
+  var updated=await response.json();
+  if(!window.ndCanUpdateSearch()) return false;
+  BASE=collect();
+  for(var key of RESEARCH_SETTINGS_FIELDS) BASE[key]=updated[key];
+  render();
+  rememberSavedResearch(collect());
+  return true;
+};
 
 async function save(){
   var data=collect();
@@ -1002,6 +1077,7 @@ async function save(){
     var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     var out=await r.json();
     if(out.ok){
+      rememberSavedResearch(data);
       el('msg').textContent=t('✅ Saved → {path}',{path:out.path}); el('msg').className='ok';
       loadLaunchdStatus();
       return true;
@@ -1040,7 +1116,7 @@ async function loadLaunchdStatus(){
       else if(s.next_run) scheduleText+=' · '+t('Next {time}',{time:time(s.next_run)});
     }
     if(desktop&&s.last_run){
-      var states={completed:'Completed',failed:'Failed',skipped:'Skipped',interrupted:'Interrupted'};
+      var states={completed:'Completed',failed:'Failed',skipped:'Skipped',interrupted:'Interrupted',cancelled:'已停止'};
       scheduleText+=' · '+t('Last {time} ({state})',{
         time:time(s.last_run.finished_at),state:t(states[s.last_run.status]||s.last_run.status)});
       if(s.last_run.error) scheduleText+=' · '+t(s.last_run.error);
@@ -1261,10 +1337,10 @@ el('search_add_set').onclick=function(){addSearchSet(NEXT_SEARCH_SET++,'',true);
 el('search_journal_mode').onchange=showJournalScope;
 el('search_preview_button').onclick=previewSearch;
 document.querySelector('main').addEventListener('input',function(event){
-  if(!event.target.closest('#search_builder')) markPreviewStale();
+  if(!event.target.closest('#search_builder, #optimization-workbench')) markPreviewStale();
 });
 document.querySelector('main').addEventListener('change',function(event){
-  if(!event.target.closest('#search_builder')) markPreviewStale();
+  if(!event.target.closest('#search_builder, #optimization-workbench')) markPreviewStale();
 });
 load();
 loadUiLanguage();
@@ -1272,3 +1348,7 @@ setInterval(function(){if(desktopScheduler&&!document.hidden) loadLaunchdStatus(
 </script>
 </body></html>
 """
+
+SETTINGS_HTML = SETTINGS_HTML.replace("<!-- OPTIMIZATION_HEAD -->", OPTIMIZATION_HEAD).replace(
+    "<!-- OPTIMIZATION_WORKBENCH -->", OPTIMIZATION_WORKBENCH
+)

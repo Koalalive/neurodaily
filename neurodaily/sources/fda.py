@@ -1,7 +1,7 @@
 """openFDA source: new drug approvals (drugsfda) + device clearances (510k)."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
 from ..models import Item
@@ -19,15 +19,28 @@ FOCUS_TERMS = [
 ]
 
 
-def _focus_hit(text: str) -> bool:
+def _focus_hit(text: str, terms=None) -> bool:
+    if terms is None:
+        terms = FOCUS_TERMS
     t = text.lower()
-    return any(term in t for term in FOCUS_TERMS)
+    return not terms or any(term.casefold() in t for term in terms if isinstance(term, str) and term.strip())
 
 
 def _date_range(back_days: int) -> tuple[str, str]:
     end = datetime.now()
     start = end - timedelta(days=back_days)
     return start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
+
+
+def _approval_date(value: str) -> str:
+    # Python 3.10 only accepts dashed ISO dates.
+    if value and len(value) == 8 and value.isdecimal():
+        value = f"{value[:4]}-{value[4:6]}-{value[6:]}"
+        try:
+            return date.fromisoformat(value).isoformat()
+        except ValueError:
+            return ""
+    return parse_date_any(value)
 
 
 def _fetch_rows(url: str, search: str) -> list[dict]:
@@ -76,16 +89,16 @@ def fetch_drugs(config, logger=None, max_results: int = 8, lookback: int = 60) -
         name = ", ".join([b for b in brand if b]) or ", ".join([g for g in generic if g]) or r.get("application_number", "")
         sponsor = r.get("sponsor_name", "")
         appno = r.get("application_number", "")
-        if not _focus_hit(f"{name} {generic} {sponsor}"):
+        if not _focus_hit(f"{name} {generic} {sponsor}", opts.get("filter_keywords")):
             continue
         if len(items) >= max_results:
             mark_sampled(truncated=True)
             break
-        sub_date = ""
-        for sub in r.get("submissions", []):
-            if sub.get("submission_status") == "AP":
-                sub_date = sub.get("submission_status_date", "")
-                break
+        dates = [stamp for sub in r.get("submissions", []) if sub.get("submission_status") == "AP"
+                 and s <= (stamp := str(sub.get("submission_status_date") or "")) <= e]
+        if not dates:
+            continue
+        sub_date = max(dates)
         items.append(Item(
             title=f"{name} — {appno}",
             url=f"https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo={appno[4:]}",
@@ -93,7 +106,7 @@ def fetch_drugs(config, logger=None, max_results: int = 8, lookback: int = 60) -
             authors=[sponsor] if sponsor else [],
             source="fda_drugs",
             kind="drug",
-            date=parse_date_any(sub_date),
+            date=_approval_date(sub_date),
             doi="",
             tags=["fda", "drug"],
             extra={"application_number": appno},
@@ -111,7 +124,8 @@ def fetch_devices(config, logger=None, max_results: int = 8, lookback: int = 60)
     for r in rows:
         name = r.get("device_name", "")
         applicant = r.get("applicant", "")
-        if not _focus_hit(f"{name} {applicant}"):
+        if not _focus_hit(f"{name} {applicant} {r.get('product_description') or ''}",
+                          opts.get("filter_keywords")):
             continue
         if len(items) >= max_results:
             mark_sampled(truncated=True)
@@ -124,7 +138,7 @@ def fetch_devices(config, logger=None, max_results: int = 8, lookback: int = 60)
             authors=[applicant] if applicant else [],
             source="fda_devices",
             kind="device",
-            date=parse_date_any(r.get("decision_date", "")),
+            date=_approval_date(r.get("decision_date", "")),
             doi="",
             tags=["fda", "device"],
             extra={"k_number": r.get("k_number"), "product_code": r.get("product_code"),

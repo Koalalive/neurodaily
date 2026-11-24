@@ -107,7 +107,7 @@ def main() -> None:
 
         Thread(target=stop_on_eof, name="neurodaily-parent", daemon=True).start()
 
-    app = create_app(str(home / "config" / "config.json"), desktop=True)
+    app = create_app(str(home / "config" / "config.json"), desktop=True, open_report_browser=not managed)
     server = DesktopServer(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info"))
     server.run()
 

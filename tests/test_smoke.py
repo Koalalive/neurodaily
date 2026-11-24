@@ -906,7 +906,8 @@ class WebSearchOutcomeTests(unittest.TestCase):
 
     def test_success_is_reported_after_the_report_is_written(self):
         def save(result, path):
-            self.assertIsNone(self.app.state.last_run)
+            if result.report_revision == 1:
+                self.assertIsNone(self.app.state.last_run)
             self.assertEqual(self.app.state.search_attempt["status"], "running")
             with open(path, "w", encoding="utf-8") as f:
                 f.write("<html>saved report</html>")
