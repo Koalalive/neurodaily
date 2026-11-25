@@ -67,7 +67,7 @@ def fetch(config, logger=None) -> list[Item]:
     # The detail API serves 30 records per page. Fetch each server/category
     # stream concurrently; page requests inside one stream stay ordered.
     max_pages = 1 if preview else max(1, (max_results + 29) // 30)
-    concurrency = max(1, min(8, int(opts.get("concurrency", 4))))
+    concurrency = max(1, min(8, int(opts.get("concurrency", 8))))
     jobs = [(server, category) for server in ("biorxiv", "medrxiv") for category in categories]
 
     def collect(server: str, category: str):

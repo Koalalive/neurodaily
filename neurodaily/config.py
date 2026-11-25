@@ -512,7 +512,7 @@ def DEFAULT_CONFIG() -> Config:
         "journal":    {"enabled": True, "max_results": 0, "lookback_days": 2},
         "arxiv":      {"enabled": True, "max_results": 0, "lookback_days": 2, "concurrency": 4},
         "pubmed":     {"enabled": True, "max_results": 0, "lookback_days": 2},
-        "biorxiv":    {"enabled": True, "max_results": 0, "lookback_days": 2, "concurrency": 4},
+        "biorxiv":    {"enabled": True, "max_results": 0, "lookback_days": 2, "concurrency": 8},
         "fda_drugs":  {"enabled": True, "max_results": 0, "lookback_days": 2},
         "fda_devices":{"enabled": True, "max_results": 0, "lookback_days": 2},
         "trials":     {"enabled": True, "max_results": 0, "lookback_days": 7},
