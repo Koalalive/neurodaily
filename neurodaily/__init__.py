@@ -7,7 +7,7 @@ Public API:
 """
 from __future__ import annotations
 
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 
 from .config import Config, DEFAULT_CONFIG
 from .digest import run, save_report, DigestResult
