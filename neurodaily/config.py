@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -29,6 +30,8 @@ OPTIONAL_SOURCES = {
     "nih_brain": {"enabled": False, "max_results": 25, "lookback_days": 7},
     "crossref": {"enabled": False, "max_results": 20, "lookback_days": 2},
 }
+RESEARCH_FIELDS = ("profile", "disciplines", "global_keywords", "sources", "windows", "policy_feeds",
+                   "journals", "search")
 
 
 class ConfigurationChanged(ValueError):
@@ -41,18 +44,43 @@ def config_lock_path(path: str) -> Path:
     return Path(DEFAULT_DIRS["output"]) / ".config-locks" / key
 
 
-def write_config(path: str, data: dict) -> None:
+def research_config(config: Config) -> dict:
+    from .profile_exchange import export_profile
+
+    return export_profile(config)["config"]
+
+
+def revision_for(config: Config, path: str | None = None) -> str:
+    """Stable content identity for the research profile, independent of its storage path."""
+    payload = json.dumps(research_config(config), sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def write_config(path: str, data: dict, *, origin="save", provenance: dict | None = None) -> None:
+    from .config_revisions import save_revision
+
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
     temporary = None
     try:
         with NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory, delete=False) as stream:
             temporary = stream.name
-            json.dump(data, stream, indent=2, ensure_ascii=False)
-        os.replace(temporary, path)
+            json.dump(data, stream, indent=2, ensure_ascii=False, allow_nan=False)
+        save_revision(path, temporary, origin=origin, provenance=provenance)
     finally:
         if temporary and os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def parse_impact_factor(value) -> float | None:
+    """Recover optional ratings from older configuration and metric files."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) and number >= 0 else None
 
 
 # ---------------------------------------------------------------------------
@@ -111,11 +139,6 @@ class Journal:
 
     @staticmethod
     def from_dict(d: dict) -> "Journal":
-        raw_if = d.get("impact_factor", d.get("if"))
-        try:
-            impact_factor = float(raw_if) if raw_if not in (None, "") else None
-        except (TypeError, ValueError):
-            impact_factor = None
         def year(value):
             try:
                 return int(value) if value not in (None, "") and not isinstance(value, bool) else None
@@ -134,7 +157,7 @@ class Journal:
             url=d.get("url", ""),
             rss=d.get("rss", ""),
             category=d.get("category", "neuroscience"),
-            impact_factor=impact_factor,
+            impact_factor=parse_impact_factor(d.get("impact_factor", d.get("if"))),
             jcr=str(d.get("jcr", "") or "").strip(),
             cas=str(d.get("cas", "") or "").strip(),
             metric_year=year(d.get("metric_year", d.get("year"))),
@@ -214,14 +237,15 @@ class Config:
         data = json.dumps(self.to_dict(), sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
-    def save(self, path: str | None = None, *, expected_version: str | None = None) -> str:
+    def save(self, path: str | None = None, *, expected_version: str | None = None,
+             origin="save", provenance: dict | None = None) -> str:
         from .file_lock import file_lock
 
         p = path or self.default_path()
         with file_lock(config_lock_path(p)):
             if expected_version is not None and self.load(p).version() != expected_version:
                 raise ConfigurationChanged("The configuration changed since the trial. Start a new comparison.")
-            write_config(p, self.to_dict())
+            write_config(p, self.to_dict(), origin=origin, provenance=provenance)
         return p
 
     # ------------------------------------------------------------- accessors

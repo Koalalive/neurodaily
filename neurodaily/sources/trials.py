@@ -8,6 +8,7 @@ from time import monotonic
 from urllib.parse import quote
 
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
+from ._discovery import fixed_bounds
 from ..models import Item
 from ..search import compile_scoped_search
 
@@ -157,7 +158,10 @@ def fetch(config, logger=None) -> list[Item]:
         max_results = min(max_results, 30)
     lookback = int(opts.get("lookback_days", 60))
     cutoff = (datetime.now() - timedelta(days=lookback)).strftime("%Y-%m-%d")
-    filters = f"AREA[LastUpdatePostDate]RANGE[{cutoff},MAX]"
+    start, end = fixed_bounds(opts) or (cutoff, "MAX")
+    if start > end:
+        return []
+    filters = f"AREA[LastUpdatePostDate]RANGE[{start},{end}]"
 
     pending = deque((query, "", set()) for query in _queries(config))
     initial_queries = len(pending)

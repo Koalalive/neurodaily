@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
+from .security import external_url
+
 
 @dataclass
 class Item:
@@ -20,6 +22,9 @@ class Item:
     doi: str = ""
     tags: list[str] = field(default_factory=list)   # matched discipline/keyword tags
     extra: dict = field(default_factory=dict)        # source-specific fields
+
+    def __post_init__(self) -> None:
+        self.url = external_url(self.url)
 
     def to_dict(self) -> dict:
         return asdict(self)

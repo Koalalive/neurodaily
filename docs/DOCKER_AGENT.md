@@ -78,6 +78,7 @@ done
 - [ ] `/`、`/api/config`、`/settings` 全部 200
 - [ ] `docker logs` 无 `Traceback`
 - [ ] 若挂了 `./config`，容器内 `config init` 不覆盖已有配置
+- [ ] 重建容器后，设置中的 AI、邮件和 Webhook 仍可读取
 
 ## 4. 离线演示（答辩/断网）
 
@@ -123,10 +124,12 @@ curl -u koalalive:$DOCKERHUB_TOKEN -X PATCH \
 
 ## 6. 升级 / 回滚
 
+容器将配置和运行数据写入 `NEURODAILY_HOME=/app/neurodaily`，与默认绑定的 `config` 和 `output` 目录一致。旧容器可能将 AI、邮件、Webhook 或期刊指标写在 `/app/config`。使用部署脚本升级时，保留现有容器，直接执行 `bash scripts/docker_deploy.sh up`。脚本会在替换容器前将旧文件备份到 `output/.container-settings.*`，并补齐宿主机缺少的文件。
+
+直接使用 Compose 或 `docker run` 升级时，先查看并备份旧容器 `/app/config` 中仍需要的文件，再合并到宿主机 `config`。备份可能含凭据，请保存在本机的私有目录中。
+
 ```bash
 # 升级
-bash scripts/docker_deploy.sh down
-docker compose build --pull
 bash scripts/docker_deploy.sh up
 
 # 回滚到某个标签

@@ -1,11 +1,10 @@
 from datetime import datetime
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
 
-from neurodaily import delivery, mailer
+from neurodaily import delivery, delivery_receipts, history, mailer
 from neurodaily.config import Config
 from neurodaily.digest import DigestResult
 from neurodaily.models import Item
@@ -52,16 +51,23 @@ class EmailRecipientTests(unittest.TestCase):
     def test_future_push_time_is_queued(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "queue.json"
-            with patch.object(delivery, "_queue_path", return_value=path):
+            with (patch.object(delivery, "_queue_path", return_value=path),
+                  patch.object(history, "db_path", return_value=str(path.with_suffix(".db")))):
                 self.assertTrue(delivery._future_due({"time": "23:59"}, datetime(2026, 11, 23, 8, 0)))
                 self.assertFalse(delivery._future_due({"time": "08:00"}, datetime(2026, 11, 23, 8, 0)))
-                delivery._queue_email("7", "/tmp/report.html", "fixture",
+                run_id = str(history.record_run("fixture", "fixture", "completed", "2026-11-23T08:00",
+                                                "2026-11-23T08:00"))
+                address = "a@example.org"
+                delivery_receipts.prepare(run_id, "fixture",
+                                          [(delivery._destination("email", address), "email", "email 1")])
+                delivery._queue_email(run_id, "/tmp/report.html", "fixture",
                                       {"address": "a@example.org", "language": "en"}, "2026-11-23T23:59")
-                rows = json.loads(path.read_text(encoding="utf-8"))
+                rows = delivery._read_queue()
                 self.assertEqual(rows[0]["language"], "en")
-                delivery._queue_email("7", "/tmp/report.html", "fixture",
+                delivery._queue_email(run_id, "/tmp/report.html", "fixture",
                                       {"address": "a@example.org", "language": "en"}, "2026-11-23T23:59")
-                self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))), 1)
+                self.assertEqual(len(delivery._read_queue()), 1)
+                self.assertFalse(path.exists())
 
 
 if __name__ == "__main__":

@@ -1,8 +1,6 @@
 """Send new report records to each destination and record acknowledged deliveries."""
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 import os
 import smtplib
@@ -13,6 +11,7 @@ from pathlib import Path
 from . import delivery_receipts, history, mailer, webhooks
 from .config import DEFAULT_DIRS
 from .digest import DigestResult
+from .delivery_receipts import destination_id as _destination
 from .records import delivery_ids
 
 _LOG = logging.getLogger(__name__)
@@ -23,10 +22,6 @@ def _limit(value, default: int) -> int:
         return max(0, int(value))
     except (TypeError, ValueError):
         return default
-
-
-def _destination(channel: str, address: str) -> str:
-    return channel + ":" + hashlib.sha256(address.encode()).hexdigest()
 
 
 def _increment(result: DigestResult, destination: str, limits: dict[str, int], total: int | None):
@@ -70,23 +65,8 @@ def _queue_path() -> Path:
     return Path(DEFAULT_DIRS["output"], "email_queue.json")
 
 
-def _read_queue() -> list[dict]:
-    try:
-        rows = json.loads(_queue_path().read_text(encoding="utf-8"))
-        return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
-    except (OSError, ValueError):
-        return []
-
-
-def _write_queue(rows: list[dict]) -> None:
-    path = _queue_path()
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(path)
-    except OSError:
-        _LOG.warning("Could not persist email delivery queue")
+def _read_queue(*, now: datetime | None = None) -> list[dict]:
+    return delivery_receipts.queued_emails(_queue_path(), now=now)
 
 
 def _future_due(recipient: dict, now: datetime | None = None) -> str:
@@ -105,61 +85,52 @@ def _future_due(recipient: dict, now: datetime | None = None) -> str:
 
 
 def _queue_email(task_id: str, report_path: str, profile: str, recipient: dict, due: str) -> None:
-    rows = _read_queue()
-    address = recipient["address"]
-    if any(row.get("task_id") == task_id and row.get("address") == address for row in rows):
-        return
-    rows.append({"task_id": task_id, "report_path": report_path, "profile": profile,
-                 "address": address, "language": recipient.get("language") or "zh",
-                 "due": due})
-    _write_queue(rows)
+    delivery_receipts.enqueue_email(task_id=task_id, report_path=report_path, profile=profile,
+                                    address=recipient["address"].strip(),
+                                    language=recipient.get("language") or "zh", due=due)
 
 
 def run_email_queue(now: datetime | None = None) -> dict:
     """Send queued emails whose per-recipient time has arrived."""
     from . import task_runs
 
-    now = now or datetime.now()
-    rows = _read_queue()
-    if not rows:
-        return {}
-    email = mailer.load_cfg()
-    current = {row["address"].casefold(): row for row in mailer.recipients(email)}
-    remain, outcomes = [], {}
-    for entry in rows:
-        due = entry.get("due") or ""
-        try:
-            due_at = datetime.fromisoformat(due)
-        except ValueError:
-            due_at = now
-        if due_at > now:
-            remain.append(entry)
-            continue
-        address = str(entry.get("address") or "")
-        recipient = current.get(address.casefold())
-        result = task_runs.load_result(int(entry.get("task_id"))) if str(entry.get("task_id", "")).isdigit() else None
-        report_path = str(entry.get("report_path") or "")
-        if recipient is None or result is None or not Path(report_path).is_file():
-            continue
-        destination = _destination("email", address.strip().casefold())
-        task_id = str(entry["task_id"])
-        profile = entry.get("profile") or result.config_profile
-        limits = {key: _limit(email.get("max_other"), 15) for key in result.sections}
-        if (email.get("body_mode") or "summary") == "summary":
-            limits["papers"] = _limit(email.get("summary_papers"), 12)
-        else:
-            limits["papers"] = _limit(email.get("max_papers"), 40)
+    outcomes = {}
+    for entry in _read_queue(now=now or datetime.now()):
+        email = mailer.load_cfg()
+        if not email.get("enabled", True):
+            break
+        address, destination = entry["address"], entry["destination"]
+        task_id, profile = entry["task_id"], entry["profile"]
         with history.delivery_lease(profile, destination) as acquired:
             if not acquired:
-                remain.append(entry)
                 continue
-            if not delivery_receipts.transition(task_id, profile, destination, "pending", "checking"):
+            if not delivery_receipts.claim_queued_email(task_id, profile, destination):
+                delivery_receipts.remove_queued_email(task_id, destination)
                 continue
+            recipient = next((row for row in mailer.recipients(email) if row["address"].casefold() ==
+                              address.casefold()), None)
+            result = task_runs.load_result(int(task_id))
+            report_path = entry["report_path"]
+            if recipient is None or result is None or not Path(report_path).is_file():
+                reason = "该投递目标已从当前设置中移除或变更。" if recipient is None else "找不到此任务的已保存日报。"
+                delivery_receipts.transition(task_id, profile, destination, "checking", "failed", error=reason)
+                delivery_receipts.remove_queued_email(task_id, destination)
+                outcomes[address] = "failed"
+                continue
+            limits = {key: _limit(email.get("max_other"), 15) for key in result.sections}
+            if (email.get("body_mode") or "summary") == "summary":
+                limits["papers"] = _limit(email.get("summary_papers"), 12)
+            else:
+                limits["papers"] = _limit(email.get("max_papers"), 40)
             subset, sent = _increment(result, destination, limits, None)
             if not sent:
                 delivery_receipts.transition(task_id, profile, destination, "checking", "no_new")
+                delivery_receipts.remove_queued_email(task_id, destination)
                 outcomes[address] = "no_new"
                 continue
+            if not mailer.load_cfg().get("enabled", True):
+                delivery_receipts.transition(task_id, profile, destination, "checking", "pending")
+                break
             if not delivery_receipts.transition(task_id, profile, destination, "checking", "sending"):
                 continue
             try:
@@ -170,7 +141,7 @@ def run_email_queue(now: datetime | None = None) -> dict:
             except Exception as exc:
                 delivery_receipts.transition(task_id, profile, destination, "sending", "failed", error=_email_error(exc))
                 outcomes[address] = "failed"
-    _write_queue(remain)
+            delivery_receipts.remove_queued_email(task_id, destination)
     return outcomes
 
 

@@ -122,8 +122,10 @@
       const title = document.createElement('p'); title.textContent = p.title || ''; title.style.fontWeight = '700'; side.append(title);
       const meta = document.createElement('p'); meta.textContent = [kindLabel(p.kind), p.venue, p.date].filter(Boolean).join(' · '); side.append(meta);
       if (p.summary) { const summary = document.createElement('p'); summary.textContent = p.summary; side.append(summary); }
-      if (/^https?:/i.test(p.url || '')) {
-        const a = document.createElement('a'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = tm?.original || '阅读原文 ↗'; side.append(a);
+      let url;
+      try { url = new URL(p.url); } catch (_) {}
+      if (url && ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) {
+        const a = document.createElement('a'); a.href = url.href; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = tm?.original || '阅读原文 ↗'; side.append(a);
       }
       const hint = document.createElement('p'); hint.className = 'tm-note'; hint.textContent = (tm?.confidence || '主题置信度：') + (p.confidence != null ? Math.round(p.confidence*100) + '%' : '—'); side.append(hint);
     }

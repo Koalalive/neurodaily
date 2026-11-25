@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections import Counter
 from math import isfinite
 from pathlib import Path
 import re
@@ -11,18 +12,21 @@ import re
 import httpx
 
 from . import ai_summary, history
-from .config import Config, ConfigurationChanged
+from .config import Config, ConfigurationChanged, revision_for
 from .config_ops import deep_merge, _diff
 from .file_lock import file_lock
-from .optimization_evidence import capture_evidence, evaluate_candidate, public_evidence, verify_candidate
-from .optimization_store import Conflict, Store
+from .optimization_evidence import CAPTURE_VERSION, capture_evidence, evaluate_candidate, public_evidence, verify_candidate
+from .optimization_store import Conflict, LabelsChanged, Store
 from .profile_exchange import export_profile, _url
 from .schema import validate
 from .sources import registry_for
+from .sources.http import source_request_budget
 
 LOG = logging.getLogger(__name__)
 OBJECTIVES = {"recall": 1, "information_gain": 1, "false_positives": -1, "cost": -1}
 ACTIVE = {"queued", "running"}
+DEFAULT_ONLINE_REQUESTS = 120
+DEFAULT_ONLINE_SECONDS = 120
 _PUBLIC_RUN = ("id", "status", "stage", "round", "rounds", "evidence", "attributions",
                "candidates", "baseline_metrics", "error", "conclusion", "applied_candidate",
                "created_at", "trial_count", "checks", "stop_reason", "budget", "window", "blockers")
@@ -92,6 +96,9 @@ def _candidate_config(base: Config, patch: dict) -> Config:
         if "max_results" in changes and (type(changes["max_results"]) is not int or
                                          not 1 <= changes["max_results"] <= 100):
             raise ValueError("The draft exceeds the per-source result budget")
+        if (keywords := changes.get("filter_keywords")) is not None and (
+                not isinstance(keywords, list) or any(not isinstance(term, str) for term in keywords)):
+            raise ValueError("Source keyword filters must be a list of text values")
     merged = deep_merge(base.to_dict(), patch)
     if errors := validate(merged):
         raise ValueError(errors[0])
@@ -140,7 +147,8 @@ def _propose(run, evidence, context, base):
     key = ai_summary.api_key(provider)
     if not key:
         raise ValueError("请先在 AI 设置中连接模型，再开始检索优化。")
-    previous = [{k: row.get(k) for k in ("title", "patch", "metrics", "reasons", "added", "lost")}
+    previous = [{k: row.get(k, [])[:8] if k in {"added", "lost"} else row.get(k)
+                 for k in ("title", "patch", "metrics", "reasons", "added", "lost")}
                 for row in run.get("trials", [])[-6:]]
     configuration = export_profile(base)["config"]
     configuration.pop("policy_feeds", None)
@@ -159,6 +167,7 @@ def _propose(run, evidence, context, base):
               "known_record_checks": evidence.get("known_id_probes", []),
               "prior_conversation_trials": run.get("prior_conversation_trials", []),
               "recent_formal_runs": run.get("recent_formal_runs", []),
+              "report_feedback": run.get("report_feedback", []),
               "allow_tradeoffs": run["allow_tradeoffs"]}
     content = json.dumps(prompt, ensure_ascii=False, default=str)
     try:
@@ -167,6 +176,8 @@ def _propose(run, evidence, context, base):
             [{"role": "system", "content": _SYSTEM_PROMPT},
              {"role": "user", "content": content}], 2400, 60,
             purpose="search_optimization", profile=base.profile, temperature=0.2,
+            optimization_context={"run_id": run["id"], "round": run["round"] + 1,
+                                  "profile_revision": run.get("profile_revision") or revision_for(base)},
         )
     except httpx.HTTPStatusError as exc:
         raise ValueError(f"模型接口返回 HTTP {exc.response.status_code}。请在 AI 设置中检查连接。") from None
@@ -194,22 +205,31 @@ class Optimizer:
         return hashlib.sha256(json.dumps([self._file_id, profile]).encode()).hexdigest()
 
     def launch(self, text, *, conversation_id=None, rounds=4, allow_tradeoffs=False,
-               max_sources=10, focus_sources=()):
+               max_sources=10, focus_sources=(), online_requests=DEFAULT_ONLINE_REQUESTS,
+               online_seconds=DEFAULT_ONLINE_SECONDS):
         scope, base = self.current()
         conversation = self.store.conversation(scope, base.profile, conversation_id)
         registry = registry_for(base)
         if any(name not in registry for name in focus_sources):
             raise ValueError("Source verification requires a built-in or configured source")
         mentioned = [name for name in registry if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE)]
+        feedback = self.store.recent_feedback(scope, limit=20)
+        priorities = Counter()
+        for row in feedback:
+            if row["source"] in registry:
+                priorities[row["source"]] += 1 if row["relevant"] else 2
+        suggested = [name for name, _ in priorities.most_common(3)]
         previous = self.store.get(scope, conversation_id=conversation) or {}
         prior = previous.get("choices") or previous.get("trials") or []
         return self.store.launch(scope, conversation, {
             "profile": base.profile, "stage": "capture", "round": 0, "rounds": rounds,
             "max_sources": max_sources, "allow_tradeoffs": allow_tradeoffs, "base": base.to_dict(),
-            "focus_sources": list(dict.fromkeys([*focus_sources, *mentioned])),
+            "focus_sources": list(dict.fromkeys([*focus_sources, *mentioned, *suggested])),
+            "online_requests": online_requests, "online_seconds": online_seconds,
+            "report_feedback": feedback,
             "prior_conversation_trials": [{key: row.get(key) for key in
                 ("title", "description", "patch", "metrics", "delta", "reasons")} for row in prior[-2:]],
-            "base_version": base.version(), "labels": self.store.labels(scope),
+            "base_version": base.version(), "profile_revision": revision_for(base), "labels": self.store.labels(scope),
             "trial_count": 0, "trials": [], "stable": 0,
         }, text)
 
@@ -219,9 +239,30 @@ class Optimizer:
             return None
         return {key: run[key] for key in _PUBLIC_RUN if key in run}
 
+    def public_review(self, scope, run, labels=None):
+        review = self.public_run(run)
+        if review is not None and review["status"] == "review":
+            labels = self.store.labels(scope) if labels is None else labels
+            review["labels_changed"] = labels != run["labels"]
+            review["evidence_outdated"] = run.get("snapshot", {}).get("version") != CAPTURE_VERSION
+        return review
+
+    def _status(self, scope, profile, conversation):
+        revision, enabled, run, budgets = self.store.summary(scope, conversation)
+        visible_history = history.optimization_revision(profile)
+        identity = json.dumps([scope, revision, visible_history], ensure_ascii=False)
+        return {"revision": hashlib.sha256(identity.encode()).hexdigest()[:24], "enabled": enabled,
+                "profile": profile, "conversation_id": conversation, "run": run, "budget_usage": budgets}
+
+    def status(self, conversation_id=None):
+        scope, base = self.current()
+        conversation = self.store.conversation(scope, base.profile, conversation_id)
+        return self._status(scope, base.profile, conversation)
+
     def state(self, conversation_id=None, history_run_id=None):
         scope, base = self.current()
         conversation = self.store.conversation(scope, base.profile, conversation_id)
+        status = self._status(scope, base.profile, conversation)
         run = self.store.get(scope, conversation_id=conversation)
         attributions, evidence = (run or {}).get("attributions", []), (run or {}).get("evidence", [])
         if history_run_id is not None or not attributions or not evidence:
@@ -230,15 +271,52 @@ class Optimizer:
             evidence = historical_sources if history_run_id is not None else evidence or historical_sources
         history_runs = [{"id": row["id"], "date": row["started_at"], "item_count": row["item_count"]}
                         for row in history.list_runs(limit=20, profile=base.profile) if row.get("has_snapshot")]
-        return {"enabled": self.store.enabled(scope), "profile": base.profile,
-                "conversation_id": conversation, "conversations": self.store.conversations(scope),
-                "messages": self.store.messages(scope, conversation), "run": self.public_run(run),
+        labels = self.store.labels(scope)
+        return {**status, "conversations": self.store.conversations(scope),
+                "messages": self.store.messages(scope, conversation), "run": self.public_review(scope, run, labels),
                 "attributions": attributions, "evidence": evidence, "history_runs": history_runs,
-                "labels": self.store.labels(scope)}
+                "labels": labels, "trial_diagnostics": self._trial_diagnostics(run),
+                "report_feedback": self.store.recent_feedback(scope, limit=12)}
+
+    @staticmethod
+    def _trial_diagnostics(run):
+        return [{"id": row["id"], "title": row["title"], "phase": row.get("phase", phase),
+                 "added_count": len(row.get("added", [])), "lost_count": len(row.get("lost", [])),
+                 "reasons": row.get("reasons", [])}
+                for phase, key in (("development", "trials"), ("holdout", "verified"))
+                for row in (run or {}).get(key, []) if row.get("added") or row.get("lost") or row.get("reasons")]
+
+    def trial_records(self, run_id, draft_id, phase, direction, offset, limit):
+        scope, _ = self.current()
+        run = self.store.get(scope, run_id)
+        field = "trials" if phase == "development" else "verified"
+        draft = next((row for row in run.get(field, []) if row["id"] == draft_id), None)
+        if draft is None:
+            raise LookupError("Trial diagnostics not found")
+        rows = draft.get(direction, [])
+        return {"records": rows[offset:offset + limit], "total": len(rows)}
 
     def _update(self, scope, run, changes, **kwargs):
         kwargs.setdefault("expect", {run["status"]})
         return self.store.update(scope, run["id"], changes, **kwargs)
+
+    def _online(self, scope, run, phase, stop, operation):
+        run_id = run["id"]
+        self.store.begin_budget(run_id, phase, run.get("online_requests", DEFAULT_ONLINE_REQUESTS),
+                                run.get("online_seconds", DEFAULT_ONLINE_SECONDS))
+
+        def reserve():
+            return (0.0, "cancelled") if stop.is_set() else self.store.reserve_request(scope, run_id, phase)
+
+        def remaining():
+            if stop.is_set() or not self.store.running(scope, run_id):
+                return 0.0
+            budget = self.store.budget_progress(run_id, phase)
+            return 0.0 if budget["reason"] else budget["seconds_limit"] - budget["elapsed_seconds"]
+
+        with source_request_budget(reserve, remaining):
+            result = operation()
+        return result, self.store.budget_progress(run_id, phase)
 
     def _step(self, scope, run_id, stop):
         run = self.store.get(scope, run_id)
@@ -248,29 +326,35 @@ class Optimizer:
         stage = run["stage"]
 
         def check():
-            if (stop.is_set() or not self.store.enabled(scope) or
-                    self.store.get(scope, run_id)["status"] != "running"):
+            if stop.is_set() or not self.store.running(scope, run_id):
                 raise WorkPaused
 
         check()
+        if stage in {"propose", "evaluate", "verify"} and run.get("snapshot", {}).get("version") != CAPTURE_VERSION:
+            self._update(scope, run, {"stage": "capture", "round": 0, "trial_count": 0, "stable": 0,
+                                      "signature": None, "trials": [], "drafts": [], "finalists": [], "verified": []})
+            return
         if stage == "capture":
             recent = recent_history(base.profile)
-            snapshot = capture_evidence(base, history=recent,
-                                        max_sources=run["max_sources"], extra_sources=run.get("focus_sources", []),
-                                        check_cancel=check)
+            snapshot, use = self._online(scope, run, "capture", stop, lambda: capture_evidence(
+                base, history=recent, max_sources=run["max_sources"], extra_sources=run.get("focus_sources", []),
+                check_cancel=check))
             evidence = public_evidence(snapshot)
             summaries = [{"date": row["started_at"], "status": row["status"],
                           "source_counts": row["source_counts"], "source_health": [
                               {key: source.get(key) for key in ("source", "status", "fetched", "count", "unknown")}
                               for source in row["snapshot"].get("sources", [])]}
                          for row in recent[:6]]
-            self._update(scope, run, {"snapshot": snapshot, "evidence": evidence["sources"],
+            fields = {"snapshot": snapshot, "evidence": evidence["sources"],
                                       "checks": evidence.get("known_id_probes", []),
                                       "budget": evidence.get("budget"), "window": evidence.get("window"),
-                                      "recent_formal_runs": summaries, "stage": "propose"})
+                                      "recent_formal_runs": summaries, "stage": "propose"}
+            if use["reason"]:
+                fields.update(stage="done", status="completed", blockers=[use["reason"]], stop_reason="online_budget")
+            self._update(scope, run, fields, finish_budget="capture")
         elif stage == "propose":
             evidence = public_evidence(run["snapshot"])
-            context = self.store.messages(scope, limit=14)
+            context = self.store.messages(scope, run["conversation_id"], limit=14)
             ideas = _propose(run, evidence, context, base)
             seen = {row["version"] for row in run["trials"]}
             drafts = []
@@ -286,26 +370,27 @@ class Optimizer:
                 if version == run["base_version"] or version in seen:
                     continue
                 seen.add(version)
-                drafts.append({"id": version[:20], "version": version, "patch": patch,
+                drafts.append({"id": version[:20], "version": version, "patch": patch, "round": run["round"] + 1,
                                "title": str(idea.get("title", ""))[:160] or "检索优化草案",
                                "description": str(idea.get("description", ""))[:2000],
                                "diff": _diff(export_profile(base)["config"], export_profile(candidate)["config"])})
             self._update(scope, run, {"drafts": drafts, "round": run["round"] + 1, "stage": "evaluate"})
         elif stage == "evaluate":
+            phase = f'round:{run["round"]}'
             if run["drafts"]:
                 draft, *remaining = run["drafts"]
                 candidate = _candidate_config(base, draft["patch"])
-                result = evaluate_candidate(run["snapshot"], base, candidate, labels=run["labels"])
-                attribution = list(result.get("attribution") or [])
-                for key, label in (("added", "试跑新增条目"), ("lost", "试跑漏掉的条目")):
-                    if examples := result.get(key):
-                        attribution.insert(0, {"rule": label, "count": len(examples), "examples": examples})
+                result, use = self._online(scope, run, phase, stop, lambda: evaluate_candidate(
+                    run["snapshot"], base, candidate, labels=run["labels"], check_cancel=check))
+                if use["reason"]:
+                    result.update(eligible=False, reasons=[*result.get("reasons", []), use["reason"]])
                 self._update(scope, run, {
                     "drafts": remaining, "trials": run["trials"] + [{**draft, **result}],
                     "trial_count": run["trial_count"] + 1, "baseline_metrics": result["baseline_metrics"],
-                    "attributions": attribution,
+                    "attributions": result.get("attribution", []),
                 })
                 return
+            self.store.budget_progress(run_id, phase, finish=True)
             frontier = pareto(run["trials"], allow_tradeoffs=run["allow_tradeoffs"])
             signature = sorted(_vector(row["metrics"]) for row in frontier)
             signature = [list(row) for row in signature]
@@ -320,17 +405,17 @@ class Optimizer:
             if run["finalists"]:
                 finalist, *remaining = run["finalists"]
                 candidate = _candidate_config(base, finalist["patch"])
-                result = verify_candidate(run["snapshot"], base, candidate, labels=run["labels"], check_cancel=check)
-                attribution = list(run["attributions"])
-                for key, label in (("added", "复核新增条目"), ("lost", "复核漏掉的条目")):
-                    if examples := result.get(key):
-                        attribution.insert(0, {"rule": label, "count": len(examples), "examples": examples})
+                result, use = self._online(scope, run, "holdout", stop, lambda: verify_candidate(
+                    run["snapshot"], base, candidate, labels=run["labels"], check_cancel=check))
+                if use["reason"]:
+                    result.update(eligible=False, reasons=[*result.get("reasons", []), use["reason"]])
                 self._update(scope, run, {"finalists": remaining,
-                                          "attributions": attribution,
+                                          "attributions": result.get("attribution", run["attributions"]),
                                           "verified": run["verified"] + [{**finalist, **result}]})
                 return
+            self.store.budget_progress(run_id, "holdout", finish=True)
             candidates = pareto(run["verified"], allow_tradeoffs=run["allow_tradeoffs"])
-            public_candidates = [{key: value for key, value in row.items()
+            public_candidates = [{key: value[:12] if key in {"added", "lost"} else value for key, value in row.items()
                                   if key not in {"patch", "version"}} for row in candidates]
             if candidates:
                 conclusion = "对照试跑和独立复核已完成。请审阅候选配置和实际收益。"
@@ -371,6 +456,8 @@ class Optimizer:
                         return
                     self._update(scope, run, {"status": "running", "error": ""})
                     self._run_graph(scope, run["id"], stop)
+            except LabelsChanged as exc:
+                self._update(scope, run, {"status": "review", "error": str(exc)})
             except Conflict:
                 return
             except WorkPaused:
@@ -406,13 +493,15 @@ class Optimizer:
         if action == "accept" and status == "review":
             if not self.store.enabled(scope):
                 raise Conflict("AI search optimisation is disabled")
+            if run.get("snapshot", {}).get("version") != CAPTURE_VERSION:
+                raise Conflict("评估方式已更新。请重新试跑，再应用方案。")
             candidate = next((row for row in run["choices"] if row["id"] == candidate_id), None)
             if candidate is None:
                 raise LookupError("Verified candidate not found")
             if current.version() != run["base_version"]:
                 raise Conflict("The configuration changed since the trial. Start a new comparison.")
             return self._update(scope, run, {"status": "applying", "applied_candidate": candidate_id},
-                                expect={status})
+                                expect={status}, expected_labels=run["labels"])
         if action == "rollback" and status == "applied":
             if current.version() != run["applied_version"]:
                 raise Conflict("The configuration changed after applying the proposal")
@@ -431,8 +520,20 @@ class Optimizer:
         destination = base if rolling_back else applied
         current = Config.load(self.config_path)
         prior_version = applied.version() if rolling_back else run["base_version"]
+        provenance = {key: value for key, value in {
+            "optimization_run_id": run["id"], "candidate_id": candidate["id"],
+            "snapshot_id": candidate.get("snapshot_id"), "round": candidate.get("round"),
+        }.items() if value is not None}
         if current.version() != destination.version():
-            destination.save(self.config_path, expected_version=prior_version)
+            if rolling_back:
+                destination.save(self.config_path, expected_version=prior_version,
+                                 origin="optimization_rollback", provenance=provenance)
+            else:
+                if run.get("snapshot", {}).get("version") != CAPTURE_VERSION:
+                    raise ConfigurationChanged("评估方式已更新。请重新试跑，再应用方案。")
+                with self.store.hold_labels(scope, run["labels"]):
+                    destination.save(self.config_path, expected_version=prior_version,
+                                     origin="optimization", provenance=provenance)
         # A crash between file replacement and this transaction safely resumes here.
         message = "已回滚到试跑前的配置。" if rolling_back else "已应用你确认的检索配置。"
         self._update(scope, run, {"status": "rolled_back" if rolling_back else "applied",

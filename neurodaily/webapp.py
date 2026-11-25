@@ -21,17 +21,17 @@ import re
 import subprocess
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Event, Lock, Thread
 
 from fastapi import FastAPI, BackgroundTasks, Query, Request
 from starlette.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import Config, DEFAULT_CONFIG, DEFAULT_DIRS
+from .config import Config, ConfigurationChanged, DEFAULT_CONFIG, DEFAULT_DIRS, revision_for
 from .desktop_schedule import RETRY_DELAY, run_schedule, scheduled_time
 from .desktop_page import render_workspace
 from .digest import preview_search, run as run_digest, render_html_for
@@ -70,10 +70,31 @@ def _cfg_with_hours(cfg: Config, hours: int) -> Config:
     return c
 
 
+def _config_headers(config: Config) -> dict:
+    return {"ETag": f'"{config.version()}"', "Cache-Control": "no-store",
+            "X-Profile-Revision": revision_for(config)}
+
+
+def _expected_config_version(request: Request) -> str | None:
+    header = request.headers.get("if-match")
+    if header is None:
+        return None
+    match = re.fullmatch(r'"([0-9a-f]{64})"', header.strip())
+    if not match:
+        raise ValueError("Invalid configuration version")
+    return match[1]
+
+
+def _config_conflict() -> JSONResponse:
+    return JSONResponse({"ok": False, "code": "configuration_changed",
+                         "error": "Configuration changed. Reload settings and review your edits."}, status_code=412)
+
+
 def create_app(config_path: str | None = None, *, desktop: bool = False,
                open_report_browser: bool = True) -> FastAPI:
     from .optimization import Optimizer
     from .optimization_api import router as optimization_router, worker as optimization_worker
+    from .report_feedback import router as feedback_router
 
     optimizer = Optimizer(config_path)
 
@@ -89,19 +110,23 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                                                 _start_scheduled_search),
                    name="neurodaily-schedule", daemon=True).start()
         from .delivery import run_email_queue_loop
-        Thread(target=run_email_queue_loop, args=(stop,),
-               name="neurodaily-email-queue", daemon=True).start()
+        email_worker = Thread(target=run_email_queue_loop, args=(stop,),
+                              name="neurodaily-email-queue", daemon=True)
+        email_worker.start()
         Thread(target=optimization_worker, args=(optimizer, stop),
                name="neurodaily-search-optimization", daemon=True).start()
         try:
             yield
         finally:
             stop.set()
+            await run_in_threadpool(email_worker.join, 1)
 
     app = FastAPI(title="NeuroDaily", version=__version__, lifespan=lifespan)
     app.include_router(optimization_router(optimizer))
+    app.include_router(feedback_router(optimizer))
     assets = Path(__file__).resolve().parent / "static" / "optimization"
     app.mount("/static/optimization", StaticFiles(directory=assets, check_dir=False), name="optimization_assets")
+    app.mount("/static/report", StaticFiles(directory=assets.parent / "report", check_dir=False), name="report_assets")
     app.state.last_run = None
     app.state.search_attempt = None
 
@@ -137,18 +162,30 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     def _page(html: str):
         return HTMLResponse(localize_document(html, _language()), headers={"Cache-Control": "no-store"})
 
-    def _report(path, ui):
-        if ui:
-            from .render import refresh_saved_research_map
+    def _report_response(html, *, localize=True, feedback=False):
+        from .report_security import protect_report
 
-            path = Path(path)
-            html = path.read_text(encoding="utf-8", errors="replace")
+        language = _language()
+        html = localize_document(html, language) if localize else html
+        html, headers = protect_report(html, language, feedback=feedback)
+        return HTMLResponse(html, headers=headers)
+
+    def _report(path, ui, *, settings_link=False):
+        from .render import refresh_saved_research_map
+        from .report_feedback import attach_controls
+
+        path = Path(path)
+        html = path.read_text(encoding="utf-8", errors="replace")
+        if ui:
             if 'name="nd-report-date"' not in html:
                 date = _saved_report_date(path, html)
                 html = html.replace("</head>", f'<meta name="nd-report-date" content="{date}"></head>', 1)
             html = re.sub(r'<details id="bibliometrics"\b[^>]*>[\s\S]*?</details>', "", html, count=1)
-            return _page(refresh_saved_research_map(html, _language()))
-        return FileResponse(path, media_type="text/html")
+            html = refresh_saved_research_map(html, _language())
+        if settings_link:
+            html = html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1)
+        html, feedback = attach_controls(html, path, _cfg().profile)
+        return _report_response(html, localize=ui or settings_link, feedback=feedback)
 
     def _cfg() -> Config:
         try:
@@ -178,27 +215,26 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
     @app.get("/desktop", response_class=HTMLResponse)
     def desktop_workspace():
-        latest = task_runs.latest()
+        cfg = _cfg()
+        latest = task_runs.latest(profile=cfg.profile)
         after = latest["id"] if latest else 0
         if latest and latest["status"] == "running":
             after -= 1
-        report = _latest_report(_cfg(), include_demo=False)
+        report = _latest_report(cfg, include_demo=False)
         date = _saved_report_date(report) if report else ""
         return HTMLResponse(render_workspace(_language(), after, date), headers={"Cache-Control": "no-store"})
 
     @app.get("/api/ui/reports")
     def api_workspace_reports(after: int = 0):
-        return JSONResponse({"reports": task_runs.reports_since(after)}, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"reports": task_runs.reports_since(after, profile=_cfg().profile)},
+                            headers={"Cache-Control": "no-store"})
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard(ui: bool = False):
         cfg = _cfg()
         previous = _latest_report(cfg, include_demo=False)
         if previous is not None:
-            if ui:
-                return _report(previous, ui)
-            html = previous.read_text(encoding="utf-8", errors="replace")
-            return _page(html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1))
+            return _report(previous, ui, settings_link=not ui)
         result = app.state.last_run
         if result is not None and result.config_profile != cfg.profile:
             result = None
@@ -219,14 +255,15 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                                       health=[], generated_at=datetime.now().isoformat(),
                                       config_profile=cfg.profile, config=cfg)
         html = render_html_for(result)
-        return _page(html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1))
+        return _report_response(html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1))
 
     @app.get("/run", response_class=HTMLResponse)
     def run_now_page():
         return _page(RUN_HTML)
 
     def _begin_search(cfg: Config, mode: str, scheduled_for: datetime | None = None,
-                      *, force: bool = False, hours: int | None = None, resume_id: int | None = None):
+                      *, force: bool = False, hours: int | None = None, resume_id: int | None = None,
+                      profile_revision: str | None = None):
         with search_lock:
             current = app.state.search_attempt
             if current and current["status"] == "running":
@@ -248,7 +285,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 if attempt is None:
                     if resume_id is not None:
                         raise task_runs.ResumeConflict("此任务当前无法继续。")
-                    attempt = task_runs.begin(cfg, mode, scheduled_for, force=force, hours=hours)
+                    attempt = task_runs.begin(cfg, mode, scheduled_for, force=force, hours=hours,
+                                              profile_revision=profile_revision)
             except BaseException:
                 guard.close()
                 raise
@@ -277,10 +315,11 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         result = task_runs.load_result(attempt["id"]) if complete("search") else None
         if result is None:
             stage("search", "running")
+            as_of = datetime.fromisoformat(attempt.get("retrieval_anchor") or attempt["started_at"])
             result = run_digest(cfg, check_duplicate=True, record=False, force=force,
                                 mode=mode, progress=sources, cached=task_runs.load_sources(attempt["id"]),
                                 checkpoint=lambda *entry: task_runs.save_source(attempt["id"], *entry),
-                                check_cancelled=check_cancelled)
+                                check_cancelled=check_cancelled, as_of=as_of)
             if result.skipped:
                 stage("search", "skipped")
                 task_runs.finish(attempt, "skipped", result.skipped_reason)
@@ -297,10 +336,12 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 task_runs.finish(attempt, "failed", error)
                 return
             result.config = cfg
+            result.profile_revision = attempt.get("profile_revision")
             task_runs.stage(attempt, "search", "completed")
             task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
         else:
             result.config = cfg
+            result.profile_revision = attempt.get("profile_revision")
         check_cancelled()
         stored_path = attempt.get("report_file")
         if stored_path:
@@ -428,11 +469,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 task_runs.finish(attempt, "completed" if attempt["report_ready"] else "failed", error)
 
     def _start_scheduled_search(cfg: Config, due: datetime) -> bool:
-        try:
-            started = _begin_search(cfg, "daily", due, force=True)
-        except task_runs.ResumeConflict:
-            # The old slot remains available for manual review if its config changed.
-            return True
+        started = _begin_search(cfg, "daily", due, force=True)
         if started is None:
             previous = hist.desktop_schedule_result(cfg.profile, due)
             return bool(previous and previous["status"] in {"completed", "cancelled"})
@@ -445,8 +482,9 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         cfg = _cfg()
         if hours is not None and not (1 <= hours <= 8760):
             return JSONResponse({"error": "hours must be 1..8760"}, status_code=400)
+        selected_revision = revision_for(cfg, config_path)
         cfg = _cfg_with_hours(cfg, hours) if hours else cfg
-        started = _begin_search(cfg, "manual", force=force, hours=hours)
+        started = _begin_search(cfg, "manual", force=force, hours=hours, profile_revision=selected_revision)
         if started is None:
             return JSONResponse({"error": "A search is already running"}, status_code=409)
 
@@ -589,11 +627,12 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         limit: int = Query(50, ge=1, le=250),
         offset: int = Query(0, ge=0),
         purpose: str | None = None,
+        optimization_run_id: str | None = None,
     ):
         from .api_billing import billing_report
 
         try:
-            return JSONResponse(billing_report(days, limit, offset, purpose),
+            return JSONResponse(billing_report(days, limit, offset, purpose, optimization_run_id=optimization_run_id),
                                 headers={"Cache-Control": "no-store"})
         except ValueError as exc:
             return JSONResponse({"message": str(exc)}, status_code=400)
@@ -624,11 +663,62 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         config = _cfg()
         data = config.to_dict()
         data["sources"] = {**config.sources, **{name: config.source_opts(name) for name in OPTIONAL_SOURCES}}
-        return JSONResponse(data)
+        return JSONResponse(data, headers=_config_headers(config))
 
     @app.get("/api/config/presets")
     def api_config_presets():
         return research_presets()
+
+    @app.get("/api/config/revisions")
+    def api_config_revisions(limit: int = Query(50, ge=1, le=100), before: int | None = Query(None, ge=1)):
+        from .config_revisions import list_revisions
+
+        current, rows = list_revisions(config_path, limit=limit, before=before)
+        return JSONResponse({"current_revision": revision_for(current), "revisions": rows},
+                            headers=_config_headers(current))
+
+    @app.get("/api/config/revisions/{revision_id}")
+    def api_config_revision(revision_id: int):
+        from .config_ops import _diff
+        from .config_revisions import get_revision
+        from .profile_exchange import export_profile
+
+        try:
+            metadata, document = get_revision(config_path, revision_id)
+        except LookupError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        current = _cfg()
+        revised = Config.from_dict(document)
+        diff = _diff(export_profile(current)["config"], export_profile(revised)["config"])
+        return JSONResponse({**metadata, "diff": diff, "current_revision": revision_for(current)},
+                            headers=_config_headers(current))
+
+    @app.post("/api/config/revisions/{revision_id}/restore")
+    def api_config_restore(revision_id: int, request: Request):
+        from .config_revisions import get_revision
+        from .profile_exchange import restore_research_config
+        from .schema import validate
+
+        try:
+            version = _expected_config_version(request)
+            if version is None:
+                return JSONResponse({"error": "Preview this revision before restoring it."}, status_code=428)
+            metadata, document = get_revision(config_path, revision_id)
+            current = _cfg()
+            restored = restore_research_config(current, document)
+            errors = validate(restored)
+            if errors:
+                return JSONResponse({"error": errors[0], "errors": errors}, status_code=400)
+            config = Config.from_dict(restored)
+            config.save(config_path, expected_version=version, origin="restore",
+                        provenance={"restored_revision": metadata["id"]})
+        except ConfigurationChanged:
+            return _config_conflict()
+        except LookupError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        except (OSError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        return JSONResponse({"ok": True, "revision": revision_for(config)}, headers=_config_headers(config))
 
     @app.get("/api/config/export")
     def api_config_export():
@@ -636,8 +726,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         cfg = _cfg()
         name = re.sub(r"[^a-zA-Z0-9_-]+", "-", cfg.profile).strip("-") or "research"
         return JSONResponse(export_profile(cfg), headers={
+            **_config_headers(cfg),
             "Content-Disposition": f'attachment; filename="neurodaily-{name}.json"',
-            "Cache-Control": "no-store",
         })
 
     @app.get("/api/app-settings/export")
@@ -657,7 +747,9 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         from .app_settings import import_settings
         try:
             data = await request.json()
-            result = import_settings(data, config_path)
+            result = import_settings(data, config_path, expected_version=_expected_config_version(request))
+        except ConfigurationChanged:
+            return _config_conflict()
         except (ValueError, TypeError, OSError) as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
         return JSONResponse(result)
@@ -675,12 +767,20 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         except (ValueError, UnicodeError):
             return JSONResponse({"error": "无法读取 JSON 配置文件"}, status_code=400)
         try:
-            config, summary = import_profile(data, _cfg())
+            current = _cfg()
+            current_version = current.version()
+            expected_version = _expected_config_version(request)
+            if expected_version is not None and current_version != expected_version:
+                raise ConfigurationChanged
+            config, summary = import_profile(data, current)
             if apply:
-                config.save(config_path)
+                config.save(config_path, expected_version=current_version, origin="import")
+        except ConfigurationChanged:
+            return _config_conflict()
         except (ValueError, OSError) as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
-        return {"ok": True, "applied": apply, "summary": summary}
+        return JSONResponse({"ok": True, "applied": apply, "summary": summary},
+                            headers=_config_headers(config if apply else current))
 
     @app.post("/api/search/preview")
     async def api_search_preview(request: Request):
@@ -693,6 +793,21 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         if errors:
             return JSONResponse({"error": errors[0], "errors": errors}, status_code=400)
         return await run_in_threadpool(preview_search, Config.from_dict(data))
+
+    @app.post("/api/config/lint")
+    async def api_config_lint(request: Request):
+        from .schema import validate
+        from .search_lint import lint_config
+
+        try:
+            data = await request.json()
+        except ValueError:
+            return JSONResponse({"errors": ["无效 JSON"]}, status_code=400)
+        errors = validate(data)
+        if errors:
+            return JSONResponse({"errors": errors}, status_code=400)
+        return JSONResponse(await run_in_threadpool(lint_config, Config.from_dict(data)),
+                            headers={"Cache-Control": "no-store"})
 
     @app.post("/api/config")
     async def api_config_post(request: Request):
@@ -710,21 +825,25 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                                  "errors": errs}, status_code=400)
         try:
             cfg = Config.from_dict(data)
-            path = cfg.save(config_path) if config_path else cfg.save()
+            path = cfg.save(config_path, expected_version=_expected_config_version(request), origin="settings")
+        except ConfigurationChanged:
+            return _config_conflict()
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
-        return JSONResponse({"ok": True, "path": path})
+        return JSONResponse({"ok": True, "path": path}, headers=_config_headers(cfg))
 
     @app.post("/api/config/reset")
-    def api_config_reset():
+    def api_config_reset(request: Request):
         try:
             defaults = DEFAULT_CONFIG()
             if desktop:
                 defaults.scheduled["enabled"] = False
-            path = defaults.save(config_path)
+            path = defaults.save(config_path, expected_version=_expected_config_version(request), origin="reset")
+        except ConfigurationChanged:
+            return _config_conflict()
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
-        return JSONResponse({"ok": True, "path": path})
+        return JSONResponse({"ok": True, "path": path}, headers=_config_headers(defaults))
 
     def _launchd_label() -> str:
         cfg = _cfg()
@@ -738,24 +857,22 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     @app.get("/api/push")
     def api_push_get():
         from .mailer import load_cfg as _mail_cfg, _password as _mail_pw
-        from .webhooks import load_cfg as _hook_cfg
+        from .webhooks import load_cfg as _hook_cfg, public_settings
         e, w = _mail_cfg(), _hook_cfg()
         keys = ("enabled", "to", "recipients", "language", "smtp_host", "smtp_port",
                 "use_ssl", "username", "from", "from_name", "subject_template",
                 "attach_report", "attach_max_mb", "summary_papers", "summary_chars", "public_url")
         return JSONResponse({
             "email": {k: e.get(k) for k in keys},
-            "webhooks": {"feishu": w.get("feishu", ""), "wecom": w.get("wecom", ""),
-                         "max_items": w.get("max_items", 8)},
+            "webhooks": public_settings(w),
             "password_set": bool(_mail_pw(e)),
-        })
+        }, headers={"Cache-Control": "no-store"})
 
     @app.post("/api/push")
     async def api_push_post(request: Request):
-        import json as _json
         from .app_settings import _write, EMAIL_KEYS
         from .mailer import CFG_PATH as EMAIL_PATH, load_cfg as _mail_cfg, validate_smtp_change
-        from .webhooks import CFG_PATH as HOOK_PATH, load_cfg as _hook_cfg
+        from .webhooks import CFG_PATH as HOOK_PATH, load_cfg as _hook_cfg, normalize_updates, public_settings
         try:
             data = await request.json()
         except Exception as exc:
@@ -767,6 +884,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         password = data.get("smtp_password", "")
         if not isinstance(email, dict) or not isinstance(hooks, dict) or not isinstance(password, str):
             return JSONResponse({"ok": False, "error": "invalid push settings"}, status_code=400)
+        try:
+            hooks = await run_in_threadpool(normalize_updates, hooks)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
         password = password.strip()
         if isinstance(email.get("recipients"), list):
             cleaned = []
@@ -801,11 +922,11 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             if password:
                 updated["password"] = password
             _write(EMAIL_PATH, updated)
+        cfg_w = _hook_cfg()
         if hooks:
-            cfg_w = _hook_cfg()
-            cfg_w.update({k: v for k, v in hooks.items() if v is not None})
+            cfg_w.update(hooks)
             _write(HOOK_PATH, cfg_w)
-        return JSONResponse({"ok": True})
+        return JSONResponse({"ok": True, "webhooks": public_settings(cfg_w)}, headers={"Cache-Control": "no-store"})
 
     @app.post("/api/push/password")
     async def api_push_password(request: Request):
@@ -882,24 +1003,26 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
         output = Path(cfg.output_dir())
         task = task_runs.latest(profile=cfg.profile, ready=True)
-        if task:
-            # CLI and launchd reports use history rows without a desktop checkpoint.
-            candidates = {Path(task["report_file"])}
-            for run in hist.list_runs(profile=cfg.profile):
-                name = run.get("report_path")
-                if not run.get("task") and name and Path(name).name == name:
-                    candidates.add((output / name).absolute())
-        else:
-            candidates = output.glob("*.html")
+        indexed = {Path(task["report_file"]).absolute()} if task else set()
+        # CLI and launchd history can identify reports predating the profile meta tag.
+        for run in hist.list_runs(profile=cfg.profile):
+            name = run.get("report_path")
+            if not run.get("task") and name and Path(name).name == name:
+                indexed.add((output / name).absolute())
+        candidates = indexed | {path.absolute() for path in output.glob("*.html")}
         files = sorted((f for f in candidates if f.is_file()), key=os.path.getmtime, reverse=True)
-        task_path = Path(task["report_file"]) if task else None
         demo = None
         for file in files:
             text = header(file)
-            if not (file == task_path or file.name.startswith("neurodaily_") or 'name="nd-base"' in text
-                    or "<title>NeuroDaily</title>" in text):
+            profile = re.search(r'<meta name="nd-report-profile" content="([^"]*)"', text)
+            if profile is None:
+                profile = re.search(r'<title>NeuroDaily — (.*?) \|', text)
+            owner = unescape(profile[1]) if profile else ""
+            if owner and owner not in {cfg.profile, cfg.profile + " (demo)"}:
                 continue
-            if "(demo)" not in text:
+            if not owner and file not in indexed:
+                continue
+            if not owner.endswith(" (demo)") and "(demo)" not in text:
                 return file
             demo = demo or file
         return demo if include_demo else None

@@ -15,8 +15,45 @@ DEFAULT_HEADERS = {
     "User-Agent": "NeuroDaily/0.1 (personal research digest; contact: local)",
 }
 
+
+class _SourceBudgetExceeded(httpx.RequestError):
+    def __init__(self, reason, request):
+        super().__init__(reason, request=request)
+        self.reason = reason
+
+
+_request_budget = ContextVar("source_request_budget", default=None)
+
+
+@contextmanager
+def source_request_budget(reserve, remaining):
+    """Attach an online trial's admission callbacks to its source GET requests."""
+    token = _request_budget.set((reserve, remaining))
+    try:
+        yield
+    finally:
+        _request_budget.reset(token)
+
+
+def _budget_source_get(request):
+    budget = _request_budget.get()
+    if request.method != "GET" or budget is None:
+        return
+    remaining, reason = budget[0]()
+    if reason:
+        raise _SourceBudgetExceeded(reason, request)
+    stats = _capture.get()
+    if stats is not None:
+        with stats._lock:
+            stats.request_count += 1
+    request.extensions["timeout"] = {phase: min(remaining, value) if value is not None else remaining
+                                     for phase, value in request.extensions.get("timeout", {}).items()}
+
+
+_source_get_events = {"request": [_budget_source_get]}
+
 _client = httpx.Client(timeout=DEFAULT_TIMEOUT, headers=DEFAULT_HEADERS,
-                        follow_redirects=True)
+                        follow_redirects=True, event_hooks=_source_get_events)
 
 
 class _BlockedSource(httpx.RequestError):
@@ -24,14 +61,19 @@ class _BlockedSource(httpx.RequestError):
 
 
 class _SourceTransport(httpx.HTTPTransport):
+    def __init__(self, *, allow_private: bool | None = None, **kwargs):
+        super().__init__(**kwargs)
+        self._allow_private = allow_private
+
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         # Apply the same policy to the initial request and every redirect. Use
         # the validated address for the connection while preserving TLS SNI.
         try:
-            validate_http_url(str(request.url), resolve=False)
+            allow_private = allow_private_sources() if self._allow_private is None else self._allow_private
+            validate_http_url(str(request.url), allow_private=allow_private, resolve=False)
             host = request.url.raw_host.decode("ascii")
             port = request.url.port or (443 if request.url.scheme == "https" else 80)
-            addresses = public_addresses(host, port, allow_private_sources())
+            addresses = public_addresses(host, port, allow_private)
         except ValueError as exc:
             raise _BlockedSource("Source destination blocked or unresolved", request=request) from exc
         for index, address in enumerate(addresses):
@@ -51,7 +93,7 @@ class _SourceTransport(httpx.HTTPTransport):
 _source_client = httpx.Client(
     transport=_SourceTransport(limits=httpx.Limits(max_keepalive_connections=0)),
     timeout=DEFAULT_TIMEOUT, headers=DEFAULT_HEADERS, follow_redirects=True,
-    max_redirects=10, trust_env=False,
+    max_redirects=10, trust_env=False, event_hooks=_source_get_events,
 )
 
 
@@ -146,7 +188,8 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
     connections, so sources hitting those should pass this.
     """
     stats = _capture.get()
-    if stats is not None:
+    budget = _request_budget.get()
+    if stats is not None and budget is None:
         with stats._lock:
             stats.request_count += 1
     request_headers = dict(headers or {})
@@ -160,7 +203,7 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
             elif connect_close:
                 fresh_headers = {**DEFAULT_HEADERS, **request_headers, "Connection": "close"}
                 with httpx.Client(timeout=timeout, headers=fresh_headers,
-                                  follow_redirects=True) as fresh:
+                                  follow_redirects=True, event_hooks=_source_get_events) as fresh:
                     resp = fresh.get(url, params=params, timeout=timeout)
             elif request_headers:
                 resp = _client.get(url, params=params, timeout=timeout,
@@ -179,6 +222,9 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
                 delay = max(delay, int(retry_after))
                 if delay > 5:
                     break
+        except _SourceBudgetExceeded as exc:
+            record_failure(exc.reason, "budget")
+            return None
         except httpx.TimeoutException:
             kind, message = "timeout", "HTTP request timed out"
             delay = backoff * (attempt + 1)
@@ -189,6 +235,9 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
             kind, message = "failed", "HTTP transport failure"
             delay = backoff * (attempt + 1)
         if attempt < retries:
+            if budget is not None and budget[1]() <= delay:
+                record_failure("online_time_budget_exhausted", "budget")
+                return None
             time.sleep(delay)
     record_failure(message, kind)
     return None

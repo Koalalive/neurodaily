@@ -22,6 +22,10 @@ class OptimizationWorkbenchTests(unittest.TestCase):
             self.assertIsNotNone(workbench.select_one("#optimization-status[role='status']"))
             limits = workbench.select_one("#optimization-max-sources")
             self.assertEqual((limits["min"], limits["max"], limits["value"]), ("1", "14", "10"))
+            for field_id, maximum in (("online-requests", "600"), ("online-seconds", "900")):
+                online = workbench.select_one(f"#optimization-{field_id}")
+                self.assertEqual((online["min"], online["max"], online["value"]), ("1", maximum, "120"))
+            self.assertIsNotNone(workbench.select_one("#optimization-budget-usage"))
             script = page.select_one('script[src$="/optimization/workbench.js"]')
             self.assertEqual(script["type"], "module")
             self.assertEqual(client.get(script["src"]).status_code, 200)

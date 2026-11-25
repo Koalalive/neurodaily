@@ -113,16 +113,26 @@ export function renderEvidence(evidence, attributions, checks, category, mark, l
     for (const [label, probe] of [[t('publicationProbe'), source.publication], [t('configuredProbe'), source.configured]]) {
       if (!probe) continue;
       const counts = [probe.status ? t(probe.status) : '', pluralCount(probe.captured, 'recordsCount'),
-        pluralCount(probe.fetched, 'recordsFetched'), pluralCount(probe.count, 'matches'),
+        pluralCount(probe.fetched, 'recordsFetched'), pluralCount(probe.matches ?? probe.count, 'matches'),
         pluralCount(probe.excluded, 'recordsExcluded'), pluralCount(probe.unknown, 'recordsUncertain'),
         probe.coverage ? t(probe.coverage) : ''].filter(Boolean);
       node.append(element('p', [label, ...counts].join(' · '), 'optimization-health'));
       if (probe.reason) node.append(element('p', probe.reason, 'optimization-muted'));
       if (probe.dated_records) {
-        const counts = Object.entries(probe.dated_records).filter(([, n]) => Number.isFinite(n));
-        if (counts.length) node.append(element('p', counts.map(([key, n]) =>
-          t(key + 'Count', {count: n})).join(' · '), 'optimization-muted'));
+        const dated = Object.entries(probe.dated_records).filter(([, dates]) => Array.isArray(dates) && dates.length);
+        if (dated.length) {
+          const days = detail(dated.map(([key, dates]) => t(key + 'Count', {count: dates.length})).join(' · '));
+          for (const [key, dates] of dated) {
+            days.append(element('p', `${t(key + 'Count', {count: dates.length})} · ${dates.join(', ')}`, 'optimization-muted'));
+          }
+          node.append(days);
+        }
       }
+    }
+    for (const [phase, probes] of Object.entries(source.windows || {})) {
+      const counts = [probes.configured?.status && t(probes.configured.status),
+        pluralCount(probes.publication?.captured, 'recordsCount'), pluralCount(probes.configured?.matches, 'matches')];
+      node.append(element('p', [t(phase), ...counts].filter(Boolean).join(' · '), 'optimization-muted'));
     }
     const examples = (source.examples || []).filter(row => matchesCategory(category, [categoryMap[row.kind]]));
     if (examples.length) node.append(recordList(examples, mark, labels));
@@ -153,6 +163,45 @@ export function renderEvidence(evidence, attributions, checks, category, mark, l
   return fragment;
 }
 
+export function renderTrialDiagnostics(trials, category, mark, labels, readPage, pages) {
+  const fragment = document.createDocumentFragment();
+  for (const trial of trials) {
+    const node = detail([t(trial.phase), trial.title].filter(Boolean).join(' · '));
+    if (trial.reasons?.length) node.append(element('p', trial.reasons.map(reason => t(reason)).join(' '), 'optimization-muted'));
+    for (const [direction, label] of [['added', 'added'], ['lost', 'removed']]) {
+      const total = trial[direction + '_count'];
+      if (!total) continue;
+      const key = [trial.phase, trial.id, direction].join(':');
+      const rows = pages.get(key) || [];
+      const records = element('div');
+      const button = element('button');
+      button.type = 'button';
+      function renderRows() {
+        records.replaceChildren(recordList(rows.filter(row => matchesCategory(category, [categoryMap[row.kind]])), mark, labels));
+        button.textContent = t(rows.length ? 'moreRecords' : 'showRecords');
+        button.hidden = rows.length >= total;
+      }
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const result = await readPage(trial, direction, rows.length);
+          if (result) {
+            rows.push(...result.records);
+            pages.set(key, rows);
+            renderRows();
+          }
+        } finally {
+          button.disabled = false;
+        }
+      });
+      renderRows();
+      node.append(element('p', `${t(label)} · ${total}`), records, button);
+    }
+    fragment.append(node);
+  }
+  return fragment;
+}
+
 function formatMetric(value, key, delta = false) {
   if (value == null || value === '') return '—';
   if (typeof value !== 'number' || !Number.isFinite(value)) return String(value);
@@ -165,8 +214,35 @@ function formatMetric(value, key, delta = false) {
   return formatter.format(value);
 }
 
+function candidateSources(rows) {
+  const group = detail(t('sourceBreakdown'));
+  for (const row of rows) {
+    const block = detail(row.source || t('source'));
+    const reference = row.citation?.url || row.citation;
+    if (reference) block.append(textLink(row.citation?.title || row.source || t('source'), reference));
+    for (const side of ['baseline', 'candidate']) {
+      const report = row[side];
+      if (!report) continue;
+      const counts = [pluralCount(report.matched, 'matches'), pluralCount(report.filtered, 'recordsExcluded'),
+        pluralCount(report.unknown, 'recordsUncertain'), pluralCount(report.undated, 'recordsUndated'),
+        pluralCount(report.request_count, 'actualRequests')].filter(Boolean);
+      block.append(element('p', [t(side), report.status && t(report.status), report.coverage && t(report.coverage),
+        ...counts].filter(Boolean).join(' · '), 'optimization-muted'));
+    }
+    group.append(block);
+  }
+  return group;
+}
+
 export function renderReview(run, onAccept, mark, labels) {
   const fragment = document.createDocumentFragment();
+  if (run?.id && /^[0-9a-f]{32}$/.test(run.id)) {
+    const billing = element('a', t('runBilling'));
+    billing.href = '/billing?optimization_run_id=' + encodeURIComponent(run.id);
+    billing.target = '_blank';
+    billing.rel = 'noopener noreferrer';
+    fragment.append(billing);
+  }
   const candidates = (run?.candidates || []).filter(candidate => candidate.eligible !== false);
   if (run?.status === 'completed' && !candidates.length && !run.conclusion) {
     fragment.append(element('p', t('noQualified'), 'optimization-muted'));
@@ -176,6 +252,9 @@ export function renderReview(run, onAccept, mark, labels) {
     return fragment;
   }
   fragment.append(element('h4', t('reviewTitle')));
+  if (run.status === 'review' && (run.labels_changed || run.evidence_outdated)) {
+    fragment.append(element('p', t(run.evidence_outdated ? 'evidenceOutdated' : 'labelsChanged'), 'optimization-muted'));
+  }
   for (const candidate of candidates) {
     const card = element('article', null, 'optimization-card');
     card.append(element('h5', candidate.title || t('candidate')));
@@ -203,14 +282,16 @@ export function renderReview(run, onAccept, mark, labels) {
       changes.append(element('pre', text));
       card.append(changes);
     }
+    if (candidate.details?.sources?.length) card.append(candidateSources(candidate.details.sources));
     for (const [key, rows] of [['added', candidate.comparison?.added || candidate.added],
       ['removed', candidate.comparison?.lost || candidate.comparison?.removed || candidate.lost]]) {
       if (!rows?.length) continue;
-      const changes = detail(t(key) + ' · ' + rows.length);
+      const total = candidate.details?.[key === 'added' ? 'added_count' : 'lost_count'] ?? rows.length;
+      const changes = detail(t(key) + ' · ' + (total > rows.length ? `${rows.length}/${total}` : total));
       changes.append(recordList(rows, mark, labels));
       card.append(changes);
     }
-    if (run.status === 'review' && candidate.id) {
+    if (run.status === 'review' && candidate.id && !run.labels_changed && !run.evidence_outdated) {
       const accept = element('button', t('accept'));
       accept.type = 'button';
       accept.dataset.action = 'accept';

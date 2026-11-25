@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
+from ._discovery import fixed_bounds
 from ..models import Item
 
 DRUGS_URL = "https://api.fda.gov/drug/drugsfda.json"
@@ -75,7 +76,10 @@ def fetch_drugs(config, logger=None, max_results: int = 8, lookback: int = 60) -
     opts = config.source_opts("fda_drugs")
     max_results = int(opts.get("max_results", max_results))
     lookback = int(opts.get("lookback_days", lookback))
-    s, e = _date_range(lookback)
+    bounds = fixed_bounds(opts)
+    s, e = (value.replace("-", "") for value in bounds) if bounds else _date_range(lookback)
+    if s > e:
+        return []
     # openFDA interprets a literal "+" as %2B (HTTP 500); use space-separated TO.
     search = (f"submissions.submission_status_date:[{s} TO {e}] "
               f"AND submissions.submission_status:AP")
@@ -118,7 +122,10 @@ def fetch_devices(config, logger=None, max_results: int = 8, lookback: int = 60)
     opts = config.source_opts("fda_devices")
     max_results = int(opts.get("max_results", max_results))
     lookback = int(opts.get("lookback_days", lookback))
-    s, e = _date_range(lookback)
+    bounds = fixed_bounds(opts)
+    s, e = (value.replace("-", "") for value in bounds) if bounds else _date_range(lookback)
+    if s > e:
+        return []
     rows = _fetch_rows(DEVICE_URL, f"decision_date:[{s} TO {e}]")
     items: list[Item] = []
     for r in rows:

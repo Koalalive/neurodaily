@@ -20,6 +20,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate
 
+from .security import external_url
+
 ROOT = os.environ.get("NEURODAILY_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG_PATH = os.path.join(ROOT, "config", "email.json")
 LAST_PATH = os.path.join(ROOT, "output", "last_email.json")
@@ -175,7 +177,8 @@ def subject_for(result, cfg: dict, language: str = "zh") -> str:
 
 def _item_html(it, accent: str, summary_len: int = 320) -> str:
     title = _esc(it.title)
-    link = f'<a href="{_esc(it.url)}" style="color:{accent};text-decoration:none">{title}</a>' if it.url else title
+    url = external_url(it.url)
+    link = f'<a href="{_esc(url)}" style="color:{accent};text-decoration:none">{title}</a>' if url else title
     _m = (it.extra or {}).get("metrics") or {}
     _bits = []
     if _m.get("if"):
@@ -264,8 +267,7 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
                 f'{_esc(e.get("category_label"))}</div>{paras}</div>'
             )
 
-    public_url = str(cfg.get("public_url") or "").strip()
-    if public_url.startswith(("http://", "https://")):
+    if public_url := external_url(cfg.get("public_url")):
         safe_url = _esc(public_url)
         label = {"zh": "在浏览器打开完整交互式日报（地图与主题图）",
                  "en": "Open the full interactive digest in a browser (map and topics)",

@@ -75,12 +75,29 @@ def request_scope(config, source: str, cap: int) -> tuple[dict, str, int]:
     return opts, query, limit
 
 
+def fixed_bounds(opts, explicit=None) -> tuple[str, str] | None:
+    evidence = opts.get("evidence_date_range")
+    if not evidence and explicit is not None:
+        return explicit
+    window = evidence or opts.get("retrieval_date_range")
+    if isinstance(window, (list, tuple)) and len(window) == 2:
+        start, end = map(date_value, window)
+        if len(start) == len(end) == 10:
+            if explicit is not None:
+                return max(start, explicit[0]), min(end, explicit[1])
+            return start, end
+    return explicit
+
+
 def paper_bounds(config, opts) -> tuple[str, str]:
     bounds = opts.get("paper_date_range") or compile_search(config.search, config.journals).date_range
     if isinstance(bounds, (list, tuple)) and len(bounds) == 2:
         start, end = map(date_value, bounds)
-        if len(start) == len(end) == 10:
-            return start, end
+        bounds = (start, end) if len(start) == len(end) == 10 else None
+    else:
+        bounds = None
+    if window := fixed_bounds(opts, bounds):
+        return window
     today = date.today()
     days = min(int_option(opts.get("lookback_days"), 7), 3650)
     return (today - timedelta(days=days)).isoformat(), today.isoformat()

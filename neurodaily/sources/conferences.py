@@ -6,6 +6,7 @@ from importlib.resources import files
 import json
 
 from ..models import Item
+from ._discovery import fixed_bounds
 from .http import record_candidates, record_query
 
 
@@ -28,7 +29,9 @@ def fetch(config, logger=None) -> list[Item]:
     if not isinstance(rows, list):
         return []
     record_candidates(len(rows))
-    today = date.today()
+    # The catalogue deliberately includes future meetings relative to the run.
+    fixed = fixed_bounds(opts)
+    today = date.fromisoformat(fixed[1]) if fixed else date.today()
     horizon = today + timedelta(days=730)
     limit = max(1, int(opts.get("max_results", 50)))
     profiles = {"neuro", "oncology", "critical-care"}

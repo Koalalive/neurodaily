@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from html import escape
 
-from .config import Config, DEFAULT_CONFIG
+from .config import Config, DEFAULT_CONFIG, revision_for
 from .models import Item, tag_items
 from .records import merge_records
 from .search import compile_scoped_search, compile_search
@@ -48,6 +48,8 @@ class DigestResult:
     geography: dict | None = None
     search_window: dict = field(default_factory=dict)
     topics: dict | None = None
+    delta: dict | None = None
+    profile_revision: str | None = None
 
     def counts(self) -> dict[str, int]:
         c: dict[str, int] = {}
@@ -115,7 +117,7 @@ def _windows(config: Config, mode: str) -> tuple[dict, int]:
     }, hours("other_lookback_days", 7) * 24
 
 
-def _candidate_config(config, windows, other, *, preview=False, fallback=False, date_range=None):
+def _candidate_config(config, windows, other, *, preview=False, fallback=False, date_range=None, as_of=None):
     cfg = deepcopy(config)
     for name in registry_for(cfg):
         options = cfg.sources.setdefault(name, {})
@@ -125,6 +127,11 @@ def _candidate_config(config, windows, other, *, preview=False, fallback=False, 
         if not literature:
             days = max(days, math.ceil(other / 24))
         options["lookback_days"] = max(int(options.get("lookback_days") or 2), days, 7 if fallback else 1)
+        if as_of is not None:
+            options["retrieval_date_range"] = (
+                (as_of.date() - timedelta(days=options["lookback_days"])).isoformat(),
+                as_of.date().isoformat(),
+            )
         if literature and options.get("type") in ("rss", "json", "json_api"):
             options["paper_date_range"] = date_range
         if preview:
@@ -144,7 +151,7 @@ def _mark_match(item, plan, scoped=None) -> str:
 
 
 def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, preview=False,
-                   progress=None, cached=None, checkpoint=None, check_cancelled=None):
+                   progress=None, cached=None, checkpoint=None, check_cancelled=None, as_of=None):
     from .sources.http import capture_requests
 
     registry = registry_for(config)
@@ -176,7 +183,7 @@ def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, pr
         diagnostics = stats.as_dict(len(items))
         if error is not None:
             diagnostics.update(status="failed", ok=False, error=error)
-        filtered = _filter_by_windows(items, windows, other, keep_dated_papers=bool(bounds))
+        filtered = _filter_by_windows(items, windows, other, keep_dated_papers=bool(bounds), as_of=as_of)
         matches, uncertain, excluded = [], [], []
         for item in filtered:
             status = _mark_match(item, plan, scoped)
@@ -265,7 +272,7 @@ def _rank(item: Item, plan) -> tuple:
 def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         record: bool = True, max_age_hours: int | None = None, force: bool = False,
         mode: str = "manual", *, progress=None, cached=None, checkpoint=None,
-        check_cancelled=None) -> DigestResult:
+        check_cancelled=None, as_of: datetime | None = None) -> DigestResult:
     """Run a digest. Optionally skip if an identical query ran recently (dedup),
     and record the run into search_history."""
     config = config or DEFAULT_CONFIG()
@@ -301,14 +308,15 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
 
         return _fetch_sources(candidates, plan, windows, other, scoped=scoped, logger=logger,
                               progress=progress, cached=(cached or {}).get(pass_name),
-                              checkpoint=save if checkpoint else None, check_cancelled=check_cancelled)
+                              checkpoint=save if checkpoint else None, check_cancelled=check_cancelled,
+                              as_of=as_of)
 
-    candidates = _candidate_config(config, windows, other, date_range=plan.date_range)
+    candidates = _candidate_config(config, windows, other, date_range=plan.date_range, as_of=as_of)
     items, health = fetch("primary", candidates)
     if (not items and health and not plan.active
             and all(row["status"] == "empty" for row in health)
             and any(row["lookback_days"] < 7 for row in health)):
-        candidates = _candidate_config(config, windows, other, fallback=True)
+        candidates = _candidate_config(config, windows, other, fallback=True, as_of=as_of)
         items, health = fetch("fallback", candidates)
     errors = [
         f'{row["source"]}: {row.get("error") or ", ".join(row.get("request_errors", [])) or row["status"]}'
@@ -341,9 +349,10 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
                        "ms": int((time.monotonic() - started) * 1000), **stats.as_dict(enriched)})
 
     try:
-        from .journal_metrics import for_item
+        from .journal_metrics import for_item, load_snapshot
+        metrics_snapshot = load_snapshot()
         for _it in deduped:
-            _m = for_item(_it, config)
+            _m = for_item(_it, config, snapshot=metrics_snapshot)
             if _m:
                 _it.extra["metrics"] = _m
     except Exception:
@@ -367,7 +376,7 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
             trials.sort(key=lambda item: (item.date or "", item.title.casefold()), reverse=True)
             conferences.sort(key=lambda item: (item.date or "9999-12-31", item.title.casefold()))
             sections[key] = trials + conferences
-        else:
+        elif key != "papers" or (plan.sort == "default" and plan.journal_mode != "prefer"):
             group.sort(key=lambda item: (item.date or "", item.title.casefold()), reverse=True)
 
     _lang = "zh"
@@ -382,12 +391,14 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
         on_this_day = []
 
     generated = datetime.now()
+    window_end = as_of or generated
     paper_hours = int(windows.get("paper", 0) or 0)
     search_window = {
         "mode": mode,
         "hours": paper_hours,
-        "start": (generated - timedelta(hours=paper_hours)).strftime("%Y-%m-%d %H:%M"),
-        "end": generated.strftime("%Y-%m-%d %H:%M"),
+        "start": (window_end - timedelta(hours=paper_hours)).strftime("%Y-%m-%d %H:%M"),
+        "end": window_end.strftime("%Y-%m-%d %H:%M"),
+        "end_at": (window_end if window_end.tzinfo else window_end.astimezone()).isoformat(),
     } if paper_hours else {}
     final = DigestResult(
         items=deduped,
@@ -409,24 +420,25 @@ def run(config: Config | None = None, logger=None, check_duplicate: bool = True,
             started_at, datetime.now().isoformat(), item_count=len(deduped),
             source_counts=final.counts(),
             summary=f"{len(deduped)} items",
-            snapshot=hist.search_snapshot(config, mode, health, deduped, windows),
+            snapshot=snapshot(final, mode),
         )
     return final
 
 
 def snapshot(result: DigestResult, mode: str) -> dict:
     windows, _ = _windows(result.config, mode)
-    return hist.search_snapshot(result.config, mode, result.health, result.items, windows)
+    return hist.search_snapshot(result.config, mode, result.health, result.items, windows,
+                                search_window=result.search_window,
+                                profile_revision=result.profile_revision or revision_for(result.config))
 
 
 def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int = 7 * 24,
-                       *, keep_dated_papers: bool = False) -> list[Item]:
+                       *, keep_dated_papers: bool = False, as_of: datetime | None = None) -> list[Item]:
     """Keep each kind within its own window; undated items are kept."""
-    from datetime import timedelta
-    now = datetime.now()
+    now = as_of or datetime.now()
     out = []
     for it in items:
-        if not it.date or (keep_dated_papers and it.kind == "paper"):
+        if not it.date:
             out.append(it)
             continue
         hours = max(1, int(hours_by_kind.get(it.kind, other_hours)))
@@ -439,20 +451,34 @@ def _filter_by_windows(items: list[Item], hours_by_kind: dict, other_hours: int 
         except Exception:
             out.append(it)
             continue
-        if dtv.tzinfo is not None:
-            cutoff = cutoff.astimezone()
-        if dtv >= cutoff or _within_window(it.extra.get("source_discovered_at"), cutoff):
+        end = as_of if it.kind != "conference" else None
+        start = None if keep_dated_papers and it.kind == "paper" else cutoff
+        if (_date_in_window(it.date, dtv, start, end) or
+                _within_window(it.extra.get("source_discovered_at"), start, end)):
             out.append(it)
     return out
 
 
-def _within_window(value, cutoff: datetime) -> bool:
+def _date_in_window(value: str, date: datetime, start: datetime | None, end: datetime | None) -> bool:
+    reference = end or start
+    if date.tzinfo is None and reference is not None and reference.tzinfo is not None:
+        date = date.replace(tzinfo=reference.tzinfo)
+    if start is not None and date.timestamp() < start.timestamp():
+        return False
+    if end is None:
+        return True
+    if len(value) == 10:
+        return date.date() <= end.date()
+    return date.timestamp() <= end.timestamp()
+
+
+def _within_window(value, cutoff: datetime | None, end: datetime | None = None) -> bool:
     try:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00") if len(value) > 10
                                     else value + "T23:59:59")
     except (AttributeError, TypeError, ValueError):
         return False
-    return dt.timestamp() >= cutoff.timestamp()
+    return _date_in_window(value, dt, cutoff, end)
 
 
 def _filter_papers_by_window(items: list[Item], hours: int) -> list[Item]:
@@ -476,6 +502,13 @@ def save_report(result: DigestResult, output_path: str) -> str:
     # A deduplicated (skipped) run has no content; don't overwrite an existing report.
     if result.skipped:
         return output_path
+    if result.history_id and result.config is not None and (run := hist.get_run(result.history_id)):
+        mode = (run.get("snapshot") or {}).get("mode")
+        if mode in {"manual", "daily"}:
+            from .report_delta import compare
+
+            current = snapshot(result, mode)
+            result.delta = compare(current, hist.previous_comparable(run, current))
     html = render_html(result)
     if result.report_base_url:
         html = html.replace('<meta name="nd-base" content="">',

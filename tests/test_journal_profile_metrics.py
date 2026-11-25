@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -7,8 +8,9 @@ from bs4 import BeautifulSoup
 from fastapi.testclient import TestClient
 
 from neurodaily import demo, journal_metrics
-from neurodaily.config import Config, DEFAULT_CONFIG
+from neurodaily.config import Config, DEFAULT_CONFIG, Journal
 from neurodaily.models import Item
+from neurodaily.records import merge_records
 from neurodaily.render import render_html
 from neurodaily.webapp import create_app
 
@@ -97,3 +99,103 @@ class JournalProfileMetricsTests(unittest.TestCase):
         self.assertEqual(metrics["if_year"], 2023)
         self.assertEqual(metrics["jcr_year"], 2022)
         self.assertEqual(metrics["cas_year"], 2025)
+
+    def test_rejects_nonfinite_and_negative_impact_factors_but_reads_legacy_config(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            self.config.save(str(path))
+            client = TestClient(create_app(str(path)), raise_server_exceptions=False)
+            original = path.read_bytes()
+            for field in ("impact_factor", "if"):
+                for value in ("NaN", "Infinity", -1):
+                    with self.subTest(field=field, value=value):
+                        data = self.config.to_dict()
+                        data["journals"] = [{"name": "A journal", field: value}]
+                        self.assertEqual(client.post("/api/config", json=data).status_code, 400)
+                        self.assertEqual(client.post("/api/config/import?apply=true", json=data).status_code, 400)
+                        self.assertEqual(path.read_bytes(), original)
+            data["journals"] = [{"name": "A journal", "impact_factor": float("nan"), "jcr": "Q3"}]
+            path.write_text(json.dumps(data), encoding="utf-8")
+            row = client.get("/api/config").json()["journals"][0]
+            exported = client.get("/api/config/export").json()["config"]["journals"][0]
+            self.assertIsNone(row["impact_factor"])
+            self.assertEqual(row["jcr"], "Q3")
+            self.assertEqual(row, exported)
+
+    def test_conflicting_journal_abbreviation_does_not_apply_profile_badges(self):
+        self.config.journals = [Journal("Alpha Clinical Journal", aliases=["J Clin Med"],
+                                       issns=["2345-6789"], tags=["国产期刊"], impact_factor=1.1)]
+        with patch.object(journal_metrics, "load_official", return_value={}), \
+                patch.object(journal_metrics, "load_auto", return_value={}):
+            other = Item("Unrelated paper", source="pubmed", extra={"journal": "Separate Clinical Journal",
+                         "journal_abbreviation": "J Clin Med", "issn": "7890-1234"})
+            self.assertIsNone(journal_metrics.for_item(other, self.config))
+            exact = Item("Related paper", source="pubmed", extra={"journal": "Alpha Clinical Journal",
+                         "issn": "7890-1234"})
+            self.assertEqual(journal_metrics.for_item(exact, self.config)["if"], 1.1)
+            self.config.journals.append(Journal("Separate Clinical Journal", issns=["7890-1234"], impact_factor=2.0))
+            cache = ({"Alpha Clinical Journal": {"if": 1.1}}, {})
+            self.assertIsNone(journal_metrics.for_item(exact, self.config, snapshot=cache))
+
+    def test_deduplicated_papers_keep_matching_journal_identifiers(self):
+        self.config.journals = [Journal("Demo Journal", issns=["2345-6789"], impact_factor=12.1)]
+        complete = Item("Same title", url="https://example.org/epmc/42", doi="10.4321/fixture",
+                        source="europe_pmc", extra={"journal": "Demo Journal", "issns": ["2345-6789"]})
+        richer = Item("Same title", url="https://example.org/openalex/42", doi="10.4321/fixture",
+                      source="openalex", summary="A substantially richer abstract.",
+                      extra={"journal": "", "issns": []})
+        record, = merge_records([complete, richer])
+        with patch.object(journal_metrics, "load_official", return_value={}), \
+                patch.object(journal_metrics, "load_auto", return_value={}):
+            self.assertEqual(record.source, "openalex")
+            self.assertEqual(journal_metrics.for_item(record, self.config)["if"], 12.1)
+
+    def test_same_venue_merges_print_and_online_issns_but_rejects_a_conflicting_venue(self):
+        records = [Item("Same title", doi="10.4321/fixture", source=source, summary=summary,
+                        extra={"journal": name, "issns": [identifier]}) for source, summary, name, identifier in (
+            ("openalex", "A substantially richer abstract.", "Demo Journal", "2345-6789"),
+            ("europe_pmc", "", "Demo Journal", "9876-5432"),
+            ("pubmed", "", "Other Journal", "4321-567X"),
+        )]
+        record, = merge_records(records)
+        self.assertEqual(record.extra["journal"], "Demo Journal")
+        self.assertEqual(set(record.extra["issns"]), {"2345-6789", "9876-5432"})
+
+    def test_invalid_optional_metrics_file_keeps_full_report_and_profile_values(self):
+        self.config.journals = [Journal("Neuron", impact_factor=12.1)]
+        result = demo.build_result(self.config)
+        with TemporaryDirectory() as tmp:
+            official = Path(tmp) / "official.json"
+            auto = Path(tmp) / "auto.json"
+            official.write_text('[]', encoding="utf-8")
+            auto.write_text('{"journals":{"Neuron":"invalid"}}', encoding="utf-8")
+            with patch.object(journal_metrics, "OFFICIAL_PATH", str(official)), \
+                    patch.object(journal_metrics, "AUTO_PATH", str(auto)):
+                report = BeautifulSoup(render_html(result, self.config), "html.parser")
+            self.assertIn("IF 12.1", report.select_one("#journals").get_text(" ", strip=True))
+
+    def test_profile_writes_reject_a_stale_form_and_stale_import_preview(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            self.config.save(str(path))
+            client = TestClient(create_app(str(path)))
+            first = client.get("/api/config")
+            stale = {"If-Match": first.headers["etag"]}
+            older_form = first.json()
+            profile_file = client.get("/api/config/export").json()
+            preview = client.post("/api/config/import", json=profile_file)
+            self.assertEqual(preview.headers["etag"], first.headers["etag"])
+            updated = {**older_form, "search": {"query": "TI=memory"}}
+            saved = client.post("/api/config", json=updated, headers=stale)
+            self.assertEqual(saved.status_code, 200)
+            self.assertNotEqual(saved.headers["etag"], first.headers["etag"])
+            older_form["journals"][0]["tags"] = ["reviewed"]
+            app_settings = {"format": "neurodaily.app-settings", "version": 1, "settings": {"output": {"dir": "old"}}}
+            for route, payload in (("/api/config", older_form),
+                                   ("/api/config/import?apply=true", profile_file),
+                                   ("/api/app-settings/import", app_settings),
+                                   ("/api/config/reset", None)):
+                response = client.post(route, json=payload, headers=stale)
+                self.assertEqual(response.status_code, 412, response.text)
+                self.assertEqual(response.json()["code"], "configuration_changed")
+            self.assertEqual(Config.load(str(path)).search["query"], "TI=memory")

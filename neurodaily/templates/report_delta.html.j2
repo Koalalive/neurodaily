@@ -1,0 +1,81 @@
+{% set delta = result.delta %}
+{% macro report_record(row) -%}
+  {% if external_url(row.url) %}<a href="{{ external_url(row.url) }}" target="_blank" rel="noopener noreferrer" data-no-i18n>{{ row.title }}</a>{% else %}<span data-no-i18n>{{ row.title }}</span>{% endif %}
+{%- endmacro %}
+<section id="report-delta">
+  <h2 class="sec-title"><span class="dot"></span>日报变化</h2>
+  {% if delta.baseline %}
+    <p class="sec-desc"><span>对照同一检索配置的上一份日报</span> · #{{ delta.baseline.id }} · {{ delta.baseline.started_at[:10] }}</p>
+  {% else %}
+    <p class="sec-desc">尚无同一检索配置的可比较日报。</p>
+  {% endif %}
+  {% if delta.retractions %}
+  <div class="byline">
+    <h3>撤稿记录 <span>({{ delta.retractions|length }})</span></h3>
+    <ul>{% for row in delta.retractions %}
+      <li>{{ report_record(row) }} · <span data-no-i18n>{{ row.provider }}</span>
+        {% if external_url(row.notice_url) %} · <a href="{{ external_url(row.notice_url) }}" target="_blank" rel="noopener noreferrer">{{ row.notice_id|default('查看记录') }}</a>{% endif %}
+        {% if row.direction == 'notice_for' and external_url(row.target_url) %} · <a href="{{ external_url(row.target_url) }}" target="_blank" rel="noopener noreferrer">涉及论文</a>{% endif %}
+        {% if row.date %} · {{ row.date }}{% endif %}
+      </li>
+    {% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if delta.publication_updates %}
+  <div class="byline">
+    <h3>更正与其他出版通知 <span>({{ delta.publication_updates|length }})</span></h3>
+    {% set notice_labels = {'correction': '更正', 'withdrawal': '撤回', 'expression-of-concern': '关注声明'} %}
+    <ul>{% for row in delta.publication_updates %}
+      <li>{{ report_record(row) }} · <span>{{ notice_labels.get(row.kind) }}</span>
+        {% if external_url(row.notice_url) %} · <a href="{{ external_url(row.notice_url) }}" target="_blank" rel="noopener noreferrer">{{ row.notice_id|default('查看记录') }}</a>{% endif %}
+        {% if row.direction == 'notice_for' and external_url(row.target_url) %} · <a href="{{ external_url(row.target_url) }}" target="_blank" rel="noopener noreferrer">涉及论文</a>{% endif %}
+        {% if row.date %} · {{ row.date }}{% endif %}
+      </li>
+    {% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if delta.trial_changes %}
+  <div class="byline">
+    <h3>临床试验状态变更 <span>({{ delta.trial_changes|length }})</span></h3>
+    <ul>{% for row in delta.trial_changes %}
+      <li>{{ report_record(row) }} · <span data-no-i18n>{{ row.before }} → {{ row.after }}</span> · {{ row.date }}</li>
+    {% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if delta.added_papers %}
+  <details class="card">
+    <summary><span>新增检出的论文</span> · {{ delta.added_papers|length }}</summary>
+    <ul>{% for row in delta.added_papers %}
+      <li>{{ report_record(row) }}{% if row.coverage_limited %} · <span>上次来源覆盖有限</span>{% endif %}</li>
+    {% endfor %}</ul>
+  </details>
+  {% endif %}
+  {% set coverage_labels = {'unavailable': '不可用', 'incomplete': '覆盖不完整', 'observed': '已完成'} %}
+  {% if delta.source_limits or delta.uncertain %}
+  <details class="card">
+    <summary>来源覆盖限制</summary>
+    {% if delta.source_limits %}
+    <ul>{% for row in delta.source_limits %}
+      <li><span data-no-i18n>{{ row.source }}</span> ·
+        {% if delta.baseline %}<span>{{ coverage_labels[row.before] }}</span> → {% endif %}
+        <span>{{ coverage_labels[row.after] }}</span>
+      </li>
+    {% endfor %}</ul>
+    {% endif %}
+    {% if delta.uncertain %}
+    <p><span>无法确认的往期条目</span> · {{ delta.uncertain|length }}</p>
+    <ul>{% for row in delta.uncertain %}<li>{{ report_record(row) }}</li>{% endfor %}</ul>
+    {% endif %}
+  </details>
+  {% endif %}
+  {% if delta.not_seen or delta.outside_window %}
+  <details class="card">
+    <summary>本次未再检出</summary>
+    {% if delta.outside_window %}<p><span>已移出检索时间窗</span> · {{ delta.outside_window }}</p>{% endif %}
+    {% if delta.not_seen %}
+    <ul>{% for row in delta.not_seen %}<li>{{ report_record(row) }}</li>{% endfor %}</ul>
+    {% endif %}
+    <p>仅表示检索结果变化，撤稿以发布者或正式索引记录为准。</p>
+  </details>
+  {% endif %}
+</section>

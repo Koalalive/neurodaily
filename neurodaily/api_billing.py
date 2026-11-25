@@ -18,6 +18,8 @@ PURPOSES = ("summary", "connection_test", "geolocation", "search_optimization", 
 _TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "output_tokens", "total_tokens")
 _RATE_FIELDS = ("currency", "input", "output", "cached_input")
 _RESPONSE_ID = re.compile(r"[A-Za-z0-9_.:-]{1,200}\Z")
+_OPTIMIZATION_ID = re.compile(r"[0-9a-f]{32}\Z")
+_PROFILE_REVISION = re.compile(r"[0-9a-f]{64}\Z")
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL
@@ -42,6 +44,11 @@ CREATE TABLE IF NOT EXISTS calls (
     rate TEXT
 );
 CREATE INDEX IF NOT EXISTS calls_date_idx ON calls(called_at DESC, id DESC);
+CREATE TABLE IF NOT EXISTS optimization_calls (
+    call_id INTEGER PRIMARY KEY REFERENCES calls(id),
+    optimization_run_id TEXT NOT NULL, optimization_round INTEGER NOT NULL, profile_revision TEXT
+);
+CREATE INDEX IF NOT EXISTS optimization_calls_by_run ON optimization_calls(optimization_run_id, optimization_round);
 """
 
 
@@ -223,7 +230,7 @@ def _estimate(rate, input_tokens, cached_tokens, output_tokens) -> str | None:
 
 
 def record_call(*, purpose, base_url, model, status, http_status=None, response_id=None, usage=None,
-                run_id=None, profile=None, rate=None, called_at=None) -> None:
+                run_id=None, profile=None, rate=None, called_at=None, optimization_context=None) -> None:
     try:
         _, origin = _endpoint(base_url)
     except ValueError:
@@ -233,7 +240,7 @@ def record_call(*, purpose, base_url, model, status, http_status=None, response_
     response_id = response_id if isinstance(response_id, str) and _RESPONSE_ID.fullmatch(response_id) else None
     now = called_at or datetime.now(timezone.utc)
     with _connection() as conn:
-        conn.execute("""INSERT INTO calls (called_at, purpose, run_id, profile, base_url, model,
+        cursor = conn.execute("""INSERT INTO calls (called_at, purpose, run_id, profile, base_url, model,
                      status, http_status, response_id, input_tokens, cached_input_tokens, output_tokens,
                      total_tokens, currency, estimated_cost, rate)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -241,6 +248,14 @@ def record_call(*, purpose, base_url, model, status, http_status=None, response_
                       _integer(run_id, 2**63 - 1), _label(profile), origin, _label(model), status,
                       _integer(http_status, 599), response_id, *tokens, rate["currency"] if rate else None,
                       cost, json.dumps(rate) if rate else None))
+        if purpose == "search_optimization" and isinstance(optimization_context, dict):
+            optimizer = optimization_context.get("run_id")
+            round_number = optimization_context.get("round")
+            revision = optimization_context.get("profile_revision")
+            if isinstance(optimizer, str) and _OPTIMIZATION_ID.fullmatch(optimizer) and type(round_number) is int and 1 <= round_number <= 1000:
+                if not isinstance(revision, str) or not _PROFILE_REVISION.fullmatch(revision):
+                    revision = None
+                conn.execute("INSERT INTO optimization_calls VALUES (?,?,?,?)", (cursor.lastrowid, optimizer, round_number, revision))
 
 
 def _report(rows) -> dict:
@@ -265,7 +280,7 @@ def _report(rows) -> dict:
     return totals
 
 
-def billing_report(days=30, limit=100, offset=0, purpose=None) -> dict:
+def billing_report(days=30, limit=100, offset=0, purpose=None, *, optimization_run_id=None) -> dict:
     if type(days) is not int or not 1 <= days <= 36500:
         raise ValueError("days must be between 1 and 36500")
     if type(limit) is not int or not 1 <= limit <= 1000:
@@ -274,18 +289,32 @@ def billing_report(days=30, limit=100, offset=0, purpose=None) -> dict:
         raise ValueError("offset must be a non-negative integer")
     if purpose is not None and purpose not in PURPOSES:
         raise ValueError("Unknown request purpose")
+    if optimization_run_id is not None and (not isinstance(optimization_run_id, str) or not _OPTIMIZATION_ID.fullmatch(optimization_run_id)):
+        raise ValueError("Invalid optimization run ID")
     if not _db_path().is_file():
-        return {"calls": [], "totals": _report(()), "total_calls": 0}
+        return {"calls": [], "totals": _report(()), "total_calls": 0, "rounds": []}
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     where = "WHERE called_at >= ?"
     params = (cutoff,)
     if purpose is not None:
         where += " AND purpose = ?"
         params += (purpose,)
+    if optimization_run_id is not None:
+        where += " AND optimization_run_id = ?"
+        params += (optimization_run_id,)
+    joined = f"FROM calls LEFT JOIN optimization_calls ON calls.id=optimization_calls.call_id {where}"
     with _connection() as conn:
         conn.execute("BEGIN")
-        totals = _report(conn.execute(f"SELECT * FROM calls {where}", params))
-        rows = conn.execute(f"SELECT * FROM calls {where} ORDER BY called_at DESC, id DESC LIMIT ? OFFSET ?",
+        rows = conn.execute(f"SELECT * {joined} ORDER BY called_at DESC, id DESC LIMIT ? OFFSET ?",
                             (*params, limit, offset))
-        calls = [dict(row) | {"rate": json.loads(row["rate"]) if row["rate"] else None} for row in rows]
-    return {"calls": calls, "totals": totals, "total_calls": totals["calls"]}
+        calls = [{key: row[key] for key in row.keys() if key != "call_id"} | {
+            "rate": json.loads(row["rate"]) if row["rate"] else None} for row in rows]
+        totals = _report(conn.execute(f"SELECT * {joined}", params))
+        rounds = []
+        if optimization_run_id is not None:
+            from itertools import groupby
+
+            usage = conn.execute(f"SELECT * {joined} ORDER BY optimization_round", params)
+            rounds = [{"round": number, **_report(records)}
+                      for number, records in groupby(usage, key=lambda row: row["optimization_round"])]
+    return {"calls": calls, "totals": totals, "total_calls": totals["calls"], "rounds": rounds}

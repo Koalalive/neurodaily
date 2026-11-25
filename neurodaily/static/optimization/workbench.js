@@ -1,5 +1,5 @@
 import {t} from './workbench-copy.js';
-import {categories, element, renderEvidence, renderReview} from './workbench-render.js';
+import {categories, element, renderEvidence, renderReview, renderTrialDiagnostics} from './workbench-render.js';
 
 const api = '/api/optimization';
 const workbench = document.getElementById('optimization-workbench');
@@ -33,6 +33,8 @@ function setupWorkbench(root) {
   let lastReview = '';
   let lastConversations = '';
   let lastHistory = '';
+  let trialRunId = '';
+  const trialPages = new Map();
 
   for (const node of root.querySelectorAll('[data-opt-text]')) node.textContent = t(node.dataset.optText);
   text.placeholder = t('prompt');
@@ -104,7 +106,10 @@ function setupWorkbench(root) {
     const sources = Array.isArray(evidence) ? evidence : (evidence.sources || []);
     const labels = labelsByIdentifier(state?.labels);
     const checks = selectedHistory ? [] : state?.run?.checks || [];
-    const key = JSON.stringify([category, sources, attributions, checks, labels]);
+    const trials = selectedHistory ? [] : state?.trial_diagnostics || [];
+    const runId = state?.run?.id || '';
+    const feedback = selectedHistory || category !== 'all' ? [] : state?.report_feedback || [];
+    const key = JSON.stringify([category, sources, attributions, checks, labels, runId, trials, feedback]);
     if (key === lastEvidence) return;
     lastEvidence = key;
     const fromTrial = sources.some(source => source.publication);
@@ -112,6 +117,31 @@ function setupWorkbench(root) {
       : sources.length ? t('historicalEvidence') : '';
     const open = new Set(Array.from(findings.querySelectorAll('details[open] > summary'), summary => summary.textContent));
     findings.replaceChildren(renderEvidence(sources, attributions, checks, category, mark, labels));
+    if (runId !== trialRunId) {
+      trialPages.clear();
+      trialRunId = runId;
+    }
+    findings.append(renderTrialDiagnostics(trials, category, mark, labels, async (trial, direction, offset) => {
+      const query = new URLSearchParams({phase: trial.phase, direction, offset});
+      try {
+        const page = await request(`/runs/${encodeURIComponent(runId)}/trials/${encodeURIComponent(trial.id)}/records?${query}`);
+        return trialRunId === runId ? page : null;
+      } catch (problem) {
+        showError(problem.message);
+        return null;
+      }
+    }, trialPages));
+    if (feedback.length) {
+      const section = element('details');
+      section.append(element('summary', t('recentReportFeedback')));
+      const list = element('ul', null, 'optimization-records');
+      for (const row of feedback) {
+        list.append(element('li', [t(row.relevant ? 'relevant' : 'irrelevant'), row.title, row.journal || row.source]
+          .filter(Boolean).join(' · ')));
+      }
+      section.append(list);
+      findings.append(section);
+    }
     for (const disclosure of findings.querySelectorAll('details')) {
       if (open.has(disclosure.firstElementChild.textContent)) disclosure.open = true;
     }
@@ -130,6 +160,19 @@ function setupWorkbench(root) {
     }
     conversation.hidden = entries.length < 2;
     conversation.value = selected;
+  }
+
+  function paintBudget() {
+    const node = get('budget-usage');
+    const uses = state?.budget_usage || [];
+    const text = uses.map(use => {
+      const phase = use.phase.startsWith('round:') ? t('onlineRound', {round: use.phase.split(':')[1]})
+        : t(use.phase === 'capture' ? 'onlineCapture' : 'onlineHoldout');
+      return t('onlineUsage', {phase, requests: use.requests, requestLimit: use.request_limit,
+        seconds: use.elapsed_seconds, secondsLimit: use.seconds_limit}) + (use.reason ? ' · ' + t(use.reason) : '');
+    }).join(' | ');
+    if (node.textContent !== text) node.textContent = text;
+    node.hidden = !text;
   }
 
   function paint() {
@@ -151,6 +194,7 @@ function setupWorkbench(root) {
     const nextStatus = run ? [t(run.status, {round: run.round || 1}), run.stage && run.stage !== run.status ? t(run.stage) : '']
       .filter(Boolean).join(' · ') : t(state ? 'noRuns' : 'loading');
     if (status.textContent !== nextStatus) status.textContent = nextStatus;
+    paintBudget();
     const conclusion = get('conclusion');
     conclusion.textContent = run?.error || [run?.conclusion, ...(run?.blockers || []).map(reason => t(reason))]
       .filter(Boolean).join(' ');
@@ -173,7 +217,8 @@ function setupWorkbench(root) {
     historyRuns.value = selectedHistory;
     paintTranscript();
     paintEvidence();
-    const reviewKey = JSON.stringify([run?.id, run?.status, run?.candidates, run?.baseline_metrics, state?.labels]);
+    const reviewKey = JSON.stringify([run?.id, run?.status, run?.candidates, run?.baseline_metrics,
+      run?.labels_changed, run?.evidence_outdated, state?.labels]);
     if (lastReview !== reviewKey) {
       lastReview = reviewKey;
       review.replaceChildren(renderReview(run, accept, mark, labelsByIdentifier(state?.labels)));
@@ -202,22 +247,7 @@ function setupWorkbench(root) {
     error.hidden = !message;
   }
 
-  async function refresh() {
-    const sequence = ++snapshotSequence;
-    const parameters = new URLSearchParams();
-    if (selected) parameters.set('conversation_id', selected);
-    if (selectedHistory) parameters.set('history_run_id', selectedHistory);
-    const query = parameters.size ? '?' + parameters.toString() : '';
-    let snapshot;
-    try {
-      snapshot = await request(query);
-    } catch (err) {
-      if (snapshotSequence !== sequence) return;
-      if (!query || err.status !== 404) throw err;
-      selectedHistory = '';
-      snapshot = await request('');
-    }
-    if (snapshotSequence !== sequence) return;
+  async function useSnapshot(snapshot) {
     state = snapshot;
     selected = state.conversation_id || selected;
     retry.hidden = true;
@@ -226,6 +256,36 @@ function setupWorkbench(root) {
       if (['applied', 'rolled_back'].includes(state.run.status)) await syncSettings();
     }
     paint();
+  }
+
+  async function refresh(force = false) {
+    const sequence = ++snapshotSequence;
+    const parameters = new URLSearchParams();
+    if (selected) parameters.set('conversation_id', selected);
+    if (selectedHistory) parameters.set('history_run_id', selectedHistory);
+    const query = parameters.size ? '?' + parameters.toString() : '';
+    let snapshot;
+    try {
+      if (!force && state?.revision) {
+        const statusQuery = selected ? '?conversation_id=' + encodeURIComponent(selected) : '';
+        const progress = await request('/status' + statusQuery);
+        if (snapshotSequence !== sequence) return;
+        if (progress.revision === state.revision && progress.conversation_id === state.conversation_id) {
+          state.budget_usage = progress.budget_usage;
+          retry.hidden = true;
+          paintBudget();
+          return;
+        }
+      }
+      snapshot = await request(query);
+    } catch (err) {
+      if (snapshotSequence !== sequence) return;
+      if (!query || err.status !== 404) throw err;
+      selectedHistory = '';
+      snapshot = await request('');
+    }
+    if (snapshotSequence !== sequence) return;
+    await useSnapshot(snapshot);
   }
 
   function schedule() {
@@ -241,7 +301,7 @@ function setupWorkbench(root) {
     }
     loading = true;
     try {
-      await refresh();
+      await refresh(force === true);
     } catch (err) {
       showError(err.message);
       retry.hidden = false;
@@ -262,7 +322,8 @@ function setupWorkbench(root) {
       const result = await request(path, payload);
       if (result.conversation_id) selected = result.conversation_id;
       if (onSuccess) await onSuccess(result);
-      await refresh();
+      if (result.revision && !selectedHistory) await useSnapshot(result);
+      else await refresh(true);
       return true;
     } catch (err) {
       showError(err.message);
@@ -323,6 +384,7 @@ function setupWorkbench(root) {
     mutate('/messages', {
       text: message, conversation_id: selected || undefined, rounds: get('rounds').valueAsNumber,
       max_sources: get('max-sources').valueAsNumber, allow_tradeoffs: get('tradeoffs').checked,
+      online_requests: get('online-requests').valueAsNumber, online_seconds: get('online-seconds').valueAsNumber,
     }, () => { text.value = ''; });
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });

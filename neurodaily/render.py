@@ -6,11 +6,11 @@ import logging
 import os
 import re
 from datetime import datetime
-from urllib.parse import urlsplit
 
 from .config import Config, DEFAULT_CONFIG
 from .digest import DigestResult
 from .research_activity import report_activity
+from .security import external_url as _external_url
 from .ui_translations import localize_document
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
@@ -25,16 +25,6 @@ def _stdlib_loader():
 
 
 _LINK_RE = r"\[([^\]]+)\]\(([^)\s]+)\)"
-
-
-def _external_url(value: str | None) -> str:
-    if not isinstance(value, str):
-        return ""
-    try:
-        parts = urlsplit(value)
-    except ValueError:
-        return ""
-    return value if parts.scheme in {"http", "https"} and parts.netloc else ""
 
 
 def render_ai_inline(text: str, allowed_urls=None, refs=None) -> str:
@@ -91,9 +81,13 @@ def render_html(result: DigestResult, config: Config | None = None, *, locale: s
         return localize_document(_fallback_plain(result), language)
     try:
         from . import journal_metrics
+        from .report_feedback import item_key
+
         profile = getattr(_cfg, "profile", result.config_profile)
-        env.globals["jm"] = lambda name: journal_metrics.lookup(name, _cfg)
+        metrics = journal_metrics.load_snapshot()
+        env.globals["jm"] = lambda name: journal_metrics.lookup(name, _cfg, snapshot=metrics)
         env.globals["external_url"] = _external_url
+        env.globals["item_key"] = item_key
         search = getattr(_cfg, "search", None) or {}
         sort = search.get("sort") if isinstance(search, dict) else None
         template = env.get_template("report.html.j2")

@@ -160,6 +160,100 @@ class DeliveryReceiptTests(unittest.TestCase):
         receipt, = list_receipts(self.task_id)
         self.assertEqual((receipt["status"], receipt["attempts"]), ("accepted", 1))
 
+    def test_turning_off_email_pauses_an_existing_queue_entry(self):
+        address = "lab@example.test"
+        profile = self.result.config_profile
+        destination = _destination("email", address)
+        self.email.update(enabled=False, to=[address])
+        delivery_receipts.prepare(self.task_id, profile, [(destination, "email", "email 1")])
+        Path(self.report).write_text("<html>Queued report</html>", encoding="utf-8")
+        queue_file = Path(self.report).with_name("queue.json")
+        now = datetime.fromisoformat("2026-11-21T14:00:00")
+        with (patch("neurodaily.delivery._queue_path", return_value=queue_file),
+              patch("neurodaily.task_runs.load_result", return_value=self.result)):
+            delivery._queue_email(self.task_id, self.report, profile,
+                                  {"address": address}, "2026-11-21T13:00:00")
+            self.assertEqual(delivery.run_email_queue(now), {})
+            self.assertEqual(list_receipts(self.task_id)[0]["status"], "pending")
+            self.send_mail.assert_not_called()
+            self.email["enabled"] = True
+            self.assertEqual(delivery.run_email_queue(now), {address: "ok"})
+        self.send_mail.assert_called_once()
+
+    def test_turning_off_email_during_preparation_keeps_the_entry_pending(self):
+        address = "lab@example.test"
+        profile = self.result.config_profile
+        destination = _destination("email", address)
+        self.email.update(enabled=True, to=[address])
+        delivery_receipts.prepare(self.task_id, profile, [(destination, "email", "email 1")])
+        Path(self.report).write_text("<html>Queued report</html>", encoding="utf-8")
+        now = datetime.fromisoformat("2026-11-21T14:00:00")
+        increment = delivery._increment
+
+        def disable_during_preparation(*args):
+            self.email["enabled"] = False
+            return increment(*args)
+
+        with (patch("neurodaily.delivery.mailer.load_cfg", side_effect=lambda: dict(self.email)),
+              patch("neurodaily.task_runs.load_result", return_value=self.result),
+              patch("neurodaily.delivery._increment", side_effect=disable_during_preparation)):
+            delivery._queue_email(self.task_id, self.report, profile,
+                                  {"address": address}, "2026-11-21T13:00:00")
+            self.assertEqual(delivery.run_email_queue(now), {})
+        self.send_mail.assert_not_called()
+        receipt, = list_receipts(self.task_id)
+        self.assertEqual((receipt["status"], receipt["attempts"]), ("pending", 0))
+
+    def test_processing_a_due_email_does_not_overwrite_a_concurrent_enqueue(self):
+        profile = self.result.config_profile
+        first, second = "a@example.test", "b@example.test"
+        second_task = self.make_run()
+        self.email.update(enabled=True, to=[first, second])
+        for task, address in ((self.task_id, first), (second_task, second)):
+            delivery_receipts.prepare(task, profile, [(_destination("email", address), "email", "email 1")])
+        Path(self.report).write_text("<html>Queued report</html>", encoding="utf-8")
+        queue_file = Path(self.report).with_name("queue.json")
+        now = datetime.fromisoformat("2026-11-21T14:00:00")
+        entered, resume = Event(), Event()
+
+        def send(*_args, **_kwargs):
+            entered.set()
+            self.assertTrue(resume.wait(5))
+
+        self.send_mail.side_effect = send
+        with (patch("neurodaily.delivery._queue_path", return_value=queue_file),
+              patch("neurodaily.task_runs.load_result", return_value=self.result),
+              ThreadPoolExecutor(1) as executor):
+            delivery._queue_email(self.task_id, self.report, profile,
+                                  {"address": first}, "2026-11-21T13:00:00")
+            active = executor.submit(delivery.run_email_queue, now)
+            try:
+                self.assertTrue(entered.wait(5))
+                delivery._queue_email(second_task, self.report, profile,
+                                      {"address": second}, "2026-11-21T15:00:00")
+            finally:
+                resume.set()
+            self.assertEqual(active.result(timeout=5), {first: "ok"})
+            self.assertEqual([row["task_id"] for row in delivery._read_queue()], [second_task])
+
+    def test_legacy_queue_is_imported_once_and_kept_on_disk(self):
+        profile = self.result.config_profile
+        address = "lab@example.test"
+        self.email.update(enabled=True, to=[address])
+        delivery_receipts.prepare(self.task_id, profile, [(_destination("email", address), "email", "email 1")])
+        Path(self.report).write_text("<html>Queued report</html>", encoding="utf-8")
+        queue_file = Path(self.report).with_name("queue.json")
+        old_rows = [{"task_id": self.task_id, "report_path": self.report, "profile": profile,
+                     "address": address, "language": "zh", "due": "2026-11-21T13:00:00"}]
+        queue_file.write_text(json.dumps(old_rows), encoding="utf-8")
+        now = datetime.fromisoformat("2026-11-21T14:00:00")
+        with (patch("neurodaily.delivery._queue_path", return_value=queue_file),
+              patch("neurodaily.task_runs.load_result", return_value=self.result)):
+            self.assertEqual(delivery.run_email_queue(now), {address: "ok"})
+            self.assertEqual(delivery.run_email_queue(now), {})
+        self.send_mail.assert_called_once()
+        self.assertEqual(json.loads(queue_file.read_text(encoding="utf-8")), old_rows)
+
     def test_retry_with_stale_attempt_cannot_send_after_another_retry_failed(self):
         self.send_hook.return_value = {"wecom": "failed"}
         deliver_report(self.result, self.report, task_id=self.task_id)

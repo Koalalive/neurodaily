@@ -13,6 +13,8 @@ from contextvars import copy_context
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
+from ._discovery import fixed_bounds
+
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
 from ..models import Item
 
@@ -150,6 +152,9 @@ def fetch(config, logger=None) -> list[Item]:
         plan = compile_search(config.search, config.journals)
     advanced = bool(plan and plan.active)
     bounds = plan.date_range if advanced else None
+    window = fixed_bounds(opts) and fixed_bounds(opts, bounds)
+    if window and window[0] > window[1]:
+        return []
 
     feeds = [journal for journal in config.journals if journal.rss]
     if not feeds:
@@ -186,7 +191,10 @@ def fetch(config, logger=None) -> list[Item]:
         deduped.append(it)
     # Strict same-day filter: journal feeds return dozens of historical articles,
     # so keep only entries published today (lookback_days=1 == today).
-    if not bounds:  # Explicit bounds and incomplete dates are checked by the advanced matcher.
+    if window:
+        start, end = window
+        deduped = [it for it in deduped if not it.date or start <= it.date[:10] <= end]
+    elif not bounds:  # Explicit bounds and incomplete dates are checked by the advanced matcher.
         if lookback <= 1:
             today = datetime.now().strftime("%Y-%m-%d")
             deduped = [it for it in deduped if it.date.startswith(today)]

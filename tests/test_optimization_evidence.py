@@ -6,7 +6,7 @@ from neurodaily.config import Config, DEFAULT_CONFIG, OPTIONAL_SOURCES
 from neurodaily.optimization_evidence import capture_evidence, evaluate_candidate, public_evidence, verify_candidate
 from neurodaily.presets import research_presets
 from neurodaily.schema import validate
-from neurodaily.sources import BUILTIN, conferences, fda
+from neurodaily.sources import BUILTIN, arxiv, biorxiv, conferences, fda, gdelt, pubmed, trials
 
 
 def _one_source() -> Config:
@@ -57,7 +57,12 @@ class OptimizationEvidenceTests(TestCase):
         self.assertEqual(development["delta"]["recall"], 0.5)
         self.assertEqual(holdout["delta"]["recall"], 0.5)
         self.assertTrue(holdout["details"]["native_probes"])
-        self.assertEqual(mocked_fetch.call_count, 4)
+        comparison, = holdout["details"]["sources"]
+        self.assertEqual(comparison["source"], "pubmed")
+        self.assertEqual(comparison["baseline"]["matched"], 1)
+        self.assertEqual(comparison["candidate"]["matched"], 2)
+        self.assertEqual(comparison["candidate"]["request_count"], 1)
+        self.assertEqual(mocked_fetch.call_count, 6)
 
     @patch("neurodaily.optimization_evidence._fetch", side_effect=_fetch)
     def test_unjudged_changes_and_unapproved_urls_cannot_enter_review(self, mocked_fetch):
@@ -71,7 +76,7 @@ class OptimizationEvidenceTests(TestCase):
         self.assertFalse(result["eligible"])
         self.assertIn("source_endpoint_not_preapproved", result["reasons"])
         self.assertIn("no_positive_relevance_judgment_in_window", result["reasons"])
-        self.assertEqual(mocked_fetch.call_count, 2)
+        self.assertEqual(mocked_fetch.call_count, 4)
 
     @patch("neurodaily.optimization_evidence._fetch", side_effect=_fetch)
     def test_native_holdout_must_reproduce_candidate_gain(self, mocked_fetch):
@@ -83,8 +88,87 @@ class OptimizationEvidenceTests(TestCase):
         mocked_fetch.side_effect = lambda _config, name, start, end, broad=False: _fetch(
             baseline, name, start, end, broad=broad)
         result = verify_candidate(snapshot, baseline, candidate, labels=_LABELS)
-        self.assertFalse(result["eligible"])
-        self.assertIn("native_trial_did_not_reproduce_added_records", result["reasons"])
+        self.assertTrue(result["eligible"])
+        self.assertEqual(result["delta"]["recall"], 0)
+        self.assertEqual(result["added"], [])
+
+    def test_development_uses_native_source_quotas_with_same_frozen_baseline(self):
+        def fetch(config, name, start, end, *, broad=False):
+            rows = [row for row in _ROWS if start <= row["date"] <= end]
+            if not broad:
+                rows = rows[:config.source_opts(name)["max_results"]]
+            return rows, {"status": "ok", "coverage": "full", "captured": len(rows), "request_count": 1}
+
+        baseline, candidate = _one_source(), _one_source()
+        baseline.search = candidate.search = {"query": "TI=attention OR TI=memory"}
+        baseline.sources["pubmed"]["max_results"] = 1
+        candidate.sources["pubmed"]["max_results"] = 4
+        with patch("neurodaily.optimization_evidence._fetch", side_effect=fetch):
+            snapshot = capture_evidence(baseline, today=date(2026, 11, 24), max_sources=1)
+            development = evaluate_candidate(snapshot, baseline, candidate, labels=_LABELS)
+        self.assertTrue(development["eligible"])
+        self.assertEqual(development["delta"]["recall"], 0.5)
+        self.assertEqual([row["ids"] for row in development["added"]], [["pmid:2"]])
+
+    def test_capture_date_strata_preserve_older_records_when_newer_partition_is_full(self):
+        newer = [_paper("Attention", str(n), "2026-11-23") for n in range(5, 35)]
+
+        def fetch(config, name, start, end, *, broad=False):
+            rows = sorted([row for row in [*_ROWS, *newer] if start <= row["date"] <= end],
+                          key=lambda paper: paper["date"], reverse=True)[:24]
+            return rows, {"status": "ok", "coverage": "sampled", "captured": len(rows), "request_count": 1}
+
+        baseline = DEFAULT_CONFIG()
+        with patch("neurodaily.optimization_evidence._fetch", side_effect=fetch) as query:
+            snapshot = capture_evidence(baseline, today=date(2026, 11, 24), max_sources=1, extra_sources=["pubmed"])
+        self.assertEqual(snapshot["budget"]["planned_sources"], 1)
+        self.assertEqual({call.args[2:4] for call in query.call_args_list},
+                         {("2026-10-26", "2026-11-14"), ("2026-11-15", "2026-11-24")})
+        samples = {row["date"] for row in snapshot["sources"][0]["examples"]}
+        self.assertIn("2026-11-09", samples)
+        self.assertIn("2026-11-23", samples)
+
+    def test_holdout_retains_native_changes_even_when_missing_judgments_block_review(self):
+        baseline, candidate = _one_source(), _one_source()
+        candidate.search = {"query": "TI=attention OR TI=memory"}
+        with patch("neurodaily.optimization_evidence._fetch", side_effect=_fetch):
+            snapshot = capture_evidence(baseline, today=date(2026, 11, 24), max_sources=1)
+        new_paper = _paper("Memory bridge", "25", "2026-11-22")
+
+        def fresh(config, name, start, end, *, broad=False):
+            rows, diagnostic = _fetch(config, name, start, end, broad=broad)
+            return [*rows, new_paper], diagnostic
+
+        with patch("neurodaily.optimization_evidence._fetch", side_effect=fresh):
+            verification = verify_candidate(snapshot, baseline, candidate, labels=_LABELS)
+        self.assertFalse(verification["eligible"])
+        self.assertIn("native_trial_changes_need_relevance_judgments", verification["reasons"])
+        self.assertIn(["pmid:25"], [row["ids"] for row in verification["added"]])
+
+    def test_explicit_source_windows_apply_before_provider_limits(self):
+        config = _one_source()
+        for source in ("pubmed", "arxiv", "biorxiv", "trials", "fda_drugs", "gdelt"):
+            config.sources[source].update(evidence_date_range=("2026-11-01", "2026-11-14"), preview=True)
+        with patch.object(pubmed, "_esearch", return_value=[]) as query:
+            pubmed.fetch(config)
+        self.assertIn("2026/11/01[dp]:2026/11/14[dp]", query.call_args.args[0])
+        self.assertIn("2026/11/01[crdt]:2026/11/14[crdt]", query.call_args.args[0])
+        with patch.object(arxiv, "_page", return_value=([], 0)) as query:
+            arxiv.fetch(config)
+        self.assertIn("202611010000 TO 202611142359", query.call_args.args[0])
+        with patch.object(biorxiv, "get", return_value=None) as query:
+            biorxiv.fetch(config)
+        self.assertIn("/2026-11-01/2026-11-14/", query.call_args.args[0])
+        with patch.object(trials, "get", return_value=None) as query:
+            trials.fetch(config)
+        self.assertIn("[2026-11-01,2026-11-14]", query.call_args.kwargs["params"]["filter.advanced"])
+        with patch.object(fda, "_fetch_rows", return_value=[]) as query:
+            fda.fetch_drugs(config)
+        self.assertIn("[20261101 TO 20261114]", query.call_args.args[1])
+        with patch.object(gdelt, "get", return_value=None) as query:
+            gdelt.fetch(config)
+        self.assertEqual(query.call_args.kwargs["params"]["startdatetime"], "20261101000000")
+        self.assertEqual(query.call_args.kwargs["params"]["enddatetime"], "20261114235959")
 
     def test_presets_validate_and_use_distinct_conference_profiles(self):
         expected = {"neuro": "SfN Neuroscience 2027", "oncology": "AACR Annual Meeting 2027",

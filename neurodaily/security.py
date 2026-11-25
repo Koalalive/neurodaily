@@ -11,6 +11,25 @@ from urllib.parse import urlsplit
 LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+def external_url(value: str | None) -> str:
+    """Return a browser-safe HTTP(S) link without embedded credentials."""
+    if not isinstance(value, str):
+        return ""
+    url = value.strip()
+    if not url or any(char.isspace() or ord(char) < 32 or ord(char) == 127 or char == "\\"
+                      for char in url):
+        return ""
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return ""
+    if (parts.scheme not in {"http", "https"} or not parts.hostname
+            or parts.username is not None or parts.password is not None or port == 0):
+        return ""
+    return url
+
+
 def allow_private_sources() -> bool:
     """Local feeds/tests can opt in; production should keep this off."""
     return os.environ.get("NEURODAILY_ALLOW_PRIVATE_SOURCES") == "1"

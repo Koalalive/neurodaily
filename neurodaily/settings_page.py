@@ -127,6 +127,17 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     </div>
     <p class="desc">应用设置只包含输出、计划、邮件、Webhook、AI 连接和界面语言；不包含检索 profile。密钥默认不导出。</p>
     <p id="app_settings_status" role="status" aria-live="polite"></p>
+    <details id="profile_revisions" style="margin-top:10px">
+      <summary>Profile revision history</summary>
+      <p class="hint">Restoring creates a new research revision and preserves app settings.</p>
+      <div class="inline">
+        <select id="profile_revision_select" aria-label="Profile revision history"></select>
+        <button id="profile_revision_more" type="button" hidden>Load older revisions</button>
+        <button id="profile_revision_restore" type="button" disabled>Restore research revision</button>
+      </div>
+      <p id="profile_revision_status" class="hint" role="status"></p>
+      <pre id="profile_revision_diff" hidden style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+    </details>
   </section>
   <section>
     <h2>Research presets</h2>
@@ -230,9 +241,14 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
         <p class="hint" id="search_journals_help">Separate journals with commas. Put names containing commas in double quotes.</p>
       </div>
       <div class="inline">
+        <button type="button" id="search_lint_button">Check draft locally</button>
         <button type="button" id="search_preview_button" disabled>Preview search</button>
         <span id="search_preview_status" role="status"></span>
       </div>
+      <details id="search_lint_results" hidden>
+        <summary>Local search check</summary>
+        <div id="search_lint_details" role="status"></div>
+      </details>
       <div class="search-preview" id="search_preview_results" aria-label="Search preview by source"></div>
     </div>
     <!-- OPTIMIZATION_WORKBENCH -->
@@ -346,8 +362,18 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
       <span id="push_test_status" role="status"></span>
     </div>
     <div class="grid2" style="margin-top:8px">
-      <div><label>Feishu webhook</label><input id="push_feishu"></div>
-      <div><label>WeCom webhook</label><input id="push_wecom"></div>
+      <div>
+        <label for="push_feishu">飞书 Webhook</label>
+        <input type="password" id="push_feishu" autocomplete="new-password" placeholder="留空保留已有地址">
+        <span class="mini" id="push_feishu_state"></span>
+        <label><input type="checkbox" id="push_feishu_remove" disabled> 移除已保存地址</label>
+      </div>
+      <div>
+        <label for="push_wecom">企业微信 Webhook</label>
+        <input type="password" id="push_wecom" autocomplete="new-password" placeholder="留空保留已有地址">
+        <span class="mini" id="push_wecom_state"></span>
+        <label><input type="checkbox" id="push_wecom_remove" disabled> 移除已保存地址</label>
+      </div>
     </div>
   </section>
 
@@ -385,9 +411,9 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 </footer>
 <script>
 var BASE=null;
-var savedResearchFingerprint=null;
+var savedConfigFingerprint=null;
+var savedConfigVersion=null;
 var displayedSearchProfile=null;
-var RESEARCH_SETTINGS_FIELDS=['profile','disciplines','global_keywords','journals','sources','policy_feeds','search'];
 var PUSH_BASELINE=null;
 var AI_BASELINE=null;
 var SEARCH_PREVIEW=null;
@@ -872,10 +898,10 @@ async function load(){
   el('saveRun').disabled=true;
   el('search_preview_button').disabled=true;
   try{
-    var r=await fetch('/api/config');
+    var r=await fetch('/api/config',{cache:'no-store'});
     if(!r.ok) throw new Error(t('Could not load settings'));
     BASE=await r.json(); render();
-    rememberSavedResearch(collect());
+    rememberSavedConfig(collect(),r.headers.get('ETag'));
     el('cfgpath').textContent=t('Config: {path}',{path:'~/neurodaily/config/config.json'});
     el('msg').textContent=''; el('msg').className='';
     loadPresets();
@@ -894,13 +920,137 @@ async function load(){
 var importedProfile = null;
 var profilePreviewSequence = 0;
 
-async function sendProfileFile(text, apply){
+var profileRevisionRows=[];
+var reviewedRevision=null;
+var revisionOrigins={existing:'Observed configuration',save:'Saved configuration',settings:'Settings saved',
+  'import':'Imported configuration',cli_patch:'CLI patch',restore:'Restored revision',reset:'Reset defaults',
+  optimization:'Applied optimization',optimization_rollback:'Reverted optimization'};
+
+async function loadProfileRevisions(older){
+  var select=el('profile_revision_select'), status=el('profile_revision_status'), more=el('profile_revision_more');
+  var before=older&&profileRevisionRows.length?'?before='+profileRevisionRows.at(-1).id:'';
+  try{
+    var response=await fetch('/api/config/revisions'+before,{cache:'no-store'});
+    if(!response.ok) throw new Error();
+    var result=await response.json(), selected=select.value;
+    profileRevisionRows=(older?profileRevisionRows:[]).concat(result.revisions);
+    select.replaceChildren(...profileRevisionRows.map(function(row){
+      var label=new Date(row.created_at).toLocaleString(document.documentElement.lang)+' · '+row.profile+' · '+row.revision.slice(0,12);
+      return new Option(label,row.id);
+    }));
+    if(older&&selected) select.value=selected;
+    more.hidden=result.revisions.length<50;
+    await loadProfileRevisionDiff();
+  }catch(_){status.textContent=t('Could not load profile revisions.');}
+}
+
+async function loadProfileRevisionDiff(){
+  var id=el('profile_revision_select').value, diff=el('profile_revision_diff'), status=el('profile_revision_status');
+  var restore=el('profile_revision_restore');
+  reviewedRevision=null;
+  restore.disabled=true;
+  diff.hidden=true;
+  if(!id) return;
+  try{
+    var response=await fetch('/api/config/revisions/'+id,{cache:'no-store'});
+    if(!response.ok) throw new Error();
+    var result=await response.json();
+    if(el('profile_revision_select').value!==id) return;
+    reviewedRevision={id:id,version:response.headers.get('ETag')};
+    diff.textContent=result.diff||t('No portable fields differ.');
+    diff.hidden=false;
+    var details=[result.revision, t(revisionOrigins[result.origin]||result.origin)];
+    if(result.provenance?.optimization_run_id) details.push(t('Optimization run')+' '+result.provenance.optimization_run_id);
+    if(result.provenance?.snapshot_id) details.push(t('Evidence snapshot')+' '+result.provenance.snapshot_id);
+    if(result.provenance?.restored_revision) details.push(t('Restored revision {number}',{number:result.provenance.restored_revision}));
+    status.textContent=details.join(' · ');
+    restore.disabled=!reviewedRevision.version||result.revision===result.current_revision;
+  }catch(_){status.textContent=t('Could not load profile revisions.');}
+}
+
+async function restoreProfileRevision(){
+  var selected=reviewedRevision, status=el('profile_revision_status'), button=el('profile_revision_restore');
+  if(!selected) return;
+  if(!window.ndCanUpdateSearch()){
+    status.textContent=t('Save or discard your settings form edits before restoring a revision.');
+    return;
+  }
+  button.disabled=true;
+  try{
+    var response=await fetch('/api/config/revisions/'+selected.id+'/restore',{method:'POST',headers:configHeaders(selected.version)});
+    if(!response.ok){
+      var result=await response.json();
+      status.textContent=t(result.error||'Could not restore the profile revision.');
+      return;
+    }
+    await load();
+    await loadProfileRevisions();
+    status.textContent=t('Research revision restored.');
+  }catch(_){status.textContent=t('Could not restore the profile revision.');}
+}
+
+el('profile_revisions').addEventListener('toggle',function(){if(this.open) loadProfileRevisions();});
+el('profile_revision_select').addEventListener('change',loadProfileRevisionDiff);
+el('profile_revision_more').addEventListener('click',function(){loadProfileRevisions(true);});
+el('profile_revision_restore').addEventListener('click',restoreProfileRevision);
+
+async function checkSearchDraft(data, show){
+  var details=el('search_lint_details'), box=el('search_lint_results');
+  try{
+    var response=await fetch('/api/config/lint',{method:'POST',headers:configHeaders(),body:JSON.stringify(data)});
+    var result=await response.json();
+    var nodes=[];
+    var add=function(text){var line=document.createElement('p');line.textContent=text;nodes.push(line);};
+    (result.errors||[]).forEach(add);
+    (result.sources||[]).forEach(function(row){
+      if(row.metadata_gaps.length) add(t('{source} may lack metadata for {fields}.',{source:row.source,fields:row.metadata_gaps.join(', ')}));
+      if(!row.remote_filter&&row.fields.length) add(t('{source} applies this rule locally.',{source:row.source}));
+      if(show&&row.query_preview) add(t('{source} candidate hint · {query}',{source:row.source,query:row.query_preview}));
+    });
+    if(result.known_records){
+      var records=result.known_records;
+      if(records.matched||records.missed||records.unknown){
+        add(t('Historical sample includes {matched} matches, {missed} exclusions and {unknown} with missing metadata.',records));
+        records.examples.forEach(function(row){
+          add(row.title+' · '+(row.missing_fields.length?row.missing_fields.join(', '):t('Excluded by the draft')));
+        });
+      }
+    }
+    var warnings=nodes.length>0;
+    if(!warnings) add(t('No issues found in the local check.'));
+    details.replaceChildren(...nodes);
+    box.hidden=false;
+    box.open=Boolean(show||warnings);
+    return response.ok;
+  }catch(_){
+    details.textContent=t('The local search check is unavailable.');
+    box.hidden=false;
+    box.open=true;
+    return true;
+  }
+}
+
+el('search_lint_button').addEventListener('click',function(){if(BASE) checkSearchDraft(collect(),true);});
+
+function configHeaders(version){
+  var headers={'Content-Type':'application/json'};
+  if(version) headers['If-Match']=version;
+  return headers;
+}
+
+async function sendProfileFile(text, apply, version){
   var response = await fetch('/api/config/import' + (apply ? '?apply=true' : ''), {
-    method: 'POST', headers: {'Content-Type': 'application/json'}, body: text
+    method: 'POST', headers: configHeaders(version), body: text
   });
   var result = await response.json();
-  if (!response.ok) throw new Error(t(result.error || '无法读取配置文件'));
-  return result.summary;
+  if (!response.ok) {
+    var stale=result.code==='configuration_changed';
+    var error=new Error(t(stale?'Configuration changed since the preview. Select the file to preview it again.':
+      (result.error||'无法读取配置文件')));
+    error.stale=stale;
+    throw error;
+  }
+  return {summary:result.summary,version:response.headers.get('ETag')};
 }
 
 async function importAppSettings(input){
@@ -910,9 +1060,9 @@ async function importAppSettings(input){
   status.textContent='正在导入…';
   try{
     var text=await file.text();
-    var response=await fetch('/api/app-settings/import',{method:'POST',headers:{'Content-Type':'application/json'},body:text});
+    var response=await fetch('/api/app-settings/import',{method:'POST',headers:configHeaders(savedConfigVersion),body:text});
     var result=await response.json();
-    if(!response.ok||!result.ok) throw new Error(result.error||'导入失败');
+    if(!response.ok||!result.ok) throw new Error(t(result.error||'导入失败'));
     status.textContent='✅ 已导入应用设置';
     await load();
   }catch(e){status.textContent='❌ '+e.message;}
@@ -930,11 +1080,12 @@ async function previewProfileFile(input){
   try {
     if (file.size > 256 * 1024) throw new Error(t('配置文件不能超过 256 KB'));
     var text = await file.text();
-    var summary = await sendProfileFile(text, false);
+    var preview = await sendProfileFile(text, false);
     if (sequence !== profilePreviewSequence) return;
+    var summary = preview.summary;
     status.textContent = [file.name,summary.profile,t('{disciplines} 个学科 · {sources} 个数据源 · {journals} 本期刊',summary),
       summary.has_query?t('含高级检索规则'):'',summary.removed_private_fields?t('本机专用字段将跳过'):''].filter(Boolean).join(' · ');
-    importedProfile = text;
+    importedProfile = {text:text,version:preview.version};
     apply.hidden = false;
   } catch (error) {
     if (sequence === profilePreviewSequence) status.textContent = t('校验失败 · {error}',{error:error.message});
@@ -946,12 +1097,13 @@ async function applyProfileFile(){
   var status = el('profile_import_status'), apply = el('apply_profile');
   apply.disabled = true;
   try {
-    var summary = await sendProfileFile(importedProfile, true);
+    var applied = await sendProfileFile(importedProfile.text, true, importedProfile.version);
     importedProfile = null;
     apply.hidden = true;
     await load();
-    status.textContent = t('已导入 {profile}',{profile:summary.profile});
+    status.textContent = t('已导入 {profile}',{profile:applied.summary.profile});
   } catch (error) {
+    if(error.stale){importedProfile=null;apply.hidden=true;}
     status.textContent = t('导入失败 · {error}',{error:error.message});
   } finally {
     apply.disabled = false;
@@ -1042,12 +1194,9 @@ function collect(){
   return data;
 }
 
-function researchFingerprint(data){
-  return JSON.stringify(RESEARCH_SETTINGS_FIELDS.map(function(key){return data[key];}));
-}
-
-function rememberSavedResearch(data){
-  savedResearchFingerprint=researchFingerprint(data);
+function rememberSavedConfig(data, version){
+  savedConfigFingerprint=JSON.stringify(data);
+  savedConfigVersion=version;
   if(displayedSearchProfile!==null&&displayedSearchProfile!==data.profile){
     document.dispatchEvent(new Event('nd:search-profile-changed'));
   }
@@ -1055,7 +1204,7 @@ function rememberSavedResearch(data){
 }
 
 window.ndCanUpdateSearch=function(){
-  return BASE!==null&&savedResearchFingerprint===researchFingerprint(collect());
+  return BASE!==null&&savedConfigFingerprint===JSON.stringify(collect());
 };
 
 window.ndRefreshSearchSettings=async function(){
@@ -1063,10 +1212,9 @@ window.ndRefreshSearchSettings=async function(){
   if(!response.ok) return false;
   var updated=await response.json();
   if(!window.ndCanUpdateSearch()) return false;
-  BASE=collect();
-  for(var key of RESEARCH_SETTINGS_FIELDS) BASE[key]=updated[key];
+  BASE=updated;
   render();
-  rememberSavedResearch(collect());
+  rememberSavedConfig(collect(),response.headers.get('ETag'));
   return true;
 };
 
@@ -1074,24 +1222,30 @@ async function save(){
   var data=collect();
   el('msg').textContent='Saving…'; el('msg').className='';
   try{
-    var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(!await checkSearchDraft(data,false)){
+      el('msg').textContent=t('Review the local search check before saving.');
+      el('msg').className='bad';
+      return false;
+    }
+    var r=await fetch('/api/config',{method:'POST',headers:configHeaders(savedConfigVersion),body:JSON.stringify(data)});
     var out=await r.json();
     if(out.ok){
-      rememberSavedResearch(data);
+      BASE=data;
+      rememberSavedConfig(data,r.headers.get('ETag'));
       el('msg').textContent=t('✅ Saved → {path}',{path:out.path}); el('msg').className='ok';
       loadLaunchdStatus();
       return true;
     }
-    el('msg').textContent=t('Save failed. {error}',{error:searchError(out)}); el('msg').className='bad'; return false;
+    el('msg').textContent=t('Save failed. {error}',{error:t(searchError(out))}); el('msg').className='bad'; return false;
   }catch(e){el('msg').textContent='❌ '+e; el('msg').className='bad'; return false;}
 }
 
 async function resetDefaults(){
   if(!confirm(t('Reset to defaults? This overwrites current settings.'))) return;
-  var r=await fetch('/api/config/reset',{method:'POST'});
+  var r=await fetch('/api/config/reset',{method:'POST',headers:configHeaders(savedConfigVersion)});
   var out=await r.json();
   if(out.ok){await load(); el('msg').textContent='✅ Reset to defaults'; el('msg').className='ok';}
-  else{el('msg').textContent='❌ Reset failed'; el('msg').className='bad';}
+  else{el('msg').textContent='❌ '+t(out.error||'Reset failed'); el('msg').className='bad';}
 }
 
 var desktopScheduler=false;
@@ -1154,12 +1308,33 @@ function recipientRow(x){
 }
 function addRecipient(){el('push_recipients').appendChild(recipientRow({language:'zh'}));}
 
+var webhookProviders=['feishu','wecom'];
+function showWebhookSettings(settings){
+  webhookProviders.forEach(function(provider){
+    var id='push_'+provider, configured=Boolean(settings[provider+'_configured']);
+    el(id).value='';
+    el(id).disabled=false;
+    el(id+'_state').textContent=t(configured?'已保存地址':'尚未保存地址');
+    el(id+'_remove').checked=false;
+    el(id+'_remove').disabled=!configured;
+  });
+}
+webhookProviders.forEach(function(provider){
+  var id='push_'+provider;
+  el(id+'_remove').addEventListener('change',function(){el(id).disabled=this.checked;});
+});
 function pushPayload(){
   var recipients=Array.from(el('push_recipients').querySelectorAll('.row.recipient')).map(function(row){
     return {address:row.querySelector('.r-address').value.trim(),
             time:row.querySelector('.r-time').value,
             language:row.querySelector('.r-lang').value};
   }).filter(function(x){return x.address;});
+  var webhooks={};
+  webhookProviders.forEach(function(provider){
+    var id='push_'+provider, value=el(id).value.trim();
+    if(el(id+'_remove').checked) webhooks[provider]='';
+    else if(value) webhooks[provider]=value;
+  });
   return {email:{enabled:el('push_email_enabled').checked,
       recipients:recipients,
       to:recipients.map(function(x){return x.address;}),
@@ -1171,8 +1346,7 @@ function pushPayload(){
       subject_template:el('push_subject').value.trim(),
       public_url:el('push_public_url').value.trim(),
       attach_report:el('push_attach').checked},
-    webhooks:{feishu:el('push_feishu').value.trim(),
-      wecom:el('push_wecom').value.trim()}};
+    webhooks:webhooks};
 }
 async function loadPush(){
   PUSH_BASELINE=null;
@@ -1195,9 +1369,7 @@ async function loadPush(){
     el('push_public_url').value=e.public_url||'';
     el('push_attach').checked=e.attach_report!==false;
     el('push_pw_state').textContent=d.password_set?'(set)':'(not set)';
-    var w=d.webhooks||{};
-    el('push_feishu').value=w.feishu||'';
-    el('push_wecom').value=w.wecom||'';
+    showWebhookSettings(d.webhooks||{});
     PUSH_BASELINE=pushPayload();
   }catch(e){}
 }
@@ -1212,7 +1384,8 @@ async function savePush(){
     var r=await fetch('/api/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(changes)});
     var out=await r.json();
     if(!out.ok) throw new Error(t(out.error||'Failed to save push settings'));
-    PUSH_BASELINE=current;
+    showWebhookSettings(out.webhooks||{});
+    PUSH_BASELINE=pushPayload();
   }
   if(pw){
     el('push_password').value=''; el('push_pw_state').textContent='(set)';

@@ -5,9 +5,14 @@ import re
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 from .models import Item
+from .search import _as_values, _issn_key, _journal_key
 
 _DOI = re.compile(r"10\.\d{4,9}/\S+", re.I)
 _PREPRINTS = {"arxiv", "biorxiv", "medrxiv"}
+_VENUE_NAMES = ("journal", "container", "venue")
+_VENUE_ALIASES = ("journal_abbrev", "journal_abbreviation", "journal_aliases")
+_VENUE_IDENTIFIERS = ("issn", "issns", "issn_l", "issn_linking")
+_VENUE_FIELDS = _VENUE_NAMES + _VENUE_ALIASES + _VENUE_IDENTIFIERS
 
 
 def normalize_doi(value: str) -> str:
@@ -83,6 +88,30 @@ def _priority(item: Item) -> tuple[bool, bool, int, int, str]:
             len(item.summary) + len(item.authors), item.source)
 
 
+def _venue_identity(extra: dict) -> tuple[str, dict]:
+    names = next((values for key in _VENUE_NAMES if (values := _as_values(extra.get(key)))), [])
+    identifiers = {_issn_key(value.strip()): value for key in _VENUE_IDENTIFIERS
+                   for value in _as_values(extra.get(key))}
+    return _journal_key(names[0]) if names else "", identifiers
+
+
+def _merge_paper_venue(preferred: Item, member: Item) -> None:
+    if member.source in _PREPRINTS and preferred.source not in _PREPRINTS:
+        return
+    extra, incoming = preferred.extra, member.extra
+    current_name, current_ids = _venue_identity(extra)
+    incoming_name, incoming_ids = _venue_identity(incoming)
+    same_name = current_name and current_name == incoming_name
+    same_identifier = current_ids.keys() & incoming_ids.keys()
+    if not (same_name or same_identifier) and ((current_name and incoming_name) or (current_ids and incoming_ids)):
+        return
+    for key in _VENUE_FIELDS:
+        if not _as_values(extra.get(key)) and _as_values(incoming.get(key)):
+            extra[key] = incoming[key]
+    if incoming_ids.keys() - current_ids.keys():
+        extra["issns"] = list({**incoming_ids, **current_ids}.values())
+
+
 def merge_records(items: list[Item]) -> list[Item]:
     """Merge records sharing an identifier, deterministically retaining the richer record."""
     groups: dict[int, list[Item]] = {}
@@ -122,7 +151,11 @@ def merge_records(items: list[Item]) -> list[Item]:
             if values and (key != "missing_fields" or preferred.extra.get("search_match") != "match"):
                 preferred.extra[key] = values
         for item in members:
+            if item is not preferred and preferred.kind == "paper":
+                _merge_paper_venue(preferred, item)
             for key, value in item.extra.items():
+                if preferred.kind == "paper" and key in _VENUE_FIELDS:
+                    continue
                 if key not in preferred.extra and value:
                     preferred.extra[key] = value
         merged.append(preferred)

@@ -7,6 +7,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 
+from ._discovery import fixed_bounds
 from .generic import entry_references
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
 from .journalpapers import _doi
@@ -152,7 +153,11 @@ def fetch(config, logger=None) -> list[Item]:
     # Same-day filter: RSS feeds carry many historical items (weeks old), so
     # keep only entries published today when lookback_days=1.
     from datetime import datetime, timedelta
-    if lookback <= 1:
+    window = fixed_bounds(opts)
+    if window:
+        start, end = window
+        deduped = [it for it in deduped if not it.date or start <= it.date[:10] <= end]
+    elif lookback <= 1:
         today = datetime.now().strftime("%Y-%m-%d")
         deduped = [it for it in deduped if it.date.startswith(today)]
     else:

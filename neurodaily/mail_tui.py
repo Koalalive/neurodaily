@@ -15,8 +15,7 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CFG_PATH = os.path.join(ROOT, "config", "email.json")
+from .mailer import CFG_PATH
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 

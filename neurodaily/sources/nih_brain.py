@@ -6,7 +6,7 @@ from urllib.parse import urljoin, urlsplit
 
 import feedparser
 
-from ._discovery import date_value, http_url, int_option, text
+from ._discovery import date_value, fixed_bounds, http_url, int_option, text
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
 from ..models import Item
 
@@ -31,6 +31,7 @@ def fetch(config, logger=None) -> list[Item]:
     requested = int_option(opts.get("max_results"), 40)
     limit = min(requested, _MAX_RESULTS)
     cutoff = (date.today() - timedelta(days=min(int_option(opts.get("lookback_days"), 14), 365))).isoformat()
+    start, end = fixed_bounds(opts) or (cutoff, "9999-12-31")
     query = text(opts.get("query")).casefold()
     record_query("NIH News Releases · BRAIN Initiative" + (f" · {query}" if query else ""))
     mark_sampled(truncated=requested > limit)
@@ -57,7 +58,7 @@ def fetch(config, logger=None) -> list[Item]:
         if not (domain == "nih.gov" or domain.endswith(".nih.gov")) or url in seen:
             continue
         published = _published(entry)
-        if published and published < cutoff:
+        if published and not start <= published <= end:
             continue
         if len(items) >= limit:
             mark_sampled(truncated=True)

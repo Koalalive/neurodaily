@@ -23,6 +23,7 @@ class AppSettingsTests(unittest.TestCase):
         for settings, message in (
             ({"ai": {"base_url": "https://other.example.test/v1"}}, "API"),
             ({"email": {"smtp_host": "smtp.other.example.test"}}, "SMTP"),
+            ({"webhooks": {"feishu": "https://127.0.0.1/value"}}, "Webhook"),
         ):
             with self.subTest(settings=settings), \
                  patch.object(ai_summary, "load_cfg", return_value={**ai_summary.DEFAULT_CFG,

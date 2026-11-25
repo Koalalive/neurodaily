@@ -12,10 +12,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from html.parser import HTMLParser
-from urllib.parse import urlsplit
 
+from ._discovery import fixed_bounds
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
 from ..models import Item
+from ..security import external_url
 
 
 class _References(HTMLParser):
@@ -33,15 +34,7 @@ def entry_references(entry) -> list[str]:
     parser.feed(str(entry.get("summary") or entry.get("description") or "")[:12_000])
     urls = parser.urls + [link["href"] for link in entry.get("links", [])
                          if isinstance(link, dict) and isinstance(link.get("href"), str)]
-    usable = []
-    for url in dict.fromkeys(urls):
-        try:
-            parts = urlsplit(url)
-            if parts.scheme in ("http", "https") and parts.hostname:
-                usable.append(url)
-        except ValueError:
-            continue
-    return usable[:24]
+    return list(dict.fromkeys(url for value in urls if (url := external_url(value))))[:24]
 
 
 def _limit(opts: dict) -> int:
@@ -122,6 +115,7 @@ def fetch_rss(name: str, config, logger=None) -> list[Item]:
     record_candidates(len(parsed.entries))
 
     lookback = int(opts.get("lookback_days", 7) or 7)
+    bounds = fixed_bounds(opts, opts.get("paper_date_range"))
     kind = _kind(opts)
     out: list[Item] = []
     seen: set[str] = set()
@@ -135,7 +129,7 @@ def fetch_rss(name: str, config, logger=None) -> list[Item]:
         raw = e.get("summary") or e.get("description") or ""
         summary = strip_html(raw)
         date = _entry_date(e)
-        if _excluded_date(date, lookback, opts.get("paper_date_range")):
+        if _excluded_date(date, lookback, bounds):
             continue
         if not _matches(f"{title} {summary}", opts.get("filter_keywords")):
             continue
@@ -200,6 +194,7 @@ def fetch_json(name: str, config, logger=None) -> list[Item]:
 
     mapping = opts.get("map") or {}
     lookback = int(opts.get("lookback_days", 7) or 7)
+    bounds = fixed_bounds(opts, opts.get("paper_date_range"))
     kind = _kind(opts)
     out: list[Item] = []
     limit = _limit(opts)
@@ -212,7 +207,7 @@ def fetch_json(name: str, config, logger=None) -> list[Item]:
             continue
         summary = strip_html(str(row.get(mapping.get("summary", "summary"), "") or ""))
         date = parse_date_any(str(row.get(mapping.get("date", "date"), "") or ""))
-        if _excluded_date(date, lookback, opts.get("paper_date_range")):
+        if _excluded_date(date, lookback, bounds):
             continue
         if not _matches(f"{title} {summary}", opts.get("filter_keywords")):
             continue

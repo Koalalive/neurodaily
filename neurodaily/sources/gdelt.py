@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from ._discovery import date_value, http_url, int_option, records, request_scope, text
+from ._discovery import date_value, fixed_bounds, http_url, int_option, records, request_scope, text
 from .http import get, mark_sampled, record_candidates, record_failure, record_query, strip_html
 from ..models import Item
 
@@ -26,10 +26,19 @@ def fetch(config, logger=None) -> list[Item]:
     if not text(opts.get("query")) and " OR " in query:
         query = f"({query})"
     days = min(int_option(opts.get("lookback_days"), 3), 365)
-    record_query(f"{query} · last {days} day(s)")
+    window = fixed_bounds(opts)
+    if window:
+        start, end = window
+        if start > end:
+            return []
+        bounds = {"startdatetime": start.replace("-", "") + "000000",
+                  "enddatetime": end.replace("-", "") + "235959"}
+        record_query(f"{query} · {start} to {end}")
+    else:
+        bounds = {"timespan": f"{days}d"}
+        record_query(f"{query} · last {days} day(s)")
     response = get(BASE, params={"query": query, "mode": "artlist", "format": "json",
-                                 "sort": "datedesc", "timespan": f"{days}d", "maxrecords": limit},
-                   timeout=18, retries=0)
+                                 "sort": "datedesc", "maxrecords": limit, **bounds}, timeout=18, retries=0)
     if response is None:
         return []
     try:

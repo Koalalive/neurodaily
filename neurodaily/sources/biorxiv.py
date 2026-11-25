@@ -10,6 +10,7 @@ import re
 import unicodedata
 
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
+from ._discovery import fixed_bounds
 from ..models import Item
 
 
@@ -47,8 +48,10 @@ def fetch(config, logger=None) -> list[Item]:
 
     end = datetime.now()
     start = end - timedelta(days=lookback)
-    bounds = plan.date_range if advanced else None
+    bounds = fixed_bounds(opts, plan.date_range if advanced else None)
     start_s, end_s = bounds or (start.date().isoformat(), end.date().isoformat())
+    if start_s > end_s:
+        return []
 
     bio_cats = {cat.casefold() for d in config.active_disciplines() for cat in d.bio_cats}
     keywords = [] if advanced else [k.casefold() for k in config.all_keywords()]

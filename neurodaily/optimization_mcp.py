@@ -41,6 +41,6 @@ def make_server(config_path=None, *, store=None):
             run = optimizer.store.get(scope, run_id)
         except LookupError as exc:
             raise ValueError("Optimisation run not found in this profile") from exc
-        return optimizer.public_run(run) or {}
+        return optimizer.public_review(scope, run) or {}
 
     return server

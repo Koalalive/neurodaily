@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
+from ._discovery import fixed_bounds
 from ..models import Item
 
 NS = {
@@ -124,15 +125,21 @@ def fetch(config, logger=None) -> list[Item]:
         from ..search import compile_search
         plan = compile_search(config.search)
     advanced = bool(plan and plan.active)
+    window = fixed_bounds(opts, plan.date_range if advanced else None)
+    if window and window[0] > window[1]:
+        return []
+    start, end = window or (cutoff.date().isoformat(), now.date().isoformat())
+    date_term = f"submittedDate:[{start.replace('-', '')}0000 TO {end.replace('-', '')}2359]"
     if advanced:
         native = plan.remote_query("arxiv") or build_search_query(cats, [])
-        start, end = plan.date_range or (cutoff.date().isoformat(), now.date().isoformat())
-        date_term = f"submittedDate:[{start.replace('-', '')}0000 TO {end.replace('-', '')}2359]"
         queries = [f"({native}) AND {date_term}" if native else date_term]
         limit = min(max_results, 30 if preview else 240)
         keywords = []
     else:
         queries = [f"cat:{_escape_query(cat)}" for cat in cats]
+        if window:
+            queries = [f"{query} AND {date_term}" for query in queries]
+            cutoff = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
         if preview and len(queries) > 4:
             queries = queries[:4]
             mark_sampled(truncated=True)

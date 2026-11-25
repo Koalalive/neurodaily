@@ -6,9 +6,10 @@ config files keep working.
 """
 from __future__ import annotations
 
+import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 KNOWN_KINDS = {"paper", "drug", "device", "trial", "news", "policy", "conference", "funding"}
 GENERIC_TYPES = {"rss", "json_api", "json"}
@@ -38,7 +39,9 @@ class JournalModel(BaseModel):
     url: str = ""
     rss: str = ""
     category: str = "neuroscience"
-    impact_factor: float | None = None
+    impact_factor: float | None = Field(
+        default=None, ge=0, allow_inf_nan=False, validation_alias=AliasChoices("impact_factor", "if"),
+    )
     jcr: str = ""
     cas: str = ""
     metric_year: int | None = None
@@ -52,6 +55,13 @@ class JournalModel(BaseModel):
     year: int | None = None
     aliases: list[str] = Field(default_factory=list)
     issns: list[str] = Field(default_factory=list)
+
+    @field_validator("impact_factor", mode="before")
+    @classmethod
+    def _optional_number(cls, value):
+        if isinstance(value, bool):
+            raise ValueError("impact factor must be a number")
+        return None if value == "" else value
 
 
 class SourceModel(BaseModel):
@@ -128,17 +138,20 @@ def validate(data: dict) -> list[str]:
         return ["config must be a JSON object"]
     try:
         ConfigModel.model_validate(data)
-        return []
     except ValidationError as exc:
         out = []
         for err in exc.errors():
             loc = ".".join(str(x) for x in err.get("loc", [])) or "<root>"
             out.append(f"{loc}: {err.get('msg', 'invalid')}")
         return out
+    try:
+        json.dumps(data, allow_nan=False)
+    except (TypeError, ValueError):
+        return ["configuration must contain only finite JSON values"]
+    return []
 
 
 def validate_file(path: str) -> list[str]:
-    import json
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)

@@ -5,14 +5,13 @@ import re
 from copy import deepcopy
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from .config import Config, DEFAULT_CONFIG
+from .config import Config, DEFAULT_CONFIG, RESEARCH_FIELDS
 from .schema import validate
 
 FORMAT = "neurodaily.profile"
 VERSION = 1
 MAX_BYTES = 256 * 1024
-_FIELDS = ("profile", "disciplines", "global_keywords", "search", "sources",
-           "windows", "policy_feeds", "journals")
+_FIELDS = RESEARCH_FIELDS
 _SOURCE_FIELDS = {"enabled", "max_results", "lookback_days", "type", "url", "kind",
                   "items_path", "map", "filter_keywords", "query", "feed_kinds"}
 _SECRET_QUERY_NAMES = {"key", "apikey", "accesstoken", "authtoken", "token", "auth",
@@ -78,6 +77,30 @@ def _portable(data: dict) -> dict:
 
 def export_profile(config: Config) -> dict:
     return {"format": FORMAT, "version": VERSION, "config": _portable(config.to_dict())}
+
+
+def restore_research_config(current: Config, document: dict) -> dict:
+    """Restore portable rules and keep local options only at their current endpoint."""
+    stored = _portable(document)
+    current_feeds = {_url(url): url for url in current.policy_feeds}
+    stored["policy_feeds"] = [current_feeds.get(url, url) for url in stored.get("policy_feeds", [])]
+    for name, opts in stored.get("sources", {}).items():
+        active = current.sources.get(name, {})
+        if opts.get("type") == active.get("type") and opts.get("url") == _url(active.get("url")):
+            opts.update({key: value for key, value in active.items() if key not in _SOURCE_FIELDS})
+            if "url" in active:
+                opts["url"] = active["url"]
+        if isinstance(opts.get("feed_kinds"), dict):
+            opts["feed_kinds"] = {current_feeds.get(url, url): kind for url, kind in opts["feed_kinds"].items()}
+    active_journals = {journal.name: journal for journal in current.journals}
+    for journal in stored.get("journals", []):
+        active = active_journals.get(journal.get("name"))
+        if active:
+            for field in ("url", "rss"):
+                value = getattr(active, field)
+                if value and _url(value) == journal.get(field):
+                    journal[field] = value
+    return {**current.to_dict(), **stored}
 
 
 def import_profile(document, current: Config) -> tuple[Config, dict]:

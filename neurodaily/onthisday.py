@@ -22,6 +22,9 @@ import os
 import httpx
 import re
 from datetime import date as _date
+from html import escape as _escape
+
+from .security import external_url
 
 
 def _cache_path() -> str:
@@ -2679,7 +2682,7 @@ def summary_text(events: list[dict], max_items: int = 2) -> str:
 
 def _paragraphs(text: str) -> str:
     parts = (text or "").split("\n\n")
-    return "".join(f'<p class="summary">{p.strip()}</p>' for p in parts if p.strip())
+    return "".join(f'<p class="summary">{_escape(p.strip())}</p>' for p in parts if p.strip())
 
 
 def render_section_html(events: list[dict], when: _date | None = None, lang: str = "zh") -> str:
@@ -2690,21 +2693,22 @@ def render_section_html(events: list[dict], when: _date | None = None, lang: str
     label = day_label(events, when, lang)
     cards = []
     for e in events:
-        url = e.get("url", "")
-        title = e["title"]
-        title_html = (f'<a href="{url}" target="_blank" rel="noopener">{title}</a>'
+        url = _escape(external_url(e.get("url")), quote=True)
+        title = _escape(str(e["title"]))
+        title_html = (f'<a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a>'
                       if url else title)
         match = e.get("match", "exact")
         cat = e.get("category", "")
-        cat_label = CATEGORY_I18N.get(cat, {}).get(lang) or e.get("category_label", "")
-        kind_label = KIND_I18N.get(e.get("kind", ""), {}).get(lang) or e.get("kind_label", "")
+        cat_label = _escape(str(CATEGORY_I18N.get(cat, {}).get(lang) or e.get("category_label", "")))
+        kind_label = _escape(str(KIND_I18N.get(e.get("kind", ""), {}).get(lang) or e.get("kind_label", "")))
+        year = _escape(str(e["year"]))
         match_tag = ""
         if match == "near":
             nd = e.get("near_day", when.day)
             txt = (f"Nearby ({when.month}/{nd})" if lang == "en"
                    else f"Рядом ({when.month}/{nd})" if lang == "ru"
                    else f"近邻（本月 {nd} 日）")
-            match_tag = f'<span class="tag t">{txt}</span>'
+            match_tag = f'<span class="tag t">{_escape(txt)}</span>'
         elif match == "evergreen":
             match_tag = f'<span class="tag t">{L["badge_classic"]}</span>'
         cards.append(
@@ -2712,7 +2716,7 @@ def render_section_html(events: list[dict], when: _date | None = None, lang: str
             '<summary><span class="chevron"></span><div class="card-main">'
             f'<h3>{title_html}</h3>'
             f'<div class="meta"><span class="badge b-doc">{kind_label}</span>'
-            f'<span class="tag tj">{e["year"]}</span>'
+            f'<span class="tag tj">{year}</span>'
             f'<span class="tag t">{cat_label}</span>'
             f'{match_tag}</div>'
             '</div></summary>'

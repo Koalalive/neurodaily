@@ -9,11 +9,11 @@
     #research-activity :focus-visible{outline:2px solid #b3d9ff;outline-offset:3px}
     #research-activity .ra-map{width:100%;aspect-ratio:2;position:relative;overflow:hidden;border:1px solid #334f70;border-radius:12px;background:#0b172a}
     #research-activity canvas{width:100%;height:100%;display:block}
-    #research-activity [data-kind=paper]{--ra-color:#74d4ff}
-    #research-activity [data-kind=trial]{--ra-color:#8fe4c2}
-    #research-activity [data-kind=news]{--ra-color:#ffd080}
-    #research-activity [data-kind=industry]{--ra-color:#f4a9cd}
-    #research-activity [data-kind=conference]{--ra-color:#c5b0ff}
+    #research-activity [data-kind=paper]{--ra-color:#c8a96b}
+    #research-activity [data-kind=trial]{--ra-color:#8da7a1}
+    #research-activity [data-kind=news]{--ra-color:#d6c7a7}
+    #research-activity [data-kind=industry]{--ra-color:#a99b83}
+    #research-activity [data-kind=conference]{--ra-color:#b8aaa2}
     #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0b172a;border-radius:20px;padding:0 4px;background:var(--ra-color,#b2c9de);color:#101928;font-size:11px;font-weight:750}
     #research-activity .ra-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em;background:var(--ra-color,#b2c9de)}
     #research-activity .ra-marker:hover,#research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#fff;background:var(--ra-color,#b2c9de)}
@@ -122,9 +122,11 @@
           evidence.className = 'ra-evidence';
           li.append(evidence);
         }
-        if (record.url) {
+        let url;
+        try { url = new URL(record.url); } catch (_) {}
+        if (url && ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) {
           const a = node('a', c.original);
-          a.href = record.url;
+          a.href = url.href;
           a.target = '_blank';
           a.rel = 'noopener noreferrer';
           li.append(a);
@@ -157,8 +159,8 @@
       const x = lon => (lon + 180) / 360;
       const y = lat => (90 - lat) / 180;
       if (ctx) {
-        ctx.fillStyle = '#243b55';
-        ctx.strokeStyle = '#587696';
+        ctx.fillStyle = '#202326';
+        ctx.strokeStyle = '#45474a';
         ctx.lineWidth = .7;
         for (const polygon of data.land) {
           ctx.beginPath();

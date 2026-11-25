@@ -115,12 +115,17 @@ def _merge(current: dict, incoming: Any, allowed: set[str]) -> dict:
     return result
 
 
-def import_settings(document: Any, config_path: str | None = None) -> dict:
+def import_settings(document: Any, config_path: str | None = None, *, expected_version: str | None = None) -> dict:
     if not isinstance(document, dict) or document.get("format") != FORMAT or document.get("version") != VERSION:
         raise ValueError(f"settings must use format {FORMAT!r} and version {VERSION}")
     settings = document.get("settings")
     if not isinstance(settings, dict):
         raise ValueError("settings must be an object")
+
+    hooks = settings.get("webhooks")
+    if "webhooks" in settings and not isinstance(hooks, dict):
+        raise ValueError("settings.webhooks must be an object")
+    hook_updates = webhooks.normalize_updates(hooks or {}, allow_clear=False)
 
     ai = settings.get("ai")
     if isinstance(ai, dict):
@@ -136,6 +141,7 @@ def import_settings(document: Any, config_path: str | None = None) -> dict:
         mailer.validate_smtp_change(saved, email)
 
     cfg = Config.load(config_path)
+    baseline_version = expected_version if expected_version is not None else cfg.version()
     if "output" in settings:
         cfg.output = _merge(cfg.output, settings["output"], OUTPUT_KEYS)
     if "scheduled" in settings:
@@ -147,7 +153,7 @@ def import_settings(document: Any, config_path: str | None = None) -> dict:
             if key in incoming:
                 current[key] = incoming[key]
         cfg.scheduled = current
-    cfg.save(config_path)
+    cfg.save(config_path, expected_version=baseline_version)
 
     if isinstance(email, dict):
         if isinstance(email.get("recipients"), list):
@@ -160,11 +166,9 @@ def import_settings(document: Any, config_path: str | None = None) -> dict:
             email["to"] = [row["address"] for row in email["recipients"]]
         _write(mailer.CFG_PATH, email)
 
-    hooks = settings.get("webhooks")
-    if isinstance(hooks, dict):
+    if hook_updates:
         current = webhooks.load_cfg()
-        current.update({key: hooks[key] for key in ("feishu", "wecom")
-                        if key in hooks and hooks[key]})
+        current.update(hook_updates)
         _write(webhooks.CFG_PATH, current)
 
     if isinstance(ai, dict):

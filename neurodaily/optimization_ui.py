@@ -36,6 +36,12 @@ OPTIMIZATION_WORKBENCH = """
             <label><span data-opt-text="maxSources"></span>
               <input id="optimization-max-sources" type="number" min="1" max="14" value="10" required>
             </label>
+            <label><span data-opt-text="onlineRequestLimit"></span>
+              <input id="optimization-online-requests" type="number" min="1" max="600" value="120" required>
+            </label>
+            <label><span data-opt-text="onlineTimeLimit"></span>
+              <input id="optimization-online-seconds" type="number" min="1" max="900" value="120" required>
+            </label>
             <label><input id="optimization-tradeoffs" type="checkbox">
               <span data-opt-text="tradeoffs"></span>
             </label>
@@ -53,6 +59,7 @@ OPTIMIZATION_WORKBENCH = """
   </div>
   <div class="optimization-progress">
     <p id="optimization-status" role="status" aria-live="polite" data-opt-text="loading"></p>
+    <p id="optimization-budget-usage" class="optimization-muted" hidden></p>
     <p id="optimization-conclusion" class="optimization-muted" hidden></p>
     <p id="optimization-error" role="alert" hidden></p>
     <div id="optimization-controls" class="optimization-actions">

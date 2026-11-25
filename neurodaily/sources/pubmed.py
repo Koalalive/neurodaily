@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query
+from ._discovery import fixed_bounds
 from ..models import Item
 
 BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -233,12 +234,19 @@ def fetch(config, logger=None) -> list[Item]:
         from ..search import compile_search
         plan = compile_search(config.search)
     bounds = plan.date_range if plan and plan.active else None
-    if bounds:
-        start, end = (bound.replace("-", "/") for bound in bounds)
-        ranges = [f"({start}[dp]:{end}[dp])"]
+    window = fixed_bounds(opts, bounds)
+    if window:
+        if window[0] > window[1]:
+            return []
+        start, end = (bound.replace("-", "/") for bound in window)
+        published = f"{start}[dp]:{end}[dp]"
+        created = f"{start}[crdt]:{end}[crdt]"
     else:
         published = f'"last {lookback} days"[dp]'
         created = f'"last {lookback} days"[crdt]'
+    if bounds:
+        ranges = [f"({published})"]
+    else:
         # ESearch's publication-date ordering can hide newly created citations
         # for old papers at retmax. Give these their own bounded result set.
         ranges = [f"({published} OR {created})"] if preview else [
@@ -279,7 +287,7 @@ def fetch(config, logger=None) -> list[Item]:
                     items.append(item)
 
     # Relative NLM date expressions can include the preceding calendar day.
-    if lookback <= 1 and not bounds:
+    if lookback <= 1 and not window:
         today = datetime.now().strftime("%Y-%m-%d")
         items = [it for it in items if today in (it.date[:10], it.extra.get("source_discovered_at"))]
     return items

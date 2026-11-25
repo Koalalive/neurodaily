@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    HOME=/app
+    HOME=/app \
+    NEURODAILY_HOME=/app/neurodaily
 
 WORKDIR /app
 COPY pyproject.toml LICENSE NOTICE ./

@@ -7,6 +7,7 @@ _PHASES = {"search": "检索", "report": "日报", "metrics": "期刊指标", "a
 _STATES = {
     "running": "进行中", "pending": "等待中", "sending": "发送中", "completed": "完成",
     "failed": "失败", "partial": "部分完成", "interrupted": "中断", "skipped": "已跳过", "cancelled": "已停止",
+    "superseded": "已由新任务替代",
     "accepted": "服务器已接受", "no_new": "没有新内容", "unknown": "结果未确认",
     "ok": "成功", "empty": "无匹配", "timeout": "超时", "limited": "触发限流",
 }

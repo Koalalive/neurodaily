@@ -13,6 +13,14 @@ UI_LANGUAGES = ("zh", "en", "ru")
 # Each row contains the Chinese, English, and Russian spelling of one message.
 _MESSAGES = """
 界面语言|Interface language|Язык интерфейса
+飞书 Webhook|Feishu webhook|Вебхук Feishu
+企业微信 Webhook|WeCom webhook|Вебхук WeCom
+留空保留已有地址|Leave blank to keep the saved URL|Оставьте пустым, чтобы сохранить текущий адрес
+移除已保存地址|Remove saved URL|Удалить сохранённый адрес
+已保存地址|URL saved|Адрес сохранён
+尚未保存地址|No URL saved|Адрес не сохранён
+Webhook 必须使用有效的 HTTPS 地址。|The webhook requires a valid HTTPS URL.|Для вебхука требуется действительный HTTPS-адрес.
+Webhook 地址无法解析或指向受限制的网络。|The webhook address could not be resolved or points to a restricted network.|Не удалось разрешить адрес вебхука, или он указывает на закрытую сеть.
 无法读取界面语言。|Could not read the interface language.|Не удалось прочитать язык интерфейса.
 无法保存界面语言。|Could not save the interface language.|Не удалось сохранить язык интерфейса.
 神通寰宇 · 设置|NeuroDaily — Settings|NeuroDaily — Настройки
@@ -90,6 +98,20 @@ AI 摘要|AI summary|ИИ-резюме
 继续检索|Resume search|Продолжить поиск
 正在停止检索，等待当前操作结束…|Stopping after the current operation…|Остановка после завершения текущей операции…
 上次检索中断。打开任务详情继续。|The previous search was interrupted. Open its details to resume.|Предыдущий поиск прерван. Откройте сведения о задаче, чтобы продолжить.
+日报变化|Daily report changes|Изменения в ежедневной сводке
+对照同一检索配置的上一份日报|Compared with the previous report using this search configuration|Сравнение с предыдущей сводкой с этой конфигурацией поиска
+尚无同一检索配置的可比较日报。|There is no earlier comparable report for this search configuration.|Для этой конфигурации поиска пока нет сопоставимой предыдущей сводки.
+撤稿记录|Retractions|Отозванные публикации
+更正与其他出版通知|Corrections and other publication notices|Исправления и другие уведомления о публикациях
+临床试验状态变更|Clinical trial status changes|Изменения статуса клинических испытаний
+新增检出的论文|Newly retrieved papers|Новые найденные публикации
+上次来源覆盖有限|Previous source coverage was limited|Предыдущий охват источников был ограничен
+来源覆盖限制|Source coverage limits|Ограничения охвата источников
+覆盖不完整|Incomplete coverage|Неполный охват
+无法确认的往期条目|Previous records with uncertain coverage|Предыдущие записи с неопределённым охватом
+本次未再检出|Not retrieved again in this run|Не найдены повторно в этом запуске
+已移出检索时间窗|Outside the current search window|Вне текущего окна поиска
+仅表示检索结果变化，撤稿以发布者或正式索引记录为准。|Search results can change. Retractions require a publisher or formal index record.|Результаты поиска могут меняться. Отзыв подтверждается записью издателя или официального индекса.
 检索已停止。|Search stopped.|Поиск остановлен.
 任务操作失败。|Task action failed.|Не удалось выполнить действие с задачей.
 已跳过|Skipped|Пропущено
@@ -127,6 +149,40 @@ AI 摘要|AI summary|ИИ-резюме
 导出已保存的配置|Export saved configuration|Экспорт сохранённой конфигурации
 导入配置文件|Import configuration|Импорт конфигурации
 确认导入|Confirm import|Подтвердить импорт
+检索配置版本历史|Profile revision history|История версий профиля
+恢复会创建一条新版本，保留应用设置。|Restoring creates a new research revision and preserves app settings.|Восстановление создаёт версию профиля и сохраняет настройки приложения.
+加载更早版本|Load older revisions|Загрузить более ранние версии
+恢复检索配置版本|Restore research revision|Восстановить версию профиля
+无法读取检索配置历史。|Could not load profile revisions.|Не удалось загрузить версии профиля.
+可导出的字段相同。|No portable fields differ.|Переносимые поля совпадают.
+检索优化运行|Optimization run|Запуск оптимизации
+证据快照|Evidence snapshot|Снимок доказательств
+恢复自版本 {number}|Restored revision {number}|Восстановлена версия {number}
+请选择并预览历史版本后再恢复。|Preview this revision before restoring it.|Просмотрите версию перед восстановлением.
+恢复前请先保存或撤销设置表单中的修改。|Save or discard your settings form edits before restoring a revision.|Сохраните или отмените правки перед восстановлением версии.
+无法恢复此检索配置版本。|Could not restore the profile revision.|Не удалось восстановить версию профиля.
+已恢复检索配置。|Research revision restored.|Версия профиля восстановлена.
+当前配置记录|Observed configuration|Наблюдаемая конфигурация
+保存配置|Saved configuration|Сохранение конфигурации
+设置页保存|Settings saved|Сохранение в настройках
+导入配置|Imported configuration|Импорт конфигурации
+命令行更新|CLI patch|Обновление в CLI
+恢复历史版本|Restored revision|Восстановление версии
+恢复默认值|Reset defaults|Сброс по умолчанию
+应用优化建议|Applied optimization|Применение оптимизации
+撤销优化建议|Reverted optimization|Откат оптимизации
+在本地检查草案|Check draft locally|Проверить черновик локально
+本地检索检查|Local search check|Локальная проверка поиска
+{source} 可能缺少 {fields} 字段。|{source} may lack metadata for {fields}.|У источника {source} могут отсутствовать поля {fields}.
+{source} 在本地应用这条规则。|{source} applies this rule locally.|Правило для {source} применяется локально.
+{source} 的编译器候选条件 · {query}|{source} candidate hint · {query}|Условие для получения кандидатов из {source} · {query}
+历史样本中 {matched} 条匹配，{missed} 条排除，{unknown} 条缺少元数据。|Historical sample includes {matched} matches, {missed} exclusions and {unknown} with missing metadata.|В выборке истории совпадений {matched}, исключений {missed}, без метаданных {unknown}.
+草案排除此条目|Excluded by the draft|Исключено черновиком
+本地检查未发现问题。|No issues found in the local check.|Локальная проверка не выявила проблем.
+本地检索检查暂不可用。|The local search check is unavailable.|Локальная проверка временно недоступна.
+请检查本地检索提示后再保存。|Review the local search check before saving.|Просмотрите результаты проверки перед сохранением.
+配置已在其他页面更新。请重新加载设置并核对你的编辑。|Configuration changed. Reload settings and review your edits.|Конфигурация изменилась. Перезагрузите настройки и проверьте правки.
+配置在预览后已更新。请重新选择文件并再次预览。|Configuration changed since the preview. Select the file to preview it again.|Конфигурация изменилась после предпросмотра. Выберите файл для повторного предпросмотра.
 分享学科、检索规则、期刊和数据源设置。邮件、Webhook 和本机路径由各自设备管理。|Share disciplines, queries, journals and sources. Email, webhooks and local paths are set per device.|В файл входят дисциплины, запросы, журналы и источники. Почта, вебхуки и локальные пути настраиваются на каждом устройстве.
 研究预设|Research presets|Профили исследований
 预设会填入研究设置，请检查后保存。|A preset fills the research fields. Review them before saving.|Профиль заполняет поля исследования. Проверьте их перед сохранением.

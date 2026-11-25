@@ -1,11 +1,18 @@
 """Store per-task delivery attempts in the local search-history database."""
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from contextlib import closing, contextmanager
 from datetime import datetime
+from pathlib import Path
 
 from . import history
+
+
+def destination_id(channel: str, address: str) -> str:
+    return channel + ":" + hashlib.sha256(address.encode()).hexdigest()
 
 
 @contextmanager
@@ -32,6 +39,106 @@ def _init_db() -> None:
                 FOREIGN KEY (task_id) REFERENCES search_history(id) ON DELETE CASCADE
             )
         """)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS email_delivery_queue (
+                task_id TEXT NOT NULL,
+                destination TEXT NOT NULL,
+                report_path TEXT NOT NULL,
+                address TEXT NOT NULL,
+                language TEXT NOT NULL,
+                due TEXT NOT NULL,
+                PRIMARY KEY (task_id, destination),
+                FOREIGN KEY (task_id, destination) REFERENCES delivery_receipts(task_id, destination)
+                    ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS email_delivery_due ON email_delivery_queue (due);
+            CREATE TABLE IF NOT EXISTS migrated_email_queue (path TEXT PRIMARY KEY);
+        """)
+
+
+def _put_email(conn, *, task_id, report_path, profile, address, language, due) -> None:
+    destination = destination_id("email", address.casefold())
+    conn.execute("""
+        INSERT OR IGNORE INTO email_delivery_queue (task_id, destination, report_path, address, language, due)
+        SELECT task_id, destination, ?, ?, ?, ? FROM delivery_receipts
+        WHERE task_id=? AND destination=? AND channel='email' AND (?='' OR profile=?)
+          AND status IN ('pending', 'checking', 'sending')
+    """, (report_path, address, language, due, task_id, destination, profile, profile))
+
+
+def enqueue_email(**entry) -> None:
+    _init_db()
+    with _connect() as conn:
+        _put_email(conn, **entry)
+
+
+def queued_emails(legacy_path: Path, *, now: datetime | None = None) -> list[dict]:
+    _init_db()
+    with _connect() as conn:
+        marker = str(legacy_path.absolute())
+        if not conn.execute("SELECT 1 FROM migrated_email_queue WHERE path=?", (marker,)).fetchone():
+            _migrate_queue(conn, legacy_path, marker)
+        sql = """
+            SELECT q.*, r.profile FROM email_delivery_queue q
+            JOIN delivery_receipts r USING (task_id, destination)
+            JOIN search_history h ON h.id=q.task_id
+        """
+        params = ()
+        if now is not None:
+            sql += "WHERE q.due<=? AND h.status NOT IN ('running','interrupted')"
+            params = (now.isoformat(),)
+        return [dict(row) for row in conn.execute(sql + " ORDER BY q.due, q.rowid", params)]
+
+
+def _migrate_queue(conn, path: Path, marker: str) -> None:
+    try:
+        legacy = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if not isinstance(legacy, list):
+        return
+    if not conn.execute("INSERT OR IGNORE INTO migrated_email_queue VALUES (?)", (marker,)).rowcount:
+        return
+    for row in legacy:
+        if not isinstance(row, dict):
+            continue
+        task_id = str(row.get("task_id", ""))
+        address = row.get("address")
+        report_path = row.get("report_path")
+        if not task_id.isascii() or not task_id.isdecimal() or not all(
+            isinstance(value, str) and value.strip() for value in (address, report_path)
+        ):
+            continue
+        try:
+            due = datetime.fromisoformat(str(row.get("due"))).isoformat()
+        except ValueError:
+            due = ""
+        _put_email(conn, task_id=task_id, report_path=report_path, profile=str(row.get("profile") or ""),
+                   address=address.strip(), language=str(row.get("language") or "zh"), due=due)
+
+
+def claim_queued_email(task_id: str, profile: str, destination: str) -> bool:
+    """Resolve a previous crashed claimant while holding the destination lease."""
+    now = datetime.now().isoformat()
+    with _connect() as conn:
+        updated = conn.execute("""
+            UPDATE delivery_receipts SET status='checking', updated_at=?, error=NULL
+            WHERE task_id=? AND destination=? AND profile=? AND status IN ('pending','checking')
+              AND EXISTS (SELECT 1 FROM email_delivery_queue WHERE task_id=? AND destination=?)
+              AND EXISTS (SELECT 1 FROM search_history WHERE id=? AND status='completed')
+        """, (now, task_id, destination, profile, task_id, destination, task_id))
+        if updated.rowcount:
+            return True
+        conn.execute("""
+            UPDATE delivery_receipts SET status='unknown', updated_at=?, error=?
+            WHERE task_id=? AND destination=? AND profile=? AND status='sending'
+        """, (now, "投递中断，未能确认服务器是否接受。", task_id, destination, profile))
+        return False
+
+
+def remove_queued_email(task_id: str, destination: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM email_delivery_queue WHERE task_id=? AND destination=?", (task_id, destination))
 
 
 def prepare(task_id: str, profile: str, targets: list[tuple[str, str, str]]) -> None:

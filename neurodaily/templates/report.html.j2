@@ -61,7 +61,7 @@
       <summary>
         <span class="chevron"></span>
         <div class="card-main">
-          <h3 data-no-i18n>{% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>{% else %}{{ it.title }}{% endif %}</h3>
+          <h3 data-no-i18n>{% if external_url(it.url) %}<a href="{{ external_url(it.url) }}" target="_blank" rel="noopener noreferrer">{{ it.title }}</a>{% else %}{{ it.title }}{% endif %}</h3>
           {{ tags_meta(it, badge_class) }}
         </div>
       </summary>
@@ -94,7 +94,10 @@
           <div class="byline"><b>{{ trial_event_labels.get(event.kind, event.kind) }}</b> · {{ event.date }}{% if event.kind == 'status_changed' %} · {{ event['from'] }} → {{ event.to }}{% endif %}</div>
         {% endfor %}
         <div class="foot">
-          {% if it.url %} · <a class="ext" href="{{ it.url }}" target="_blank" rel="noopener">Read ↗</a>{% endif %}
+          {% if external_url(it.url) %} · <a class="ext" href="{{ external_url(it.url) }}" target="_blank" rel="noopener noreferrer">Read ↗</a>{% endif %}
+          {% if result.history_id and item_key(it) %}
+          <span data-report-record="{{ item_key(it) }}" hidden></span>
+          {% endif %}
         </div>
       </div>
     </details>
@@ -109,6 +112,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="nd-report-date" content="{{ result.generated_at[:10] }}">
+<meta name="nd-report-profile" content="{{ result.config_profile }}">
+{% if result.history_id %}<meta name="nd-report-run-id" content="{{ result.history_id }}">{% endif %}
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="nd-base" content="">
 <title>NeuroDaily — {{ result.config_profile }} | {{ today }}</title>
@@ -258,9 +263,235 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 ::-webkit-scrollbar-track { background: #0b0b0c; }
 ::-webkit-scrollbar-thumb { background: #3a4352; border: 2px solid #0b0b0c; border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: #58647a; }
+
+/* ------------------------------------------------------------------
+   Editorial report skin
+   One restrained accent, serif display type, hairline lists.
+   ------------------------------------------------------------------ */
+body.editorial {
+  --bg: #090a0c; --panel: #0e1013; --panel2: #121419;
+  --accent: #c8a96b; --accent2: #8da7a1;
+  --text: #ece9e2; --muted: #979791; --border: rgba(255,255,255,.10);
+  --ok: #83b59f; --warn: #c6a46b;
+  --serif: "Source Serif 4", "Iowan Old Style", "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+  --sans: var(--serif);
+  background: var(--bg); color: var(--text); font-family: var(--sans);
+  font-size: 15px; line-height: 1.7; letter-spacing: .001em;
+}
+body.editorial .wrap { max-width: 1020px; }
+body.editorial header.masthead {
+  padding: 58px 24px 30px; border-bottom: 1px solid var(--border);
+  background: radial-gradient(70% 80% at 15% 0%, #17171a 0%, transparent 70%), var(--bg);
+}
+body.editorial .masthead-kicker {
+  margin-bottom: 18px; color: var(--accent); font: 600 10px/1.2 var(--sans);
+  letter-spacing: .18em;
+}
+body.editorial .masthead-kicker span { color: #5d5b56; margin: 0 5px; }
+body.editorial h1, body.editorial .sec-title, body.editorial .journal h4,
+body.editorial .card h3 { font-family: var(--serif); font-weight: 600; }
+body.editorial h1 { font-size: clamp(2.25rem, 5vw, 4.8rem); line-height: 1.04; letter-spacing: -.035em; overflow-wrap: anywhere; }
+body.editorial h1 span { max-width: 100%; }
+body.editorial h1 .logo { color: var(--text); background: none; -webkit-text-fill-color: currentColor; }
+body.editorial h1 .title-sep { color: var(--accent); font-weight: 400; }
+body.editorial h1 span:last-child { color: #b9b4a7; font-size: .58em; letter-spacing: -.01em; }
+body.editorial .sub, body.editorial .window { color: var(--muted); font-size: .82rem; }
+body.editorial .sub { margin-top: 14px; }
+body.editorial .window span { color: var(--accent); font-weight: 600; }
+body.editorial .chips { gap: 7px 16px; margin-top: 17px; }
+body.editorial .chip {
+  background: none; border: 0; border-bottom: 1px solid #383832;
+  border-radius: 0; padding: 0 0 2px; color: var(--muted); font-size: .72rem;
+  letter-spacing: .02em;
+}
+body.editorial .stats {
+  display: flex; gap: 0; margin-top: 30px; border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border); width: 100%;
+}
+body.editorial .stat {
+  background: none; border: 0; border-radius: 0; padding: 13px 24px 12px 0;
+  min-width: 0; flex: 1;
+}
+body.editorial .stat + .stat { border-left: 1px solid var(--border); padding-left: 24px; }
+body.editorial .stat b { color: var(--text); font: 500 1.55rem/1.1 var(--serif); }
+body.editorial .stat span { color: var(--muted); font-size: .63rem; letter-spacing: .12em; }
+body.editorial .toolbar { margin-top: 18px; gap: 16px; }
+body.editorial .btn {
+  background: var(--accent); color: #15120b; border-radius: 3px; padding: 7px 14px;
+  font-size: .78rem; font-weight: 700; letter-spacing: .01em;
+}
+body.editorial .btn:hover { filter: none; background: #ddc183; transform: none; }
+body.editorial .btn.ghost { background: transparent; color: var(--muted); border: 0; border-bottom: 1px solid #3c3a35; border-radius: 0; padding-inline: 0; }
+body.editorial .btn.ghost:hover { color: var(--accent); border-color: var(--accent); }
+body.editorial main.wrap { padding: 42px 24px 70px; }
+body.editorial section { margin-bottom: 56px; }
+body.editorial .sec-head { margin-bottom: 18px; }
+body.editorial .sec-title {
+  gap: 13px; margin: 0 0 7px; font-size: clamp(1.55rem, 2.5vw, 2.15rem);
+  line-height: 1.12; letter-spacing: -.025em;
+}
+body.editorial .sec-title .dot { width: 22px; height: 1px; border-radius: 0; background: var(--accent); }
+body.editorial .sec-title .count { color: #77756e; font: 400 .62em/1 var(--sans); letter-spacing: .04em; }
+body.editorial .sec-desc { color: #85837d; font-size: .78rem; }
+body.editorial .card {
+  background: transparent; border: 0; border-top: 1px solid var(--border);
+  border-radius: 0; margin: 0; overflow: visible;
+}
+body.editorial .card:last-child { border-bottom: 1px solid var(--border); }
+body.editorial .card:hover { border-color: var(--border); }
+body.editorial .card > summary { padding: 20px 0 17px; gap: 17px; }
+body.editorial .card > summary::before {
+  counter-increment: report-item; content: counter(report-item, decimal-leading-zero);
+  flex: 0 0 25px; padding-top: 4px; color: var(--accent); font: 500 .65rem/1 var(--sans);
+  letter-spacing: .08em;
+}
+body.editorial section { counter-reset: report-item; }
+body.editorial .card > summary .chevron { width: 7px; height: 7px; margin-top: 9px; border-width: 1px; border-color: #77756e; }
+body.editorial .card h3 { font-size: clamp(1.05rem, 1.8vw, 1.34rem); line-height: 1.35; letter-spacing: -.012em; }
+body.editorial .card h3 a { color: var(--text); }
+body.editorial .card h3 a:hover { color: var(--accent); }
+body.editorial .meta { gap: 8px 15px; margin-top: 8px; }
+body.editorial .badge {
+  background: none; border: 0; border-radius: 0; padding: 0; color: var(--accent2);
+  font: 500 .61rem/1.2 var(--sans); letter-spacing: .10em;
+}
+body.editorial .badge.b-journal { color: var(--accent); }
+body.editorial .tag {
+  background: none; border: 0; border-radius: 0; padding: 0; color: #77756e;
+  font: .67rem/1.35 var(--sans);
+}
+body.editorial .tag.tj { color: #b4a988; }
+body.editorial .tag.t { color: #77756e; }
+body.editorial .tag.bad { color: var(--warn); }
+body.editorial .card-body { padding: 0 0 22px 42px; }
+body.editorial .summary { color: #aaa8a0; font-size: .9rem; line-height: 1.8; max-width: 75ch; }
+body.editorial .evidence { background: #0d0f12; border-left: 1px solid var(--accent); padding: 9px 14px; }
+body.editorial .byline { color: var(--accent2); font-size: .76rem; }
+body.editorial .byline b { color: #77756e; }
+body.editorial .byline.aff { color: #77756e; }
+body.editorial .foot { margin-top: 10px; }
+body.editorial a.ext { color: var(--accent); font-size: .76rem; }
+body.editorial .empty { border-color: var(--border); border-radius: 0; background: none; }
+body.editorial #ai-summary { margin-bottom: 62px; }
+body.editorial #ai-summary .card {
+  border: 0; border-top: 1px solid var(--accent); border-bottom: 1px solid var(--border);
+  padding: 23px 0 25px !important; background: none;
+}
+body.editorial #ai-summary .card-body { padding: 0 0 0 0 !important; }
+body.editorial #ai-summary .card-body p { color: #c3c0b7; font: 400 1.08rem/1.9 var(--serif); max-width: 72ch; }
+body.editorial #ai-summary .card-body p + p { margin-top: 1em; }
+body.editorial .journals { gap: 0; border-top: 1px solid var(--border); }
+body.editorial .journal {
+  background: none; border: 0; border-bottom: 1px solid var(--border); border-radius: 0;
+  padding: 16px 18px 16px 0;
+}
+body.editorial .journal:hover { border-color: var(--border); transform: none; }
+body.editorial .journal .cat { color: #77756e; font-size: .63rem; letter-spacing: .12em; }
+body.editorial .journal h4 { font-size: 1.02rem; }
+body.editorial .health { background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 0; }
+body.editorial .health th, body.editorial .health td { border-bottom-color: rgba(255,255,255,.07); }
+body.editorial .health th { color: #77756e; font-size: .68rem; letter-spacing: .08em; }
+body.editorial .ok { color: var(--ok); } body.editorial .bad { color: var(--warn); }
+body.editorial .prompt { background: #0d0f12; border-color: var(--border); border-radius: 2px; }
+body.editorial .toc {
+  top: 100px; right: 24px; width: 166px; padding: 0 0 0 14px;
+  background: none; border: 0; border-left: 1px solid #2d2d2b; border-radius: 0;
+  backdrop-filter: none;
+}
+body.editorial .toc .toc-title { color: #77756e; font-size: 9px; letter-spacing: .16em; }
+body.editorial .toc a { color: #77756e; padding: 5px 0; border-radius: 0; font-size: .68rem; }
+body.editorial .toc a:hover { color: var(--accent); background: none; }
+body.editorial footer { border-top-color: var(--border); color: #77756e; }
+body.editorial .minibtn { background: none; border-color: var(--border); border-radius: 2px; color: #77756e; }
+@media (max-width: 1280px) {
+  body.editorial .toc { left: 12px; right: 12px; bottom: 12px; top: auto; width: auto; display: flex; gap: 0; padding: 8px 10px; border-left: 0; border-top: 1px solid #2d2d2b; background: rgba(9,10,12,.92); overflow-x: auto; }
+  body.editorial .toc .toc-title { display: none; }
+  body.editorial .toc a { white-space: nowrap; padding: 5px 8px; }
+}
+@media (max-width: 640px) {
+  body.editorial header.masthead { padding: 38px 18px 24px; }
+  body.editorial main.wrap { padding: 30px 18px 56px; }
+  body.editorial .stats { flex-wrap: wrap; }
+  body.editorial .stat { flex: 1 1 33%; border-left: 0 !important; padding-left: 0 !important; min-width: 0; }
+  body.editorial .stat span { overflow-wrap: anywhere; }
+  body.editorial .ra-controls { max-width: 100%; }
+  body.editorial #research-activity, body.editorial #research-activity .ra-map { max-width: 100%; }
+  body.editorial .card > summary { padding: 16px 0 14px; gap: 10px; }
+  body.editorial .card > summary::before { flex-basis: 18px; }
+  body.editorial .card-body { padding-left: 28px; }
+}
+/* Final responsive and map restraint pass */
+html { overflow-x: hidden; }
+body.editorial { overflow-x: hidden; }
+body.editorial .toc { max-width: calc(100vw - 24px); }
+body.editorial h1, body.editorial .masthead-kicker, body.editorial .sub, body.editorial .window { max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  body.editorial .wrap { width: 100%; }
+  body.editorial .toc a { flex: 0 0 auto; }
+}
+/* Keep the research map in the report's quiet palette instead of its own blue dashboard skin. */
+body.editorial #research-activity,
+body.editorial #topic-map {
+  border-color: var(--border); border-radius: 2px; background: transparent; color: var(--text);
+}
+body.editorial #research-activity h2,
+body.editorial #research-activity h3,
+body.editorial #research-activity h4,
+body.editorial #topic-map h2,
+body.editorial #topic-map h3,
+body.editorial #topic-map h4 { color: var(--text); }
+body.editorial #research-activity p,
+body.editorial #topic-map p { color: var(--muted); }
+body.editorial #research-activity .ra-map,
+body.editorial #topic-map .tm-canvas {
+  border-color: var(--border); border-radius: 1px; background: #0d0f12;
+}
+body.editorial #research-activity button,
+body.editorial #topic-map button {
+  background: transparent; color: var(--muted); border-color: var(--border); border-radius: 1px;
+}
+body.editorial #research-activity button:hover,
+body.editorial #research-activity button[aria-pressed=true],
+body.editorial #topic-map button:hover,
+body.editorial #topic-map button[aria-pressed=true] {
+  color: var(--accent); border-color: var(--accent); background: #15140f;
+}
+body.editorial #research-activity .ra-caption { color: var(--muted); }
+body.editorial #research-activity .ra-results,
+body.editorial #topic-map .tm-side {
+  background: #0d0f12; border-color: var(--border); border-radius: 1px;
+}
+body.editorial #research-activity a,
+body.editorial #topic-map a { color: var(--accent); }
+
+/* Editorial preview: all text uses the serif family. */
+body.editorial,
+body.editorial button,
+body.editorial input,
+body.editorial select,
+body.editorial textarea,
+body.editorial code,
+body.editorial pre,
+body.editorial kbd,
+body.editorial samp,
+body.editorial .masthead-kicker,
+body.editorial .sub,
+body.editorial .window,
+body.editorial .chip,
+body.editorial .stat span,
+body.editorial .sec-desc,
+body.editorial .badge,
+body.editorial .tag,
+body.editorial .byline,
+body.editorial .foot,
+body.editorial .toc,
+body.editorial .toc a,
+body.editorial .prompt {
+  font-family: var(--serif);
+}
 </style>
 </head>
-<body>
+<body class="editorial">
 {% set categories = result.report_categories() %}
 {% set category_labels = {
   'zh': {'paper': '论文', 'trial': '临床试验', 'news': '新闻与政策', 'industry': '产业', 'conference': '学术会议'},
@@ -289,9 +520,10 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
   {% if result.config and result.config.journals %}<a href="#journals">📚 期刊</a>{% endif %}
   {% if result.health %}<a href="#source-health">📡 来源状态</a>{% endif %}
 </nav>
-<header>
+<header class="masthead">
   <div class="wrap">
-    <h1><span class="logo">NeuroDaily</span> — <span>{{ digest_title }}</span></h1>
+    <div class="masthead-kicker">NEURODAILY <span>/</span> DAILY BRIEF <span>·</span> {{ today }}</div>
+    <h1><span class="logo">NeuroDaily</span> <span class="title-sep">·</span> <span>{{ digest_title }}</span></h1>
     <div class="sub"><span>Auto-aggregated</span> {{ today }} · <span>Profile</span>: <span data-no-i18n>{{ result.config_profile }}</span></div>
     {% if result.search_window %}
     <div class="window"><span>{{ ui_labels.get('window', '检索时间窗') }}</span> {{ result.search_window.start }} → {{ result.search_window.end }} · {{ result.search_window.hours }}h · {{ result.search_window.mode }}</div>
@@ -321,6 +553,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 </header>
 
 <main class="wrap">
+  {% if result.delta %}{% include "report_delta.html.j2" %}{% endif %}
   {{ block_section('papers', '📄 Latest Papers', 'New PubMed, arXiv, and bioRxiv preprints matching your focus.', 'b-doc') }}
   {{ block_section('industry', '💊 Commercial & Regulatory Progress', 'Drug approvals, device clearances, and funding records.', 'b-drug') }}
   {% set trial_items = categories['trial'] %}
@@ -340,7 +573,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
       {% for j in result.config.journals %}
       <div class="journal">
         <div class="cat" data-no-i18n>{{ j.category }}</div>
-        <h4 data-no-i18n>{% if j.url %}<a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.name }}</a>{% else %}{{ j.name }}{% endif %}</h4>
+        <h4 data-no-i18n>{% if external_url(j.url) %}<a href="{{ external_url(j.url) }}" target="_blank" rel="noopener noreferrer">{{ j.name }}</a>{% else %}{{ j.name }}{% endif %}</h4>
         {% set m = jm(j.name) %}
         {% if m %}<div class="meta" style="margin-top:6px">{{ journal_badges(m, {'en': 'CAS', 'ru': 'КАН'}.get(language, '中科院分区')) }}</div>{% endif %}
       </div>

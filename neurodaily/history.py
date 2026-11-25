@@ -35,6 +35,21 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def optimization_revision(profile: str) -> tuple:
+    """Fingerprint the displayed report list without loading history snapshots."""
+    if not os.path.isfile(db_path()):
+        return ()
+    with closing(_connect()) as conn:
+        try:
+            rows = conn.execute("""SELECT id, item_count, status, finished_at FROM search_history
+                WHERE profile=? AND snapshot IS NOT NULL ORDER BY id DESC LIMIT 20""", (profile,)).fetchall()
+        except sqlite3.OperationalError as error:
+            if "no such" in str(error):  # Pre-upgrade or uninitialized database.
+                return ()
+            raise
+    return tuple(map(tuple, rows))
+
+
 def desktop_schedule_result(profile: str, due: datetime | None = None) -> dict | None:
     """Read one slot, or the latest completed/failed slot for the profile."""
     init_db()
@@ -148,23 +163,58 @@ def record_run(fingerprint: str, profile: str, status: str, started_at: str,
         return cur.lastrowid
 
 
-def search_snapshot(config, mode, health, items, windows) -> dict:
+def search_snapshot(config, mode, health, items, windows, *, search_window=None, profile_revision=None) -> dict:
+    def record(item):
+        trial = item.extra.get("trial_dates") or {}
+        return {"ids": item.extra.get("record_ids") or record_ids(item),
+                "title": item.title, "url": item.url, "kind": item.kind, "source": item.source,
+                "journal": item.extra.get("journal", ""), "tags": item.tags, "date": item.date,
+                "seen_at": item.extra.get("source_discovered_at", ""),
+                "matched_rules": item.extra.get("matched_rules", []),
+                "missing_fields": item.extra.get("missing_fields", []),
+                "source_names": sorted({item.source, *(row["source"] for row in item.extra.get("provenance", [])
+                                                        if isinstance(row, dict) and row.get("source"))}),
+                "trial_status": item.extra.get("status", "") if item.kind == "trial" else "",
+                "trial_update": trial.get("last_update_posted", "") if item.kind == "trial" else "",
+                "publication_types": item.extra.get("publication_types", []),
+                "publication_updates": item.extra.get("publication_updates", [])}
+
     return {
         "query_version": QUERY_VERSION,
         "mode": mode,
+        "profile_revision": profile_revision,
         "search": config.search,
         "disciplines": [item.to_dict() for item in config.active_disciplines()],
         "global_keywords": config.global_keywords,
         "windows": windows,
+        "search_window": search_window or {},
+        "seen_dedup": bool(config.output.get("seen_dedup")),
         "sources": health,
         "journals": [{"name": j.name, "aliases": j.aliases, "issns": j.issns}
                      for j in config.journals],
-        "records": [{"ids": item.extra.get("record_ids") or record_ids(item),
-                     "title": item.title, "url": item.url, "kind": item.kind, "source": item.source,
-                     "journal": item.extra.get("journal", ""), "tags": item.tags, "date": item.date,
-                     "matched_rules": item.extra.get("matched_rules", []),
-                     "missing_fields": item.extra.get("missing_fields", [])} for item in items],
+        "records": [record(item) for item in items],
     }
+
+
+def previous_comparable(run: dict, current: dict) -> dict | None:
+    """Find the nearest saved successful report with the same retrieval setup."""
+    from .report_delta import comparable
+
+    init_db()
+    with _LOCK, closing(_connect()) as conn:
+        rows = conn.execute("""
+            SELECT id, started_at, snapshot FROM search_history WHERE profile=? AND fingerprint=?
+              AND status='completed' AND coalesce(report_path, '') <> '' AND snapshot IS NOT NULL
+              AND id < ? AND finished_at <= ? ORDER BY id DESC
+        """, (run["profile"], run["fingerprint"], run["id"], run["started_at"]))
+        for row in rows:
+            try:
+                previous = json.loads(row["snapshot"])
+            except (TypeError, ValueError):
+                continue
+            if comparable(previous, current):
+                return {**dict(row), "snapshot": previous}
+    return None
 
 
 def compare_runs(before: dict, after: dict) -> dict:

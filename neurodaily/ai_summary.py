@@ -489,7 +489,8 @@ def _write_cache(path: str, text: str, model: str, refs: dict | None = None) -> 
 def _chat_request(base_url: str, model: str, key: str, messages: list[dict],
                   max_tokens: int, timeout: int, *, purpose: str = "other",
                   run_id: int | None = None, profile: str | None = None,
-                  temperature: float = 0.4, response_format: dict | None = None) -> dict:
+                  temperature: float = 0.4, response_format: dict | None = None,
+                  optimization_context: dict | None = None) -> dict:
     base_url = _api_base(base_url)
     url = base_url + "/chat/completions"
     request = {"model": model, "temperature": temperature, "max_tokens": max_tokens, "messages": messages}
@@ -546,7 +547,7 @@ def _chat_request(base_url: str, model: str, key: str, messages: list[dict],
                                     base_url=base_url, model=safe_label(model), status=status,
                                     http_status=getattr(response, "status_code", None),
                                     response_id=safe_label(metadata.get("id")), usage=metadata.get("usage"),
-                                    rate=rate, called_at=called_at)
+                                    rate=rate, called_at=called_at, optimization_context=optimization_context)
         except Exception:
             # A local accounting problem must never block or repeat a paid request.
             logging.getLogger(__name__).warning("Could not record model request usage")

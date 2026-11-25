@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import delivery_receipts, history
-from .config import Config
+from .config import Config, revision_for
 from .digest import DigestResult
 from .models import Item
 from .profile_exchange import export_profile
@@ -58,11 +58,14 @@ def acquire():
 
 
 def begin(config: Config, mode: str, due: datetime | None, *, force: bool = False,
-          hours: int | None = None) -> dict:
+          hours: int | None = None, profile_revision: str | None = None) -> dict:
+    start = datetime.now().astimezone()
     task = {"profile": config.profile, "mode": mode, "status": "running", "phase": "search",
-            "started_at": datetime.now().isoformat(), "scheduled_for": due.isoformat() if due else None,
+            "started_at": start.replace(tzinfo=None).isoformat(),
+            "retrieval_anchor": start.isoformat(), "scheduled_for": due.isoformat() if due else None,
             "finished_at": None, "sources": {}, "stages": {}, "report_ready": False,
-            "workflow": 1, "force": force, "hours": hours}
+            "workflow": 1, "force": force, "hours": hours,
+            "profile_revision": profile_revision or revision_for(config)}
     stage(task, "search", "running")
     history.init_db()
     with history._LOCK, closing(history._connect()) as conn, conn:
@@ -105,6 +108,7 @@ def _checkpoint(result: DigestResult) -> str:
         "geography": result.geography,
         "topics": result.topics,
         "search_window": result.search_window,
+        "delta": result.delta, "profile_revision": result.profile_revision,
     })
 
 
@@ -126,7 +130,7 @@ def _write(conn, task: dict) -> None:
     conn.execute("UPDATE search_history SET task=?, status=?, finished_at=?, skipped_reason=? WHERE id=?",
                  (_json(task), task["status"], task["finished_at"],
                   task.get("error", "") if task["status"] == "skipped" else "", task["id"]))
-    if task["scheduled_for"] and task["finished_at"] and task["status"] != "interrupted":
+    if task["scheduled_for"] and task["finished_at"] and task["status"] not in {"interrupted", "superseded"}:
         conn.execute("INSERT INTO desktop_schedule_runs VALUES (?, ?, ?, ?, ?) "
                      "ON CONFLICT(profile, due) DO UPDATE SET status=excluded.status, "
                      "finished_at=excluded.finished_at, error=excluded.error",
@@ -157,8 +161,12 @@ def finish(task: dict, status: str, error: str = "") -> None:
         _write(conn, task)
         _workflow_tables(conn)
         if status != "interrupted":
-            conn.execute("DELETE FROM search_task_sources WHERE run_id=?", (task["id"],))
-            conn.execute("DELETE FROM search_task_controls WHERE run_id=?", (task["id"],))
+            _clear_search_work(conn, task["id"])
+
+
+def _clear_search_work(conn, run_id: int) -> None:
+    conn.execute("DELETE FROM search_task_sources WHERE run_id=?", (run_id,))
+    conn.execute("DELETE FROM search_task_controls WHERE run_id=?", (run_id,))
 
 
 def recover() -> None:
@@ -176,8 +184,7 @@ def recover() -> None:
                 status = "cancelled" if cancelled else "interrupted"
                 if cancelled:
                     message = "检索已停止。"
-                    conn.execute("DELETE FROM search_task_sources WHERE run_id=?", (task["id"],))
-                    conn.execute("DELETE FROM search_task_controls WHERE run_id=?", (task["id"],))
+                    _clear_search_work(conn, task["id"])
                     delivery_receipts.close_interrupted(conn, str(task["id"]))
                 else:
                     delivery_receipts.recover_for_resume(conn, str(task["id"]))
@@ -206,7 +213,14 @@ def resume(config: Config, mode: str, *, run_id: int | None = None,
             if (not task.get("workflow") or task["mode"] != mode or task["scheduled_for"] != due_iso):
                 continue
             if row["fingerprint"] != fingerprint:
-                raise ResumeConflict("检索配置已更改，请恢复原配置后继续此任务。")
+                if run_id is not None or due is None:
+                    raise ResumeConflict("检索配置已更改，请恢复原配置后继续此任务。")
+                # Closing this attempt leaves the original schedule slot unclaimed.
+                task.update(status="superseded", error="检索配置已更改。此定时时段将按新配置重新执行。")
+                _write(conn, task)
+                _clear_search_work(conn, task["id"])
+                delivery_receipts.close_interrupted(conn, str(task["id"]))
+                return None
             task.pop("error", None)
             task.update(status="running", finished_at=None)
             _write(conn, task)
@@ -265,19 +279,24 @@ def latest(*, profile: str | None = None, ready: bool = False) -> dict | None:
                 if task["report_ready"] and Path(task["report_file"]).is_file():
                     return task
             return None
+        condition = " AND profile=?" if profile is not None else ""
+        args = (profile,) if profile is not None else ()
         row = conn.execute("SELECT task FROM search_history WHERE status='running' AND task IS NOT NULL "
-                           "ORDER BY id DESC LIMIT 1").fetchone()
+                           f"{condition} ORDER BY id DESC LIMIT 1", args).fetchone()
         if row is None:
             row = conn.execute("SELECT task FROM search_history WHERE task IS NOT NULL "
-                               "ORDER BY id DESC LIMIT 1").fetchone()
+                               f"{condition} ORDER BY id DESC LIMIT 1", args).fetchone()
     return json.loads(row[0]) if row else None
 
 
-def reports_since(after: int) -> list[dict]:
+def reports_since(after: int, *, profile: str | None = None) -> list[dict]:
     history.init_db()
     with history._LOCK, closing(history._connect()) as conn:
+        condition = " AND profile=?" if profile is not None else ""
+        args = (after, profile) if profile is not None else (after,)
         rows = conn.execute("SELECT task FROM search_history WHERE id>? AND checkpoint IS NOT NULL "
-                            "AND report_path IS NOT NULL AND task IS NOT NULL ORDER BY id LIMIT 100", (after,)).fetchall()
+                            f"AND report_path IS NOT NULL AND task IS NOT NULL{condition} ORDER BY id LIMIT 100",
+                            args).fetchall()
     return [{**{key: task[key] for key in ("id", "status", "report_ready")},
              "report_revision": task.get("report_revision", 1)}
             for row in rows if (task := json.loads(row[0]))["report_ready"]]

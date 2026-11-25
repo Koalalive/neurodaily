@@ -5,11 +5,12 @@ from collections.abc import Callable
 from datetime import date as CalendarDate
 from threading import Event
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from starlette.responses import JSONResponse
 
-from .optimization import LOG, Optimizer
+from .optimization import DEFAULT_ONLINE_REQUESTS, DEFAULT_ONLINE_SECONDS, LOG, Optimizer
 from .optimization_store import Conflict
 
 
@@ -24,6 +25,8 @@ class Message(RequestBody):
     max_sources: int = Field(default=10, ge=1, le=14)
     focus_sources: list[str] = Field(default_factory=list, max_length=8)
     allow_tradeoffs: StrictBool = False
+    online_requests: int = Field(default=DEFAULT_ONLINE_REQUESTS, ge=1, le=600)
+    online_seconds: int = Field(default=DEFAULT_ONLINE_SECONDS, ge=1, le=900)
 
 
 class Preference(RequestBody):
@@ -57,6 +60,10 @@ def router(optimizer: Optimizer):
     @api.get("")
     def state(conversation_id: str | None = None, history_run_id: int | None = None):
         return response(lambda: optimizer.state(conversation_id, history_run_id))
+
+    @api.get("/status")
+    def status(conversation_id: str | None = None):
+        return response(lambda: optimizer.status(conversation_id))
 
     @api.post("/conversations")
     def start_conversation():
@@ -106,6 +113,12 @@ def router(optimizer: Optimizer):
             return optimizer.state(updated["conversation_id"])
 
         return response(operation)
+
+    @api.get("/runs/{run_id}/trials/{draft_id}/records")
+    def trial_records(run_id: str, draft_id: str, phase: Literal["development", "holdout"],
+                      direction: Literal["added", "lost"], offset: int = Query(0, ge=0),
+                      limit: int = Query(24, ge=1, le=50)):
+        return response(lambda: optimizer.trial_records(run_id, draft_id, phase, direction, offset, limit))
 
     return api
 

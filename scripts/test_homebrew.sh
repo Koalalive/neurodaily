@@ -100,6 +100,8 @@ done
 curl "${curl_options[@]}" "$base_url/desktop" > "$scratch/workspace.html"
 curl "${curl_options[@]}" "$base_url/api/ui/preferences" > "$scratch/preferences.json"
 curl "${curl_options[@]}" "$base_url/api/launchd/status" > "$scratch/scheduler.json"
+curl "${curl_options[@]}" "$base_url/api/optimization" > "$scratch/optimization.json"
+curl "${curl_options[@]}" "$base_url/static/optimization/workbench.js" > "$scratch/workbench.js"
 "$python" - "$scratch" "$version" <<'PY'
 import json
 from pathlib import Path
@@ -113,6 +115,8 @@ assert read("api.json")["info"]["version"] == version
 assert read("preferences.json")["language"] == "zh"
 scheduler = read("scheduler.json")
 assert scheduler["backend"] == "desktop" and scheduler["state"] == "off", scheduler
+assert read("optimization.json")["conversation_id"]
+assert 'setupWorkbench' in (scratch / "workbench.js").read_text(encoding="utf-8")
 assert 'role="tablist"' in (scratch / "workspace.html").read_text(encoding="utf-8")
 assert (scratch / "app-home" / "config" / "config.json").is_file()
 PY

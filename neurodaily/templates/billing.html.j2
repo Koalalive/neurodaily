@@ -32,6 +32,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
     <button id="refresh" type="button" data-copy="refresh">刷新</button>
   </div>
   <p id="totals" class="total" role="status"></p>
+  <div id="optimization-rounds"></div>
   <div class="table"><table>
     <thead><tr>
       <th scope="col" data-copy="time">时间</th><th scope="col" data-copy="purpose">用途</th>
@@ -78,7 +79,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       network_error:'连接失败',invalid_response:'响应无效',request_error:'请求失败',empty:'该时段没有调用记录。',unknown:'未知',
       loadError:'暂时无法读取账单。',saveError:'无法保存设置。请检查费率和服务地址。',days:n=>'过去 '+n+' 天',
       totals:t=>['调用 '+t.calls+' 次','有用量 '+t.usage_reported_calls+' 次','已报告 token '+t.total_tokens,
-        '费用未知 '+t.unknown_cost_calls+' 次'], task:'任务', rates:'当次费率'
+        '费用未知 '+t.unknown_cost_calls+' 次'], task:'任务', rates:'当次费率', optimizationRun:'检索优化', optimizationRound:'轮次', allCalls:'查看全部调用'
     },
     en: {
       title:'API billing',settings:'Back to settings',basis:'Estimates use provider-reported usage and saved rates. The provider invoice determines the final charge.',usage:'API calls',
@@ -92,7 +93,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       network_error:'Connection failed',invalid_response:'Invalid response',request_error:'Request failed',empty:'No calls in this period.',unknown:'Unknown',
       loadError:'The billing data could not be loaded.',saveError:'Could not save settings. Check the rates and API base URL.',days:n=>'Last '+n+' days',
       totals:t=>[t.calls+' calls',t.usage_reported_calls+' with usage',t.total_tokens+' tokens reported',t.unknown_cost_calls+' without a cost estimate'],
-      task:'Run',rates:'Rate at request time'
+      task:'Run',rates:'Rate at request time',optimizationRun:'Optimization run',optimizationRound:'Round',allCalls:'View all calls'
     },
     ru: {
       title:'Расходы API',settings:'К настройкам',basis:'Расчёт использует данные поставщика о токенах и сохранённые тарифы. Итоговая сумма указана в счёте поставщика.',usage:'Запросы API',
@@ -106,7 +107,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       network_error:'Сбой соединения',invalid_response:'Недопустимый ответ',request_error:'Ошибка запроса',empty:'За этот период запросов нет.',unknown:'Неизвестно',
       loadError:'Не удалось получить данные о расходах.',saveError:'Ошибка сохранения. Проверьте тарифы и URL API.',days:n=>'Последние '+n+' дней',
       totals:t=>['Запросов '+t.calls,'С данными '+t.usage_reported_calls,'Токенов '+t.total_tokens,'Без оценки '+t.unknown_cost_calls],
-      task:'Запуск',rates:'Тариф на момент запроса'
+      task:'Запуск',rates:'Тариф на момент запроса',optimizationRun:'Оптимизация поиска',optimizationRound:'Раунд',allCalls:'Все запросы'
     }
   }[document.documentElement.lang] || {};
   const el = id => document.getElementById(id);
@@ -117,6 +118,8 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
     if (text !== undefined) node.textContent = text;
     return node;
   };
+  const optimizationRun = new URLSearchParams(location.search).get('optimization_run_id');
+  const filterRun = /^[0-9a-f]{32}$/.test(optimizationRun || '') ? optimizationRun : '';
   async function request(path, options) {
     const response = await fetch(path, options);
     if (!response.ok) throw new Error('Could not load API billing');
@@ -136,6 +139,13 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       run.href = '/history/' + call.run_id;
       purpose.append(create('small')).appendChild(run);
     }
+    if (call.optimization_run_id) {
+      const link = create('a', copy.optimizationRun + ' ' + call.optimization_run_id.slice(0,8) +
+          ' · ' + copy.optimizationRound + ' ' + call.optimization_round);
+      link.href = '/billing?optimization_run_id=' + encodeURIComponent(call.optimization_run_id);
+      if(call.profile_revision) link.title=call.profile_revision;
+      purpose.append(create('small')).appendChild(link);
+    }
     const model = create('td', call.model || '—');
     model.append(create('small', [call.base_url, call.profile].filter(Boolean).join(' · ')));
     const status = create('td', [copy[call.status] || call.status, call.http_status].filter(Boolean).join(' · '));
@@ -153,12 +163,20 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
     const start = offset;
     const params = new URLSearchParams({days:el('days').value, limit, offset:start});
     if (el('purpose').value) params.set('purpose', el('purpose').value);
+    if (filterRun) params.set('optimization_run_id',filterRun);
     try {
-      const {calls, totals, total_calls:count} = await request('/api/billing?' + params);
+      const {calls, totals, total_calls:count, rounds=[]} = await request('/api/billing?' + params);
       if (revision !== loadRevision) return;
       el('totals').classList.remove('error');
       const amounts = Object.entries(totals.cost_by_currency).map(([currency, value]) => value + ' ' + currency);
       el('totals').textContent = [...copy.totals(totals), ...amounts].join(' · ');
+      if(filterRun) {
+        const all = create('a',copy.allCalls);
+        all.href='/billing';
+        const rows = rounds.map(round => create('p', [copy.optimizationRound+' '+round.round, ...copy.totals(round),
+          ...Object.entries(round.cost_by_currency).map(([currency,value])=>value+' '+currency)].join(' · ')));
+        el('optimization-rounds').replaceChildren(all,...rows);
+      }
       el('calls').replaceChildren(...calls.map(callRow));
       if (!calls.length) {
         const row = create('tr');

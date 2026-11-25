@@ -135,6 +135,87 @@ class SearchTaskTests(unittest.TestCase):
         self.assertEqual(history.get_run(attempt["id"])["status"], "interrupted")
         self.digest.assert_not_called()
 
+    def test_todays_scheduled_slot_restarts_with_new_search_inputs(self):
+        due = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        self.cfg.scheduled.update(enabled=True, hour=0, minute=0)
+        attempt = task_runs.begin(self.cfg, "daily", due, force=True)
+        self.cfg.global_keywords = [*self.cfg.global_keywords, "changed-after-restart"]
+        self.cfg.save(self.config_path)
+        finished = Event()
+        outcomes = []
+
+        def scheduler(_stop, load, start):
+            try:
+                outcomes.append(start(load(), due))
+            finally:
+                finished.set()
+
+        with mock.patch("neurodaily.webapp.run_schedule", side_effect=scheduler):
+            with TestClient(create_app(self.config_path, desktop=True)) as restarted:
+                self.assertTrue(finished.wait(5))
+                self.assertEqual(outcomes, [True])
+                self.assertEqual(history.count_runs(self.cfg.profile), 2)
+                self.assertEqual(history.get_run(attempt["id"])["status"], "superseded")
+                self.assertEqual(restarted.get("/api/launchd/status").json()["last_run"]["status"], "completed")
+
+    def test_resumed_sources_and_report_keep_the_original_search_window(self):
+        from neurodaily.digest import run
+        from neurodaily.models import Item
+
+        class NextDay(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 11, 24, 8)
+
+        self.cfg.windows["manual_paper_hours"] = 24
+        self.cfg.save(self.config_path)
+        attempt = task_runs.begin(self.cfg, "manual", None, force=True)
+        attempt["started_at"] = "2026-11-23T08:00:00"
+        attempt["retrieval_anchor"] = "2026-11-23T08:00:00+08:00"
+        task_runs.save(attempt)
+        first = Item("First source", source="fixture_one", url="https://example.test/a",
+                     date="2026-11-22T18:00:00")
+        second = Item("Second source", source="fixture_two", url="https://example.test/b",
+                      date="2026-11-22T18:00:00")
+        task_runs.save_source(attempt["id"], "primary", first.source, [first], {
+            "source": first.source, "status": "ok", "ok": True, "count": 1,
+            "fetched": 1, "ms": 1, "lookback_days": 2,
+        })
+        self.digest.side_effect = run
+        with (mock.patch("neurodaily.digest.datetime", NextDay),
+              mock.patch("neurodaily.digest.registry_for", return_value={
+                  first.source: mock.Mock(side_effect=AssertionError("cached source was re-fetched")),
+                  second.source: mock.Mock(return_value=[second]),
+              }), TestClient(create_app(self.config_path)) as restarted):
+            self.assertEqual(restarted.post(f"/api/run/{attempt['id']}/resume").status_code, 200)
+        result = task_runs.load_result(attempt["id"])
+        self.assertEqual({item.source for item in result.items}, {first.source, second.source})
+        self.assertEqual(result.search_window["start"], "2026-11-22 08:00")
+        self.assertEqual(result.search_window["end"], "2026-11-23 08:00")
+
+    def test_switching_profile_does_not_show_another_profiles_latest_report(self):
+        self.assertEqual(self.client.post("/api/run?force=1").status_code, 200)
+        history_name = history.list_runs(profile=self.cfg.profile)[0]["report_path"]
+        self.assertTrue((self.folder / history_name).is_file())
+        self.cfg.profile = "empty-profile"
+        self.cfg.save(self.config_path)
+        restarted = TestClient(create_app(self.config_path))
+        self.assertEqual(restarted.get("/report/latest").status_code, 404)
+        self.assertIn("尚无已保存的日报", restarted.get("/?ui=1").text)
+        self.assertEqual(restarted.get("/api/ui/reports?after=0").json()["reports"], [])
+
+    def test_journal_priority_remains_in_the_rendered_papers_section(self):
+        from neurodaily.digest import run
+        from neurodaily.models import Item
+
+        self.cfg.search = {"sort": "journal"}
+        ordinary = Item("Newest ordinary paper", date="2026-11-23T09:00", source="fixture")
+        top = Item("Older top journal paper", date="2026-11-22T09:00", source="fixture", tags=["top-journal"])
+        with (mock.patch("neurodaily.digest.registry_for", return_value={"fixture": mock.Mock(return_value=[ordinary, top])}),
+              mock.patch("neurodaily.digest._filter_by_windows", side_effect=lambda items, *_args, **_kw: items)):
+            result = run(self.cfg, record=False, force=True)
+        self.assertEqual([item.title for item in result.sections["papers"]], [top.title, ordinary.title])
+
     def test_scheduled_resume_preserves_confirmed_and_uncertain_receipts(self):
         from neurodaily.delivery import _destination
 
@@ -257,7 +338,10 @@ class SearchTaskTests(unittest.TestCase):
         latest = self.folder / history.get_run(second)["report_path"]
         self.assertNotEqual(original, latest)
         self.assertEqual(self.client.get(f"/history/{first}/report").status_code, 200)
-        self.assertEqual(self.client.get("/report/latest").text, latest.read_text(encoding="utf-8"))
+        response = self.client.get("/report/latest")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(f'name="nd-report-run-id" content="{second}"', response.text)
+        self.assertNotIn(f'name="nd-report-run-id" content="{first}"', response.text)
 
     def test_workspace_persists_language_and_opens_only_new_ready_reports(self):
         self.assertEqual(self.client.get("/api/ui/preferences").json(), {"language": "zh"})

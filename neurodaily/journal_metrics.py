@@ -27,6 +27,7 @@ from datetime import date, datetime
 
 import httpx
 
+from .config import parse_impact_factor
 from .search import _as_values, _issn_key, _journal_key
 
 ROOT = os.environ.get("NEURODAILY_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,6 +36,7 @@ OFFICIAL_PATH = os.path.join(ROOT, "config", "journal_metrics.json")
 
 OPENALEX = "https://api.openalex.org/sources"
 TTL_DAYS = 1
+_CONFLICTING_VENUE = object()
 
 _ALIASES = {
     "nat med": "Nature Medicine",
@@ -100,22 +102,31 @@ def _norm(s: str) -> str:
 def _read_json(path: str) -> dict:
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
+            document = json.load(f)
+    except (OSError, ValueError):
         return {}
+    return document if isinstance(document, dict) else {}
+
+
+def _load_metrics(path: str) -> dict:
+    data = _read_json(path)
+    entries = data.get("journals", data)
+    if not isinstance(entries, dict):
+        return {}
+    return {name: metrics for name, metrics in entries.items() if isinstance(metrics, dict)}
 
 
 def load_official() -> dict:
-    data = _read_json(OFFICIAL_PATH)
-    if isinstance(data.get("journals"), dict):
-        return data["journals"]
-    # tolerate a flat {name: {...}} file
-    return {k: v for k, v in data.items() if isinstance(v, dict)}
+    return _load_metrics(OFFICIAL_PATH)
 
 
 def load_auto() -> dict:
-    data = _read_json(AUTO_PATH)
-    return data.get("journals", {}) if isinstance(data.get("journals"), dict) else data
+    return _load_metrics(AUTO_PATH)
+
+
+def load_snapshot() -> tuple[dict, dict]:
+    """Take one copy of the optional data for the entire digest or render."""
+    return load_official(), load_auto()
 
 
 def ttl_days() -> int:
@@ -146,43 +157,54 @@ def _find_key(name: str, mapping: dict) -> str | None:
     return next((key for key in mapping if keys & _name_keys(key)), None)
 
 
-def _matching_journal(names, issns, config):
-    journals = getattr(config, "journals", [])
-    identifiers = {_issn_key(value) for value in issns if value}
-    by_id = [journal for journal in journals if identifiers.intersection(
-        _issn_key(value) for value in [*journal.issns, _ISSN_MAP.get(journal.name)] if value)]
+def _identifier_keys(values):
+    return {_issn_key(value.strip()) for value in _as_values(values)}
+
+
+def _matching_journal(venues, aliases, issns, config):
+    identifiers = _identifier_keys(issns)
+    journals = [(journal, _identifier_keys([*journal.issns, _ISSN_MAP.get(journal.name)]))
+                for journal in getattr(config, "journals", [])]
+    by_id = [(journal, ids) for journal, ids in journals if identifiers & ids]
+    names = {key for name in venues for key in _name_keys(name) if key}
+    by_name = [journal for journal, _ in journals if _journal_key(journal.name) in names]
+    if by_id and by_name:
+        # Two recognised but contradictory identities provide no reliable match.
+        matches = [journal for journal, _ in by_id if journal in by_name]
+        return matches[0] if len(matches) == 1 else _CONFLICTING_VENUE
     if len(by_id) == 1:
-        return by_id[0]
-    names = {key for name in names for key in _name_keys(name)}
-    candidates = by_id or journals
-    for journal in candidates:
-        if _journal_key(journal.name) in names:
-            return journal
-    for journal in candidates:
-        if any(names & _name_keys(value) for value in [journal.name, *journal.aliases]):
-            return journal
-    return None
+        return by_id[0][0]
+    if by_name:
+        # A matching title can identify print and electronic editions with different ISSNs.
+        return by_name[0] if len(by_name) == 1 else None
+    # An alternate spelling only counts when it agrees with the supplied venue,
+    # or when the source supplied no venue and there is no conflicting ISSN.
+    label_keys = names or {key for name in aliases for key in _name_keys(name) if key}
+    matches = [journal for journal, ids in (by_id or journals)
+               if (not identifiers or not ids or identifiers & ids)
+               and any(label_keys & _name_keys(label) for label in [journal.name, *journal.aliases])]
+    return matches[0] if len(matches) == 1 else None
 
 
-def _lookup(names, journal=None) -> dict | None:
+def _lookup(names, journal=None, *, snapshot=None) -> dict | None:
     if journal:
         names = [journal.name, *names, *journal.aliases]
     if not names:
         return None
-    official = load_official()
-    auto = load_auto()
+    official, auto = load_snapshot() if snapshot is None else snapshot
     off_key = next((key for name in names if (key := _find_key(name, official)) is not None), None)
     auto_key = next((key for name in names if (key := _find_key(name, auto)) is not None), None)
     imported = official.get(off_key) or {}
     automatic = auto.get(auto_key) or {}
     recorded = {
-        "if": journal.impact_factor, "jcr": journal.jcr or None, "cas": journal.cas or None,
+        "if": parse_impact_factor(journal.impact_factor), "jcr": journal.jcr or None, "cas": journal.cas or None,
         "cas_top": journal.cas_top, "sci": journal.sci, "ssci": journal.ssci, "tags": journal.tags,
     } if journal else {}
     years = {
         "if": journal.impact_factor_year, "jcr": journal.jcr_year, "cas": journal.cas_year,
     } if journal else {}
     out = {key: automatic.get(key) for key in ("oa_2yr", "h_index", "works", "openalex_id", "fetched_at")}
+    out["oa_2yr"] = parse_impact_factor(out["oa_2yr"])
     out["name"] = journal.name if journal else off_key or auto_key
     for key in ("if", "jcr", "cas"):
         year_key = f"{key}_year"
@@ -190,7 +212,7 @@ def _lookup(names, journal=None) -> dict | None:
             out[key] = recorded[key]
             out[year_key] = years[key] or journal.metric_year
         else:
-            out[key] = imported.get(key)
+            out[key] = parse_impact_factor(imported.get(key)) if key == "if" else imported.get(key)
             out[year_key] = imported.get(year_key) or imported.get("year")
     out.update({key: recorded.get(key) for key in ("cas_top", "sci", "ssci", "tags")})
     has_metrics = any(out[key] is not None for key in ("if", "jcr", "cas")) or bool(out["cas_top"])
@@ -205,23 +227,27 @@ def _lookup(names, journal=None) -> dict | None:
     return None
 
 
-def lookup(name: str | None, config=None) -> dict | None:
+def lookup(name: str | None, config=None, *, snapshot=None) -> dict | None:
     if not name:
         return None
     names = [name]
-    return _lookup(names, _matching_journal(names, (), config))
+    return _lookup(names, _matching_journal(names, (), (), config), snapshot=snapshot)
 
 
-def for_item(item, config=None) -> dict | None:
+def for_item(item, config=None, *, snapshot=None) -> dict | None:
     if item.kind != "paper":
         return None
     extra = item.extra or {}
-    names = list(dict.fromkeys(name for key in
-                              ("journal", "journal_abbrev", "journal_abbreviation", "journal_aliases", "container", "venue")
-                              for name in _as_values(extra.get(key))))
+    venues = next((values for key in ("journal", "container", "venue")
+                   if (values := _as_values(extra.get(key)))), [])
+    aliases = [name for key in ("journal_abbrev", "journal_abbreviation", "journal_aliases")
+               for name in _as_values(extra.get(key))]
     issns = [identifier for key in ("issn", "issns", "issn_l", "issn_linking")
              for identifier in _as_values(extra.get(key))]
-    return _lookup(names, _matching_journal(names, issns, config))
+    journal = _matching_journal(venues, aliases, issns, config)
+    if journal is _CONFLICTING_VENUE:
+        return None
+    return _lookup(venues or aliases, journal, snapshot=snapshot)
 
 
 def _pick(name: str, results: list[dict]) -> dict | None:
@@ -354,11 +380,8 @@ def import_csv(path: str) -> dict:
             if not name:
                 continue
             entry = {}
-            if low.get("if"):
-                try:
-                    entry["if"] = float(low["if"])
-                except ValueError:
-                    pass
+            if (impact_factor := parse_impact_factor(low.get("if"))) is not None:
+                entry["if"] = impact_factor
             if low.get("jcr"):
                 entry["jcr"] = low["jcr"].upper()
             if low.get("cas"):

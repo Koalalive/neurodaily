@@ -1027,19 +1027,21 @@ class WebSearchOutcomeTests(unittest.TestCase):
         folder = Path(self.directory)
         real = folder / "review_2026-11-20.html"
         demo_report = folder / "neurodaily_demo.html"
-        real.write_text(render_html(self.result).replace(" (demo)", ""), encoding="utf-8")
-        demo_report.write_text(render_html(self.result), encoding="utf-8")
+        real.write_text(render_html(self.result).replace(" (demo)", "").replace(
+            "</body>", '<p id="formal-fixture">Formal report</p></body>'), encoding="utf-8")
+        demo_report.write_text(render_html(self.result).replace(
+            "</body>", '<p id="demo-fixture">Demo report</p></body>'), encoding="utf-8")
         (folder / "history.html").write_text("<html>not a report</html>", encoding="utf-8")
         os.utime(real, (100, 100))
         os.utime(demo_report, (200, 200))
 
         response = self.client.get("/report/latest")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.text, real.read_text(encoding="utf-8"))
+        self.assertIn('id="formal-fixture"', response.text)
+        self.assertNotIn('id="demo-fixture"', response.text)
 
         real.unlink()
-        self.assertEqual(self.client.get("/report/latest").text,
-                         demo_report.read_text(encoding="utf-8"))
+        self.assertIn('id="demo-fixture"', self.client.get("/report/latest").text)
 
     def test_disabled_email_accepts_no_recipients_without_touching_webhooks(self):
         from pathlib import Path

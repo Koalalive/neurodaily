@@ -79,7 +79,7 @@ def _apply_patch(path, patch, dry_run):
     if errs:
         return False, errs, diff
     if not dry_run:
-        write_config(path, merged)
+        write_config(path, merged, origin="cli_patch")
     return True, [], diff
 
 
