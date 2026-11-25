@@ -331,9 +331,9 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     <p class="hint" id="schedule_hint"></p>
   </section>
 
-  <section id="service-diagnostics">
-    <h2>Service diagnostics</h2>
-    <p class="desc">Live status for the scheduled search worker and email delivery. This checks the local service APIs; it does not expose logs or secrets.</p>
+  <details class="search-tools" id="service-diagnostics">
+    <summary>Service diagnostics</summary>
+    <p class="desc">Live status for the scheduled search worker and email delivery. The pause control is in the Schedule section above.</p>
     <div class="grid2">
       <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
         <h3 style="margin-top:0;font-size:.9rem">Service</h3>
@@ -354,11 +354,9 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     </div>
     <div class="inline" style="margin-top:10px">
       <button type="button" id="diag-refresh">↻ Refresh diagnostics</button>
-      <button type="button" id="diag-pause">Pause scheduled search &amp; email</button>
-      <button type="button" id="diag-resume">Resume scheduled search &amp; email</button>
       <span id="diag-message" role="status" class="mini"></span>
     </div>
-  </section>
+  </details>
 
   <section>
     <h2>Policy / news RSS</h2>
@@ -1622,19 +1620,6 @@ async function loadDiagnostics(){
   }
 }
 el('diag-refresh').addEventListener('click',loadDiagnostics);
-async function diagControl(action){
-  var message=el('diag-message');
-  try{
-    var response=await fetch('/api/service/'+action,{method:'POST',headers:{'Content-Type':'application/json'}});
-    var result=await response.json();
-    if(!response.ok) throw new Error(result.error||'request failed');
-    message.textContent=action==='pause'?'Scheduled search and email paused.':'Scheduled search and email resumed.';
-    await loadDiagnostics();
-    await loadLaunchdStatus();
-  }catch(e){message.textContent='Action failed: '+e.message;}
-}
-el('diag-pause').addEventListener('click',function(){diagControl('pause');});
-el('diag-resume').addEventListener('click',function(){diagControl('resume');});
 
 load();
 loadUiLanguage();
