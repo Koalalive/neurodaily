@@ -120,6 +120,16 @@ def _fallback_descriptions(topic: dict) -> dict[str, str]:
     }
 
 
+def _message_rows(message: dict) -> list[dict]:
+    """Some OpenAI-compatible models put the useful JSON in reasoning_content."""
+    rows = []
+    for field in ("content", "reasoning_content"):
+        value = message.get(field) if isinstance(message, dict) else None
+        if isinstance(value, str):
+            rows.extend(_parse_annotations(value))
+    return rows
+
+
 def _parse_annotations(content: str) -> list[dict]:
     content = _clean(content)
     fenced = re.fullmatch(r"\x60{3}(?:json)?\s*(.*?)\s*\x60{3}", content, re.S | re.I)
@@ -194,7 +204,7 @@ def _labels(topics: list[dict], chat) -> None:
                  "Describe the shared subject, not study conclusions. Do not fabricate findings."},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
             ], 1600)
-            applied = _apply_annotations(batch, _parse_annotations(message.get("content", "")))
+            applied = _apply_annotations(batch, _message_rows(message))
         except Exception:
             applied = set()
         # Retry only clusters missing from a malformed/truncated batch. This
@@ -209,7 +219,7 @@ def _labels(topics: list[dict], chat) -> None:
                         "id": topic["id"], "terms": topic["terms"][:8],
                         "examples": [title[:180] for title in topic["examples"]]}], ensure_ascii=False)},
                 ], 1000)
-                _apply_annotations({topic["id"]: topic}, _parse_annotations(message.get("content", "")))
+                _apply_annotations({topic["id"]: topic}, _message_rows(message))
             except Exception:
                 continue
     for topic in populated:

@@ -36,6 +36,16 @@ class TopicMapTests(unittest.TestCase):
         self.assertEqual(topics[0]["labels"]["ru"], "Стимуляция мозга")
         self.assertLessEqual(len(topics[0]["descriptions"]["en"]), 120)
 
+    def test_reasoning_content_can_supply_annotations(self):
+        topics = [{"id": 0, "size": 2, "label": "default", "terms": ["brain"], "examples": ["A study"]}]
+        row = {"id": 0}
+        for language in ("zh", "en", "ru"):
+            row[language] = {"label": f"label {language}", "description": f"description {language}"}
+        chat = Mock(return_value={"content": "", "reasoning_content": json.dumps([row])})
+        _labels(topics, chat)
+        self.assertEqual(topics[0]["label_method"], "ai")
+        self.assertEqual(topics[0]["labels"]["en"], "label en")
+
     def test_fallback_descriptions_are_short_and_marked(self):
         topics = [{"id": 0, "size": 2, "label": "default", "terms": ["brain", "sleep"],
                    "examples": ["A very long representative title that should be shortened"]}]
