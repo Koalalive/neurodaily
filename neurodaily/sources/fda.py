@@ -17,6 +17,7 @@ FOCUS_TERMS = [
     "antiepileptic", "cognitive", "dementia", "alzheim", "parkinson", "multiple sclerosis",
     "migraine", "anesthesia", "analgesic", "schizophrenia", "bipolar", "depression",
     "anxiety", "insomnia", "neuromuscular", "spinal", "intracran", "gliom",
+    "tremor", "movement disorder", "neuromodulation", "brain-computer", "bci",
 ]
 
 
