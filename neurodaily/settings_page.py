@@ -4,8 +4,8 @@ from .optimization_ui import OPTIMIZATION_HEAD, OPTIMIZATION_WORKBENCH
 
 DASHBOARD_SETTINGS_LINK = (
     '<a href="/settings" style="position:fixed;top:12px;right:16px;z-index:9999;'
-    'background:#171f2f;border:1px solid #38bdf8;color:#38bdf8;padding:6px 12px;'
-    'border-radius:8px;text-decoration:none;font:600 13px -apple-system,Segoe UI,sans-serif;">'
+    'background:#0e1013;border:1px solid #c8a96b;color:#c8a96b;padding:6px 12px;'
+    'border-radius:2px;text-decoration:none;font:600 13px Georgia,serif;">'
     "⚙ Settings</a>"
 )
 

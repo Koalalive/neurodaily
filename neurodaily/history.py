@@ -60,6 +60,26 @@ def desktop_schedule_result(profile: str, due: datetime | None = None) -> dict |
         else:
             row = conn.execute("SELECT * FROM desktop_schedule_runs WHERE profile=? AND due=?",
                                (profile, due.isoformat())).fetchone()
+            if row is None:
+                # A launchd/CLI daily run does not write desktop_schedule_runs.
+                # Treat a completed daily run on the same local date as the same
+                # slot so starting the desktop workspace cannot send a second
+                # copy after the scheduled run already finished.
+                for candidate in conn.execute(
+                    "SELECT id, finished_at, snapshot FROM search_history "
+                    "WHERE profile=? AND status='completed' AND finished_at LIKE ? "
+                    "ORDER BY finished_at DESC", (profile, due.date().isoformat() + '%')
+                ):
+                    try:
+                        snapshot = json.loads(candidate["snapshot"] or '{}')
+                    except (TypeError, ValueError):
+                        continue
+                    if snapshot.get("mode") == "daily":
+                        row = {
+                            "profile": profile, "due": due.isoformat(), "status": "completed",
+                            "finished_at": candidate["finished_at"], "error": None,
+                        }
+                        break
     return dict(row) if row else None
 
 

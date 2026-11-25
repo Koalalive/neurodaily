@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 
+from .ui_theme import UI_CSS
+
 
 _COPY = {
     "zh": {"settings": "设置", "dashboard": "最新日报", "history": "运行历史", "run": "开始检索",
@@ -15,7 +17,8 @@ _COPY = {
 
 
 def render_workspace(language: str, after: int, latest_date: str = "") -> str:
-    return (_PAGE.replace("__LANG__", language)
+    return (_PAGE.replace("<style>", "<style>" + UI_CSS, 1)
+            .replace("__LANG__", language)
             .replace("__COPY__", json.dumps(_COPY, ensure_ascii=False))
             .replace("__AFTER__", str(after))
             .replace("__LATEST_DATE__", json.dumps(latest_date)))

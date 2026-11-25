@@ -40,6 +40,7 @@ from .security import validate_label, within
 from .settings_page import SETTINGS_HTML, DASHBOARD_SETTINGS_LINK
 from .run_page import RUN_HTML
 from .ui_translations import UI_LANGUAGES, localize_document
+from .ui_theme import inject_ui_theme
 from . import __version__, history as hist, task_runs
 
 
@@ -160,7 +161,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         return "zh"
 
     def _page(html: str):
-        return HTMLResponse(localize_document(html, _language()), headers={"Cache-Control": "no-store"})
+        return HTMLResponse(localize_document(inject_ui_theme(html), _language()),
+                            headers={"Cache-Control": "no-store"})
 
     def _report_response(html, *, localize=True, feedback=False):
         from .report_security import protect_report

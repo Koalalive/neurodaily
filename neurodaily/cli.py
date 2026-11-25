@@ -771,11 +771,15 @@ def build_parser() -> argparse.ArgumentParser:
     serve_p.add_argument("--host", default="127.0.0.1")
     serve_p.add_argument("--demo", action="store_true", help="dashboard uses offline demo data")
     serve_p.add_argument("--open", action="store_true", help="open the settings page in a browser")
+    serve_p.add_argument("--config", default=argparse.SUPPRESS,
+                         help="config path for this instance (can be used after the subcommand)")
     serve_p.set_defaults(func=cmd_serve)
 
     web_p = sub.add_parser("web", help="run the scheduled workspace on localhost")
     web_p.add_argument("--port", type=_valid_web_port, default=8031, help="local port (default: 8031)")
     web_p.add_argument("--no-open", action="store_true", help="do not open the workspace in a browser")
+    web_p.add_argument("--config", default=argparse.SUPPRESS,
+                       help="config path for this instance (can be used after the subcommand)")
     web_p.set_defaults(func=cmd_web)
 
     cfg_p = sub.add_parser("config", help="view or init config")

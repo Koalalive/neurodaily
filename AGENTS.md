@@ -22,6 +22,13 @@ neurodaily --profile oncology demo --no-open     # 离线冒烟
 neurodaily --profile oncology run --no-open      # 真正跑一次
 ```
 
+## 多实例（不同端口）
+```bash
+neurodaily web --port 8031 --config "$HOME/neurodaily/config/config.json" --no-open
+neurodaily web --port 8032 --config /tmp/neurodaily-b/config.json --no-open
+```
+`--config` 可写在子命令后；不同实例应使用独立配置文件，避免共享历史/队列。
+
 ## 其他
 ```bash
 neurodaily demo --no-open                       # 离线演示

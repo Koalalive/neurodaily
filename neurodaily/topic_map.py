@@ -19,7 +19,7 @@ from .digest import DigestResult
 from .records import record_ids
 
 _MIN_DOCS = 8
-_CACHE_VERSION = 2
+_CACHE_VERSION = 3
 _LANGUAGES = ("zh", "en", "ru")
 _STOP_EN = {
     "the", "and", "for", "with", "from", "that", "this", "are", "was", "were",
@@ -99,11 +99,31 @@ def _documents(result: DigestResult) -> list[dict]:
     return docs
 
 
+def _fallback_descriptions(topic: dict) -> dict[str, str]:
+    """Keep every populated cluster readable when the model is unavailable or partial."""
+    if not topic.get("size"):
+        return {}
+    terms = "、".join(topic.get("terms", [])[:4]) or topic.get("label", "")
+    examples = topic.get("examples") or []
+    hint = examples[0][:70] if examples else ""
+    if hint:
+        return {
+            "zh": f"围绕{terms}的研究主题；代表条目：{hint}",
+            "en": f"Research theme around {terms}; representative item: {hint}",
+            "ru": f"Тема исследований вокруг {terms}; пример: {hint}",
+        }
+    return {
+        "zh": f"围绕{terms}的研究主题。",
+        "en": f"Research theme around {terms}.",
+        "ru": f"Тема исследований вокруг {terms}.",
+    }
+
+
 def _labels(topics: list[dict], chat) -> None:
     """Annotate populated topics using their terms and representative titles."""
     for topic in topics:
         topic["labels"] = dict.fromkeys(_LANGUAGES, topic["label"])
-        topic["descriptions"] = {}
+        topic["descriptions"] = _fallback_descriptions(topic)
     if chat is None:
         return
     populated = [topic for topic in topics if topic["size"]]
@@ -138,8 +158,8 @@ def _labels(topics: list[dict], chat) -> None:
                 label = _clean(annotation.get("label"))
                 description = _clean(annotation.get("description"))
                 if label and description:
-                    topic["labels"][language] = label[:80]
-                    topic["descriptions"][language] = description[:360]
+                    topic["labels"][language] = label[:48]
+                    topic["descriptions"][language] = description[:120]
 
 
 def _cache_path(payload: dict) -> Path:
@@ -207,7 +227,7 @@ def build_topics(result: DigestResult, *, chat=None, labeler: tuple[str, str] | 
                        "confidence": round(float(doc_topic[index][topic]), 4)})
     result_data = {"enabled": True, "method": "lda_tsne", "topics": topic_rows,
                    "points": points, "unknown": [], "n_topics": n_topics}
-    if chat is None or all(len(topic["descriptions"]) == len(_LANGUAGES) for topic in topic_rows if topic["size"]):
+    if all(topic["labels"].get("zh") and topic["descriptions"].get("zh") for topic in topic_rows if topic["size"]):
         tmp = None
         try:
             cache.parent.mkdir(parents=True, exist_ok=True)

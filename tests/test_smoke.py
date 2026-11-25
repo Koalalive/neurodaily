@@ -1112,6 +1112,19 @@ class DesktopScheduleTests(unittest.TestCase):
                          [datetime(2026, 11, 20, 8), datetime(2026, 11, 20, 8),
                           datetime(2026, 11, 21, 8)])
 
+    def test_desktop_schedule_result_recognizes_launchd_daily_history(self):
+        from datetime import datetime
+        from neurodaily import history
+        with tempfile.TemporaryDirectory() as folder:
+            with mock.patch.dict("os.environ", {"NEURODAILY_HOME": folder}), \
+                 mock.patch("neurodaily.config.DEFAULT_DIRS", {"output": folder, "config": folder}):
+                history.init_db()
+                due = datetime(2026, 11, 25, 8, 0)
+                history.record_run("fp", "neuro", "completed", "2026-11-25T08:00:00",
+                                   "2026-11-25T08:02:00", item_count=1,
+                                   snapshot={"mode": "daily"})
+                self.assertEqual(history.desktop_schedule_result("neuro", due)["status"], "completed")
+
     def test_desktop_schedule_result_survives_restart_and_distinguishes_slots(self):
         from datetime import datetime
         from neurodaily.history import desktop_schedule_result, save_desktop_schedule_result

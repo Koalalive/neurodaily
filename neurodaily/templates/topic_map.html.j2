@@ -1,19 +1,19 @@
 <section id="topic-map" data-no-i18n>
   <style>
-    #topic-map{margin-block:1.5rem;padding:clamp(12px,2.5vw,24px);border:1px solid #3a4a63;border-radius:16px;background:#101928;color:#e2eaf5}
-    #topic-map h2,#topic-map h3,#topic-map h4{color:#f1f6ff;margin:0 0 .6em}
-    #topic-map p{color:#b9cbdf}
+    #topic-map{margin-block:1.5rem;padding:clamp(12px,2.5vw,24px);border:1px solid #2d2d2b;border-radius:2px;background:transparent;color:#ece9e2}
+    #topic-map h2,#topic-map h3,#topic-map h4{color:#ece9e2;margin:0 0 .6em}
+    #topic-map p{color:#979791}
     #topic-map .tm-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:14px}
-    #topic-map .tm-canvas{width:100%;aspect-ratio:1.8;border:1px solid #334f70;border-radius:12px;background:#0b172a;cursor:crosshair}
-    #topic-map .tm-side{padding:12px;border:1px solid #3b5574;border-radius:10px;background:#15233a;min-height:220px}
+    #topic-map .tm-canvas{width:100%;aspect-ratio:1.8;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;cursor:crosshair}
+    #topic-map .tm-side{padding:12px;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;min-height:220px}
     #topic-map .tm-side h3{font-size:1rem;margin-bottom:8px}
     #topic-map .tm-side p{margin:.35em 0;font-size:.88rem;line-height:1.55}
-    #topic-map .tm-side a{color:#9addff}
+    #topic-map .tm-side a{color:#c8a96b}
     #topic-map .tm-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px}
-    #topic-map .tm-chip{font:inherit;font-size:.75rem;color:#dbe9f8;background:#1c2b40;border:1px solid #455d79;border-radius:999px;padding:3px 8px;cursor:pointer}
-    #topic-map .tm-chip[aria-pressed=true]{background:#264464;border-color:#88bbf0}
+    #topic-map .tm-chip{font:inherit;font-size:.75rem;color:#979791;background:transparent;border:1px solid #3a3a37;border-radius:1px;padding:3px 8px;cursor:pointer}
+    #topic-map .tm-chip[aria-pressed=true]{color:#c8a96b;background:#15140f;border-color:#c8a96b}
     #topic-map .tm-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em}
-    #topic-map .tm-note{font-size:.82rem;color:#9fb3c8}
+    #topic-map .tm-note{font-size:.82rem;color:#77756e}
     @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
   </style>
   {% set tm_title = {'zh':'🧭 主题景观','en':'🧭 Topic landscape','ru':'🧭 Тематический ландшафт'}.get(language, '🧭 主题景观') %}
@@ -58,8 +58,8 @@
     const ctx = canvas.getContext('2d');
     let selectedTopic = 'all';
     let selectedPoint = null;
-    const hue = id => (Number(id) * 47 + 190) % 360;
-    const color = id => `hsl(${hue(id)} 72% 62%)`;
+    const topicColors = ['#c8a96b', '#8da7a1', '#b8aaa2', '#a99b83', '#d6c7a7', '#7e9b95', '#c2b59a', '#77756e'];
+    const color = id => topicColors[Number(id) % topicColors.length];
     const dot = id => {
       const element = document.createElement('span');
       element.className = 'tm-dot';
@@ -84,8 +84,8 @@
     });
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#0b172a'; ctx.fillRect(0,0,canvas.width,canvas.height);
-      ctx.strokeStyle = '#223a57'; ctx.lineWidth = 1;
+      ctx.fillStyle = '#0d0f12'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = '#2b2c2b'; ctx.lineWidth = 1;
       for (let i=1;i<5;i++) {
         ctx.beginPath(); ctx.moveTo(0,canvas.height*i/5); ctx.lineTo(canvas.width,canvas.height*i/5); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(canvas.width*i/5,0); ctx.lineTo(canvas.width*i/5,canvas.height); ctx.stroke();
@@ -98,7 +98,7 @@
         ctx.fillStyle = color(p.topic); ctx.fill();
         ctx.lineWidth = p === selectedPoint ? 3 : 1.2; ctx.strokeStyle = p === selectedPoint ? '#fff' : '#0b172a'; ctx.stroke();
       }
-      ctx.fillStyle = '#9fb3c8'; ctx.font = '18px -apple-system,Segoe UI,sans-serif';
+      ctx.fillStyle = '#77756e'; ctx.font = '18px -apple-system,Segoe UI,sans-serif';
       ctx.fillText(visible.length + ' ' + (tm?.items || '个条目') + ' · ' + topics.length + ' ' + (tm?.topics || '个主题'), 18, 28);
     }
     const topicById = new Map(topics.map(topic => [topic.id, topic]));

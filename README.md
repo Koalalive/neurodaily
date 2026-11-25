@@ -138,6 +138,27 @@ scripts/start.sh
 # http://127.0.0.1:8031
 ```
 
+### 多个实例：不同端口并行
+
+可以保留 8031 不动，在另一个终端启动第二个实例；建议同时指定独立的配置文件，避免两个实例写同一份历史和队列：
+
+```bash
+# 实例 A（默认）
+neurodaily web --port 8031 --config "$HOME/neurodaily/config/config.json" --no-open
+
+# 实例 B（另一个端口，独立配置）
+neurodaily web --port 8032 --config /tmp/neurodaily-b/config.json --no-open
+```
+
+打开：
+
+```text
+http://127.0.0.1:8031/settings
+http://127.0.0.1:8032/settings
+```
+
+`--port` 和 `--config` 可以放在 `web` 后面；不要对已经运行的端口执行重复启动。`serve` 也支持这两个参数。
+
 ### 从源码一键启动（macOS）
 
 双击 `scripts/启动 NeuroDaily.command` → 自动启动服务并打开设置页。
