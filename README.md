@@ -18,6 +18,8 @@ NeuroDaily 适合需要持续跟踪论文、预印本、临床试验和监管产
 
 [项目主页](https://koalalive.github.io/neurodaily/)提供安装入口、界面演示和文档索引。
 
+> **本轮发布范围**：CLI / Homebrew **1.0.9**、Docker **1.0.9**。Windows 和 Linux 桌面客户端本轮不更新，继续使用已发布的 v1.0.8 安装包。
+
 ## 界面预览 · Screenshots
 
 下图为本地运行的日报演示。打开本机工作区后，从设置选择学科并发起检索，可在独立标签页浏览新日报和最近一次结果。
@@ -88,6 +90,11 @@ NeuroDaily 适合需要持续跟踪论文、预印本、临床试验和监管产
 | **Webhook** | 飞书 / 企业微信 |
 | **离线演示** | `neurodaily demo`，断网可完整演示 |
 | **检索质量对比** | 在同一批标注论文上比较规则、查看召回率和前 K 条准确率 |
+| **检索优化工作台** | 逐来源证据、开发/复核窗口、请求预算、独立复核、候选差异与回滚；AI 负责解释，不直接改配置 |
+| **日报差异与反馈** | 与上一份成功日报比较新增论文、试验状态、撤稿/更正；相关性标注回流到下一轮优化证据 |
+| **配置版本与检索预检** | 配置差异预览、恢复与审计；本地预检查询语法、元数据和历史匹配，不发起检索 |
+| **可信日报** | 外链限制 HTTP(S)、CSP 安全加载、Webhook 地址校验与敏感路径保护 |
+| **Editorial 日报** | 衬线排版、AI 导语、细线编辑列表、研究地图与主题景观，支持中英俄三语 |
 | **稳健性** | 并行抓取、0 条自动回退、单源失败降级、报告保留策略 |
 | **可部署** | `scripts/start.sh` 一键启动；Docker / docker compose（镜像约 199MB） |
 
@@ -106,6 +113,8 @@ brew tap koalalive/neurodaily https://github.com/Koalalive/neurodaily.git
 brew install koalalive/neurodaily/neurodaily
 neurodaily web
 ```
+
+当前 CLI/Homebrew 通道版本为 **1.0.9**；`brew update && brew upgrade koalalive/neurodaily/neurodaily` 升级。
 
 服务默认在 `http://127.0.0.1:8031/desktop` 打开浏览器。可用 `neurodaily web --no-open` 只启动服务。终端中的 **Ctrl+C** 会停止定时检索和推送。升级使用 `brew update && brew upgrade koalalive/neurodaily/neurodaily`。 [完整安装与升级说明](docs/MACOS_HOMEBREW.md)
 
@@ -144,9 +153,20 @@ scripts/start.sh
 ### Docker
 
 ```bash
+# 使用本轮发布镜像
+docker pull koalalive/neurodaily:1.0.9
+docker run -d --name neurodaily -p 127.0.0.1:8031:8031 \
+  -v "$PWD/config:/app/neurodaily/config" \
+  -v "$PWD/output:/app/neurodaily/output" \
+  koalalive/neurodaily:1.0.9
+# http://127.0.0.1:8031
+```
+
+本地构建仍可使用：
+
+```bash
 docker build -t neurodaily:local .
 docker run -d --name neurodaily -p 127.0.0.1:8031:8031 neurodaily:local
-# http://127.0.0.1:8031
 ```
 
 或：
@@ -567,7 +587,9 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 scripts/start.sh          # http://127.0.0.1:8031
 ```
 
-On macOS, use the Homebrew tap and run `neurodaily web` to open the local app in your browser. On Windows and Linux, download the installer from GitHub Releases. Open Settings to choose a research preset, language, and delivery options. [macOS Homebrew](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest)
+On macOS, use the Homebrew tap and run `neurodaily web` to open the local app in your browser. On Windows and Linux, download the installer from GitHub Releases. Open Settings to choose a research preset, language, and delivery options. [macOS Homebrew](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest) 
+
+> Current update scope: CLI/Homebrew **1.0.9** and Docker **1.0.9**. Windows/Linux desktop clients remain on the published v1.0.8 installers and are not updated in this round.
 
 Offline demo:
 
@@ -661,6 +683,8 @@ NeuroDaily — автономная ежедневная научная свод
 ### Быстрый старт
 
 На macOS установите приложение через tap Homebrew и запустите `neurodaily web`. В Windows и Linux скачайте установщик из GitHub Releases. [Установка на macOS](docs/MACOS_HOMEBREW.md) · [Releases](https://github.com/Koalalive/neurodaily/releases/latest)
+
+> Обновление этого раунда: CLI/Homebrew **1.0.9** и Docker **1.0.9**. Клиенты Windows/Linux остаются на опубликованной версии v1.0.8; в этом раунде они не обновляются.
 
 ```bash
 git clone https://github.com/Koalalive/neurodaily.git

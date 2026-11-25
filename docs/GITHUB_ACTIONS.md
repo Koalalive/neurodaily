@@ -143,21 +143,21 @@ Releases 包含 Windows NSIS 和 MSI、Linux DEB 和 AppImage，共 4 个安装�
 桌面全平台发布与 CLI/Homebrew 发布分开：
 
 - 全平台：`vX.Y.Z` tag → `release-tauri.yml`，产出 Windows/Linux/macOS 桌面安装包。
-- CLI/Homebrew：`cli-vX.Y.Z` tag → `release-cli.yml`，只构建并发布 Python wheel，同时验证 Homebrew 公式；不会触发桌面安装包，也不会抢占 `latest`。
+- CLI/Homebrew/Docker：`cli-vX.Y.Z` tag → `release-cli.yml`，构建并发布 Python wheel、验证 Homebrew 公式，并推送 Docker 镜像与 `latest`；不会触发桌面安装包。
 
 ```bash
 # Formula/neurodaily.rb 的 tag 与 version 对齐后
-git tag -a cli-v1.0.8 -m "NeuroDaily 1.0.8 CLI + Homebrew"
-git push origin cli-v1.0.8
+git tag -a cli-v1.0.9 -m "NeuroDaily 1.0.9 CLI + Homebrew"
+git push origin cli-v1.0.9
 ```
 
 用户升级：
 
 ```bash
-python -m pip install neurodaily-1.0.8-py3-none-any.whl
+python -m pip install neurodaily-1.0.9-py3-none-any.whl
 # 或
 brew update && brew upgrade koalalive/neurodaily/neurodaily
 ```
 
-等需要全平台时，再打 `v1.0.8` tag（与 `cli-v1.0.8` 可以是同一提交）。
+等需要全平台时，再打 `v1.0.9` tag（与 `cli-v1.0.9` 可以是同一提交）。
 

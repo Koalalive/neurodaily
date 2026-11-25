@@ -74,9 +74,41 @@ jobs:
       - name: Install formula from the tagged checkout
         run: bash scripts/test_homebrew.sh
 
+  docker:
+    name: Build and publish Docker image
+    needs: [wheel, homebrew]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      DOCKER_IMAGE: docker.io/koalalive/neurodaily
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'koalalive' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Resolve image version
+        id: version
+        shell: bash
+        run: echo "value=${RELEASE_TAG#cli-v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3
+      - uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:${{ steps.version.outputs.value }}
+            ${{ env.DOCKER_IMAGE }}:latest
+
   publish:
     name: Publish the verified CLI release
-    needs: [wheel, homebrew]
+    needs: [wheel, homebrew, docker]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

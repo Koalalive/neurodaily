@@ -129,7 +129,7 @@ export NEURODAILY_HOME="$PWD/.agent-home"
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install /path/to/neurodaily-1.0.8-py3-none-any.whl
+.venv/bin/pip install /path/to/neurodaily-1.0.9-py3-none-any.whl
 .venv/bin/neurodaily --version
 .venv/bin/neurodaily demo --no-open
 ```
