@@ -539,7 +539,6 @@ body.editorial .prompt {
       <button class="btn" id="runNow" type="button">▸ Run now</button>
       <a class="btn ghost" id="settingsLink" href="/settings">◈ Settings</a>
       <a class="btn ghost" id="histLink" href="/history">History</a>
-      <a class="btn ghost" id="promptLink" href="/api/prompt" target="_blank" rel="noopener">Focus prompt</a>
       <a class="runmsg" id="runMsg" hidden></a>
       {% if result.report_base_url and result.history_id %}
       <a class="runmsg" href="/history/{{ result.history_id }}" data-task="{{ result.history_id }}" data-revision="{{ result.report_revision }}"><span>任务</span> #{{ result.history_id }}</a>
@@ -657,11 +656,6 @@ if (IS_FILE) {
   if (settingsLink) settingsLink.addEventListener('click', function(e){
     e.preventDefault(); window.gotoServer('/settings');
   });
-  var promptLink = document.getElementById('promptLink');
-  if (promptLink) {
-    promptLink.removeAttribute('target');
-    promptLink.href = '#prompt';
-  }
 }
 
 
