@@ -1,13 +1,13 @@
 <section id="research-activity" data-no-i18n>
   <style>
-    #research-activity{margin-block:1.5rem;padding:clamp(12px,2.5vw,24px);border:1px solid #33445d;border-radius:16px;background:#101928;color:#e2eaf5;color-scheme:dark}
-    #research-activity h2,#research-activity h3,#research-activity h4{color:#f1f6ff;margin:0 0 .6em}
-    #research-activity p{margin:.55em 0;color:#b9cbdf}
+    #research-activity{margin-block:1.5rem;padding:clamp(12px,2.5vw,24px);border:1px solid #2d2d2b;border-radius:2px;background:transparent;color:#ece9e2;color-scheme:dark}
+    #research-activity h2,#research-activity h3,#research-activity h4{color:#ece9e2;margin:0 0 .6em}
+    #research-activity p{margin:.55em 0;color:#979791}
     #research-activity .ra-controls{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-    #research-activity button{font:inherit;color:#e2eaf5;cursor:pointer;background:#1c2b40;border:1px solid #455d79;border-radius:7px;padding:4px 9px}
-    #research-activity button:hover,#research-activity button[aria-pressed=true]{background:#264464;border-color:#88bbf0}
+    #research-activity button{font:inherit;color:#979791;cursor:pointer;background:transparent;border:1px solid #3a3a37;border-radius:1px;padding:3px 8px;font-size:.75rem}
+    #research-activity button:hover,#research-activity button[aria-pressed=true]{background:#15140f;border-color:#c8a96b;color:#c8a96b}
     #research-activity :focus-visible{outline:2px solid #b3d9ff;outline-offset:3px}
-    #research-activity .ra-map{width:100%;aspect-ratio:2;position:relative;overflow:hidden;border:1px solid #334f70;border-radius:12px;background:#0b172a}
+    #research-activity .ra-map{width:100%;aspect-ratio:2;position:relative;overflow:hidden;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12}
     #research-activity canvas{width:100%;height:100%;display:block}
     /* Shared qualitative palette with the topic landscape. */
     #research-activity [data-kind=paper]{--ra-color:#56B4E9}
@@ -19,15 +19,16 @@
     #research-activity .ra-controls button{background:transparent;border-color:#3a3a37;border-radius:1px;color:#979791}
     #research-activity .ra-controls button:hover,
     #research-activity .ra-controls button[aria-pressed=true]{background:#15140f;border-color:#c8a96b;color:#c8a96b}
-    #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0b172a;border-radius:20px;padding:0 4px;background:var(--ra-color,#b2c9de);color:#101928;font-size:11px;font-weight:750}
+    #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0d0f12;border-radius:20px;padding:0 4px;background:var(--ra-color,#b2c9de);color:#101928;font-size:11px;font-weight:750}
     #research-activity .ra-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em;background:var(--ra-color,#b2c9de)}
     #research-activity .ra-marker:hover,#research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#fff;background:var(--ra-color,#b2c9de)}
-    #research-activity .ra-caption{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:.85rem;color:#c3cfe0}
-    #research-activity .ra-results{margin-block:12px 18px;padding:12px;border:1px solid #3b5574;border-radius:10px;background:#15233a;scroll-margin-top:12px}
+    #research-activity .ra-caption{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:.85rem;color:#77756e}
+    #research-activity .ra-results{margin-block:12px 18px;padding:12px;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;color:#ece9e2;scroll-margin-top:12px}
     #research-activity .ra-results ol{padding-inline-start:1.4rem;margin-bottom:0}
     #research-activity .ra-results li+li{margin-top:10px}
-    #research-activity a{color:#9addff}
-    #research-activity .ra-evidence{font-size:.88rem;overflow-wrap:anywhere}
+    #research-activity a{color:#c8a96b}
+    #research-activity .ra-evidence{font-size:.88rem;overflow-wrap:anywhere;color:#979791}
+    #research-activity .ra-deferred{color:#c6a46b}
   </style>
   <h2 data-ra="map">⌖ 研究动态地图</h2>
   <p data-ra="mapNote"></p>
