@@ -10,11 +10,14 @@ import json
 from pathlib import Path
 import re
 import sqlite3
+from threading import Lock
 from urllib.parse import urlsplit, urlunsplit
 
 from .config import DEFAULT_DIRS
 
 PURPOSES = ("summary", "connection_test", "geolocation", "search_optimization", "other")
+GEO_CONCURRENCY_DEFAULT = 4
+_WRITE_LOCK = Lock()
 _TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "output_tokens", "total_tokens")
 _RATE_FIELDS = ("currency", "input", "output", "cached_input")
 _RESPONSE_ID = re.compile(r"[A-Za-z0-9_.:-]{1,200}\Z")
@@ -159,11 +162,15 @@ def _validate_rates(rates) -> list[dict]:
 
 def save_settings(payload: dict) -> dict:
     """Apply a settings patch atomically. Prices are per million tokens."""
-    if not isinstance(payload, dict) or set(payload) - {"rates", "geo_enabled"}:
+    if not isinstance(payload, dict) or set(payload) - {"rates", "geo_enabled", "geo_concurrency"}:
         raise ValueError("Invalid billing settings")
     patch = dict(payload)
     if "geo_enabled" in patch and not isinstance(patch["geo_enabled"], bool):
         raise ValueError("geo_enabled must be a boolean")
+    if "geo_concurrency" in patch:
+        value = patch["geo_concurrency"]
+        if type(value) is not int or not 1 <= value <= 16:
+            raise ValueError("geo_concurrency must be an integer from 1 to 16")
     if "rates" in patch:
         patch["rates"] = _validate_rates(patch["rates"])
     with _connection() as conn:
@@ -239,7 +246,7 @@ def record_call(*, purpose, base_url, model, status, http_status=None, response_
     cost = _estimate(rate, *tokens[:3])
     response_id = response_id if isinstance(response_id, str) and _RESPONSE_ID.fullmatch(response_id) else None
     now = called_at or datetime.now(timezone.utc)
-    with _connection() as conn:
+    with _WRITE_LOCK, _connection() as conn:
         cursor = conn.execute("""INSERT INTO calls (called_at, purpose, run_id, profile, base_url, model,
                      status, http_status, response_id, input_tokens, cached_input_tokens, output_tokens,
                      total_tokens, currency, estimated_cost, rate)

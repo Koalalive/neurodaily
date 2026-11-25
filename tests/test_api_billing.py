@@ -49,9 +49,13 @@ class BillingTests(unittest.TestCase):
         first = api_billing.save_settings({"rates": [rate]})
         self.assertEqual(first["rates"], [_price()])
         self.assertEqual(api_billing.save_settings({"geo_enabled": True}), {**first, "geo_enabled": True})
+        self.assertEqual(api_billing.save_settings({"geo_concurrency": 6})["geo_concurrency"], 6)
         self.assertEqual(api_billing.load_settings()["rates"], [_price()])
         invalid = (
             {"geo_enabled": "true"},
+            {"geo_concurrency": 0},
+            {"geo_concurrency": 17},
+            {"geo_concurrency": "4"},
             {"rates": [rate, _price()]},
             {"rates": [_price(input="Infinity")]},
             {"rates": [_price(output=-1)]},

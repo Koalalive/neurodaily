@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from importlib.resources import files
 import json
 from functools import lru_cache
@@ -512,7 +513,8 @@ def _extract_batch(chat, batch, names: _CountryNames):
 
 def locate_items(items: dict[str, Item], *, chat=None, cache_dir=None,
                  max_model_items: int = _MAX_MODEL_ITEMS,
-                 batch_size: int = _BATCH_SIZE) -> dict:
+                 batch_size: int = _BATCH_SIZE,
+                 concurrency: int = 4) -> dict:
     """Map structured locations and optional model evidence to labelled report points."""
     if not items:
         return {"places": [], "unknown": []}
@@ -557,8 +559,7 @@ def locate_items(items: dict[str, Item], *, chat=None, cache_dir=None,
         keep = {item_id for item_id, _ in prioritized[:max_model_items]}
         deferred.update(item_id for item_id, _ in pending if item_id not in keep)
         pending = [pair for pair in pending if pair[0] in keep]
-    for start in range(0, len(pending), batch_size):
-        batch = pending[start:start + batch_size]
+    def resolve(batch):
         response = _extract_batch(chat, batch, names)
         if response is None and len(batch) > 1:
             # Long batches can exhaust the model's visible-output budget while
@@ -572,7 +573,24 @@ def locate_items(items: dict[str, Item], *, chat=None, cache_dir=None,
                 else:
                     found.update(retry[0])
                     malformed.update(retry[1])
-            response = (found, malformed)
+            return found, malformed
+        return response
+
+    batches = [pending[start:start + batch_size]
+               for start in range(0, len(pending), batch_size)]
+    responses = [None] * len(batches)
+    workers = max(1, min(int(concurrency or 1), 16, len(batches)))
+    if workers > 1:
+        # The model batches are independent. Resolve them concurrently, then
+        # apply results in source order so map output remains deterministic.
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="geo-batch") as pool:
+            futures = {pool.submit(resolve, batch): index for index, batch in enumerate(batches)}
+            for future in as_completed(futures):
+                responses[futures[future]] = future.result()
+    else:
+        responses = [resolve(batch) for batch in batches]
+
+    for batch, response in zip(batches, responses):
         if response is None:
             deferred.update(item_id for item_id, _ in batch)
             continue

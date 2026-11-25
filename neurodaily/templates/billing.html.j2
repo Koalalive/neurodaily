@@ -53,6 +53,9 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
   <h2 id="prefs-title" data-copy="preferences">费率与 AI 定位</h2>
   <form id="preferences">
     <label><input type="checkbox" id="geo-enabled"> <span data-copy="geo">启用 AI 地理定位</span></label>
+    <label style="display:block;margin-top:8px"><span data-copy="geoConcurrency">地理定位并发数</span>
+      <input id="geo-concurrency" type="number" min="1" max="16" value="4" style="width:90px;margin-left:8px">
+    </label>
     <p data-copy="geoNote"></p>
     <p data-copy="rateNote"></p>
     <div id="rates"></div>
@@ -71,7 +74,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       title:'API 账单',settings:'返回设置',basis:'按服务商返回的用量和已保存费率估算。最终费用以服务商账单为准。',usage:'调用明细',
       period:'统计周期',purpose:'用途',refresh:'刷新',time:'时间',provider:'模型与服务',status:'状态',inputTokens:'输入 token',
       cachedTokens:'缓存命中',outputTokens:'输出 token',totalTokens:'总 token',cost:'费用估算',prev:'上一页',next:'下一页',
-      preferences:'费率与 AI 定位',geo:'启用 AI 地理定位',geoNote:'启用后，已配置并启用的摘要模型会处理出处不明确的地图条目，可能产生额外费用。',
+      preferences:'费率与 AI 定位',geo:'启用 AI 地理定位',geoConcurrency:'地理定位并发数（1–16）',geoNote:'启用后，已配置并启用的摘要模型会处理出处不明确的地图条目，可能产生额外费用。',
       rateNote:'按每百万 token 填写费率。缓存费率如留空，统一使用输入费率。费率修改从下一次请求起生效。',
       add:'添加费率',save:'保存',remove:'移除',saved:'已保存',base_url:'API 基础地址',model:'模型 ID',currency:'币种',
       input:'输入费率',output:'输出费率',cached_input:'缓存输入费率',all:'全部',summary:'AI 摘要',
@@ -85,7 +88,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       title:'API billing',settings:'Back to settings',basis:'Estimates use provider-reported usage and saved rates. The provider invoice determines the final charge.',usage:'API calls',
       period:'Date range',purpose:'Purpose',refresh:'Refresh',time:'Time',provider:'Model and provider',status:'Status',inputTokens:'Input tokens',
       cachedTokens:'Cache hits',outputTokens:'Output tokens',totalTokens:'Total tokens',cost:'Estimated cost',prev:'Previous',next:'Next',
-      preferences:'Rates and AI geography',geo:'Enable AI geography',geoNote:'The enabled summary model can resolve uncertain locations when configured. This can incur additional charges.',
+      preferences:'Rates and AI geography',geo:'Enable AI geography',geoConcurrency:'Geography concurrency (1–16)',geoNote:'The enabled summary model can resolve uncertain locations when configured. This can incur additional charges.',
       rateNote:'Enter prices per million tokens. Leave the cached rate blank to use the input rate. Changes apply to future requests.',
       add:'Add rate',save:'Save',remove:'Remove',saved:'Saved',base_url:'API base URL',model:'Model ID',currency:'Currency',
       input:'Input rate',output:'Output rate',cached_input:'Cached input rate',all:'All',summary:'AI summary',
@@ -99,7 +102,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
       title:'Расходы API',settings:'К настройкам',basis:'Расчёт использует данные поставщика о токенах и сохранённые тарифы. Итоговая сумма указана в счёте поставщика.',usage:'Запросы API',
       period:'Период',purpose:'Назначение',refresh:'Обновить',time:'Время',provider:'Модель и поставщик',status:'Статус',inputTokens:'Входные токены',
       cachedTokens:'Из кеша',outputTokens:'Выходные токены',totalTokens:'Всего токенов',cost:'Оценка стоимости',prev:'Назад',next:'Далее',
-      preferences:'Тарифы и геолокация',geo:'Геолокация с помощью ИИ',geoNote:'Настроенная модель резюме уточняет местоположения. При вызове модели возможна дополнительная плата.',
+      preferences:'Тарифы и геолокация',geo:'Геолокация с помощью ИИ',geoConcurrency:'Параллельные запросы геолокации (1–16)',geoNote:'Настроенная модель резюме уточняет местоположения. При вызове модели возможна дополнительная плата.',
       rateNote:'Укажите цену за миллион токенов. Если ставка для кеша не указана, применяется входная ставка. Изменения применяются к новым запросам.',
       add:'Добавить тариф',save:'Сохранить',remove:'Убрать',saved:'Сохранено',base_url:'Базовый URL API',model:'ID модели',currency:'Валюта',
       input:'Входной тариф',output:'Выходной тариф',cached_input:'Тариф кеша',all:'Все',summary:'Резюме ИИ',
@@ -226,6 +229,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
   }
   function fillSettings(settings) {
     el('geo-enabled').checked = settings.geo_enabled;
+    el('geo-concurrency').value = settings.geo_concurrency || 4;
     el('rates').replaceChildren();
     settings.rates.forEach(addRate);
   }
@@ -237,7 +241,7 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
     const rates = [...el('rates').children].map(row => Object.fromEntries([...row.querySelectorAll('input')].map(input => [input.name, input.value])));
     try {
       fillSettings(await request('/api/billing/settings', {method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({rates, geo_enabled:el('geo-enabled').checked})}));
+        body:JSON.stringify({rates, geo_enabled:el('geo-enabled').checked, geo_concurrency:Number(el('geo-concurrency').value)})}));
       saveStatus.classList.remove('error');
       saveStatus.textContent = copy.saved;
     } catch (_) {
@@ -250,9 +254,10 @@ button{cursor:pointer}button:hover{background:#314762}button:disabled{opacity:.5
   el('save').disabled = true;
   el('add-rate').disabled = true;
   el('geo-enabled').disabled = true;
+  el('geo-concurrency').disabled = true;
   request('/api/billing/settings').then(settings => {
     fillSettings(settings);
-    for (const id of ['save','add-rate','geo-enabled']) el(id).disabled = false;
+    for (const id of ['save','add-rate','geo-enabled','geo-concurrency']) el(id).disabled = false;
   }).catch(() => {el('save-status').textContent = copy.loadError;});
   request('/api/ai/settings').then(({base_url, model}) => {currentModel = {base_url, model};}).catch(() => {});
   loadCalls();

@@ -36,7 +36,8 @@ def enrich_geography(result: DigestResult) -> bool:
     """Optionally resolve ambiguous locations during a real run, before delivery."""
     from . import ai_summary, api_billing
 
-    if result.skipped or not result.items or not api_billing.load_settings()["geo_enabled"]:
+    settings = api_billing.load_settings()
+    if result.skipped or not result.items or not settings["geo_enabled"]:
         return False
     cfg = ai_summary.load_cfg()
     # Summary and map have independent switches; the map only needs a key.
@@ -47,6 +48,7 @@ def enrich_geography(result: DigestResult) -> bool:
     model = cfg["model"]
     cache_key = hashlib.sha256(json.dumps([base, model]).encode()).hexdigest()
     cache_dir = Path(DEFAULT_DIRS["output"], "geography_cache", cache_key)
+    concurrency = max(1, min(16, int(settings.get("geo_concurrency") or 4)))
     mapped = _index(result)
     # News/policy feeds often carry only a headline. Fetch the article text so the
     # geolocation model can trace the event location instead of leaving it unknown.
@@ -88,7 +90,7 @@ def enrich_geography(result: DigestResult) -> bool:
     # its small default for callers that want a bounded preview.
     result.geography = locate_items({key: item for key, (_, item) in mapped.items()}, chat=chat,
                                     cache_dir=cache_dir, max_model_items=400,
-                                    batch_size=6)
+                                    batch_size=6, concurrency=concurrency)
     return True
 
 
