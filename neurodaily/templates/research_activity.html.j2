@@ -15,8 +15,10 @@
     #research-activity [data-kind=news]{--ra-color:#E69F00}
     #research-activity [data-kind=industry]{--ra-color:#CC79A7}
     #research-activity [data-kind=conference]{--ra-color:#F0E442}
-    #research-activity .ra-controls button[data-kind]{color:var(--ra-color);border-color:color-mix(in srgb,var(--ra-color) 55%,#455d79)}
-    #research-activity .ra-controls button[data-kind][aria-pressed=true]{background:color-mix(in srgb,var(--ra-color) 20%,#1c2b40);border-color:var(--ra-color)}
+    /* Controls stay neutral, matching the topic landscape chips. */
+    #research-activity .ra-controls button{background:transparent;border-color:#3a3a37;border-radius:1px;color:#979791}
+    #research-activity .ra-controls button:hover,
+    #research-activity .ra-controls button[aria-pressed=true]{background:#15140f;border-color:#c8a96b;color:#c8a96b}
     #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0b172a;border-radius:20px;padding:0 4px;background:var(--ra-color,#b2c9de);color:#101928;font-size:11px;font-weight:750}
     #research-activity .ra-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em;background:var(--ra-color,#b2c9de)}
     #research-activity .ra-marker:hover,#research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#fff;background:var(--ra-color,#b2c9de)}
@@ -234,10 +236,7 @@
         const categoryIds = ids.filter(id => kind(id) === type);
         const button = control(type === 'all' ? c.all : `${c[type]} (${categoryIds.length})`);
         button.dataset.filter = type;
-        if (type !== 'all') {
-          button.dataset.kind = type;
-          button.prepend(dot(type));
-        }
+        if (type !== 'all') button.prepend(dot(type));
         button.setAttribute('aria-pressed', String(type === selected));
         button.addEventListener('click', () => {
           selected = type;
