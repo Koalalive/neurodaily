@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from html import escape, unescape
 from pathlib import Path
@@ -308,11 +309,19 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             attempt["sources"].update(changes)
             task_runs.save(attempt)
 
-        def stage(name, status, error="", *, checkpoint=None):
-            task_runs.stage(attempt, name, status, error)
-            task_runs.save(attempt, result=checkpoint)
-            if status == "running":
-                check_cancelled()
+        stage_lock = Lock()
+
+        def stage(name, status, error="", *, checkpoint=None, set_phase=True):
+            # AI summary/geography/topics now run in parallel. Serialize task
+            # writes so one stage cannot overwrite another stage's status.
+            with stage_lock:
+                previous_phase = attempt["phase"]
+                task_runs.stage(attempt, name, status, error)
+                if not set_phase:
+                    attempt["phase"] = previous_phase
+                task_runs.save(attempt, result=checkpoint)
+                if status == "running":
+                    check_cancelled()
 
         result = task_runs.load_result(attempt["id"]) if complete("search") else None
         if result is None:
@@ -399,40 +408,69 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             except Exception:
                 stage("metrics", "failed", "期刊指标更新失败。")
 
-        if not complete("ai"):
-            stage("ai", "running")
-            try:
-                from .ai_summary import generate_all, load_cfg
-                summaries = generate_all(result, load_cfg())
-                if summaries:
-                    result.ai_summary_meta = {"model": load_cfg().get("model", ""),
-                                              "languages": sorted(summaries)}
-                stage("ai", "completed" if summaries else "skipped", checkpoint=result)
-            except Exception:
-                stage("ai", "failed", "AI 摘要生成失败，请检查设置中的 AI 连通性。")
+        # These three post-processing stages are independent. Run them in a
+        # bounded pool; metrics stays before this block because it mutates item
+        # metadata used by the report.
+        enrichment = []
 
-        if not complete("geolocation"):
-            stage("geolocation", "running")
-            try:
-                from .research_activity import enrich_geography
-                if enrich_geography(result):
-                    partial = bool(result.geography.get("deferred"))
-                    stage("geolocation", "partial" if partial else "completed", checkpoint=result)
-                else:
-                    stage("geolocation", "skipped", "未启用或缺少大模型 API。")
-            except Exception:
-                stage("geolocation", "failed", "AI 地理定位未完成。")
+        def add_enrichment(name, operation):
+            if not complete(name):
+                enrichment.append((name, operation))
 
-        if not complete("topics"):
-            stage("topics", "running")
+        def run_ai_summary():
+            from .ai_summary import generate_all, load_cfg
+            summaries = generate_all(result, load_cfg())
+            if summaries:
+                result.ai_summary_meta = {"model": load_cfg().get("model", ""),
+                                          "languages": sorted(summaries)}
+            stage("ai", "completed" if summaries else "skipped", checkpoint=result, set_phase=False)
+
+        def run_geography():
+            from .research_activity import enrich_geography
+            if enrich_geography(result):
+                partial = bool((result.geography or {}).get("deferred"))
+                stage("geolocation", "partial" if partial else "completed", checkpoint=result, set_phase=False)
+            else:
+                stage("geolocation", "skipped", "未启用或缺少大模型 API。", set_phase=False)
+
+        def run_topics():
+            from .topic_map import enrich_topics
+            if enrich_topics(result):
+                stage("topics", "completed", checkpoint=result, set_phase=False)
+            else:
+                stage("topics", "skipped", "LDA/scikit-learn 未启用或语料不足。", set_phase=False)
+
+        add_enrichment("ai", run_ai_summary)
+        add_enrichment("geolocation", run_geography)
+        add_enrichment("topics", run_topics)
+        if enrichment:
+            # Mark all selected stages running before submitting so the UI has
+            # an accurate snapshot even when one stage is much slower.
+            phase_name = "ai" if any(name == "ai" for name, _ in enrichment) else enrichment[0][0]
+            for name, _ in enrichment:
+                stage(name, "running", set_phase=name == phase_name)
             try:
-                from .topic_map import enrich_topics
-                if enrich_topics(result):
-                    stage("topics", "completed", checkpoint=result)
-                else:
-                    stage("topics", "skipped", "LDA/scikit-learn 未启用或语料不足。")
-            except Exception:
-                stage("topics", "failed", "主题图生成失败。")
+                with ThreadPoolExecutor(max_workers=len(enrichment),
+                                        thread_name_prefix="nd-enrich") as pool:
+                    futures = {pool.submit(operation): name for name, operation in enrichment}
+                    for future in as_completed(futures):
+                        try:
+                            future.result()
+                        except task_runs.Cancelled:
+                            for pending in futures:
+                                pending.cancel()
+                            raise
+                        except Exception:
+                            name = futures[future]
+                            message = {
+                                "ai": "AI 摘要生成失败，请检查设置中的 AI 连通性。",
+                                "geolocation": "AI 地理定位未完成。",
+                                "topics": "主题图生成失败。",
+                            }[name]
+                            logging.getLogger(__name__).exception("Enrichment stage %s failed", name)
+                            stage(name, "failed", message, set_phase=False)
+            except task_runs.Cancelled:
+                raise
 
         if attempt.get("report_revision", 0) < 2:
             publish_report(2)
