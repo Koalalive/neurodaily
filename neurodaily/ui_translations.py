@@ -572,8 +572,8 @@ AI 地理定位|AI geography|Геолокация ИИ
 暂无任务|No task recorded|Запись о задаче отсутствует
 在线 · PID {pid} · 配置 {profile}|online · PID {pid} · profile {profile}|онлайн · PID {pid} · профиль {profile}
 已停用|disabled|отключено
-已启用；{count} 个收件人；SMTP 已配置|enabled; {count} recipient(s); SMTP configured|включено; получателей: {count}; SMTP настроен
-已启用；{count} 个收件人；SMTP 未配置|enabled; {count} recipient(s); SMTP password missing|включено; получателей: {count}; пароль SMTP отсутствует
+已启用 · {count} 个收件人 · SMTP 已配置|enabled · {count} recipient(s) · SMTP configured|включено · получателей: {count} · SMTP настроен
+已启用 · {count} 个收件人 · SMTP 未配置|enabled · {count} recipient(s) · SMTP password missing|включено · получателей: {count} · пароль SMTP отсутствует
 已由服务暂停|paused by service|приостановлено службой
 正常|Healthy|Работает
 无命中|No matches|Совпадений нет

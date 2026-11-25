@@ -1603,7 +1603,7 @@ async function loadDiagnostics(){
       : (healthRows.length?'all sources ok':'no source health yet');
     el('diag-health').textContent=t('Sources: {sources}',{sources:healthText});
     var recipients=email.recipients||0;
-    var emailText=email.enabled===false?t('disabled'):t(email.smtp_configured?'enabled; {count} recipient(s); SMTP configured':'enabled; {count} recipient(s); SMTP password missing',{count:recipients});
+    var emailText=email.enabled===false?t('disabled'):t(email.smtp_configured?'enabled · {count} recipient(s) · SMTP configured':'enabled · {count} recipient(s) · SMTP password missing',{count:recipients});
     if(scheduler.paused) emailText+=' · '+t('paused by service');
     var schedulerText=(scheduler.backend||'?')+' · '+(scheduler.state||'?')+' · '+(scheduler.schedule||'—');
     if(scheduler.next_run) schedulerText+=' · next '+new Date(scheduler.next_run).toLocaleString(document.documentElement.lang);
