@@ -38,6 +38,7 @@ class DigestResult:
     ai_summary_meta: dict = field(default_factory=dict)
     on_this_day_lang: str = "zh"
     history_id: int = 0            # id in search_history (0 = not recorded)
+    task_name: str = ""            # start time · retrieval configuration
     skipped: bool = False          # True if this run was deduped (not executed)
     skipped_reason: str = ""
     fingerprint: str = ""

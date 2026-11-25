@@ -357,6 +357,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 path = path.with_name(f"{path.stem}-{attempt['id']}{path.suffix}")
             attempt["report_file"] = str(path)
         result.history_id = attempt["id"]
+        result.task_name = attempt.get("name") or task_runs.task_name(
+            cfg.profile, attempt.get("started_at", ""))
         base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
         result.report_base_url = base
         result.report_locale = _language()
@@ -1005,14 +1007,17 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
         output = Path(cfg.output_dir())
         task = task_runs.latest(profile=cfg.profile, ready=True)
-        indexed = {Path(task["report_file"]).absolute()} if task else set()
+        task_path = Path(task["report_file"]).absolute() if task else None
+        indexed = {task_path} if task_path else set()
         # CLI and launchd history can identify reports predating the profile meta tag.
         for run in hist.list_runs(profile=cfg.profile):
             name = run.get("report_path")
             if not run.get("task") and name and Path(name).name == name:
                 indexed.add((output / name).absolute())
         candidates = indexed | {path.absolute() for path in output.glob("*.html")}
-        files = sorted((f for f in candidates if f.is_file()), key=os.path.getmtime, reverse=True)
+        files = sorted((f for f in candidates if f.is_file()
+                        and f.name not in {"last_email_attachment.html", "history.html"}),
+                       key=lambda f: (f != task_path, -f.stat().st_mtime))
         demo = None
         for file in files:
             text = header(file)

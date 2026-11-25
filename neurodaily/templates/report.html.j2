@@ -316,6 +316,7 @@ body.editorial .stat + .stat { border-left: 1px solid var(--border); padding-lef
 body.editorial .stat b { color: var(--text); font: 500 1.55rem/1.1 var(--serif); }
 body.editorial .stat span { color: var(--muted); font-size: .63rem; letter-spacing: .12em; }
 body.editorial .toolbar { margin-top: 18px; gap: 16px; }
+body.editorial .task-context { color: #77756e; font-size: .74rem; letter-spacing: .02em; }
 body.editorial .btn {
   background: var(--accent); color: #15120b; border-radius: 3px; padding: 7px 14px;
   font-size: .78rem; font-weight: 700; letter-spacing: .01em;
@@ -536,12 +537,9 @@ body.editorial .prompt {
       {% endfor %}
     </div>
     <div class="toolbar">
-      <button class="btn" id="runNow" type="button">▸ Run now</button>
-      <a class="btn ghost" id="histLink" href="/history">History</a>
-      <a class="runmsg" id="runMsg" hidden></a>
-      {% if result.report_base_url and result.history_id %}
-      <a class="runmsg" href="/history/{{ result.history_id }}" data-task="{{ result.history_id }}" data-revision="{{ result.report_revision }}"><span>任务</span> #{{ result.history_id }}</a>
-      {% endif %}
+      <button class="btn" id="runNow" type="button">▸ 检索</button>
+      <a class="btn ghost" id="histLink" href="/history">历史</a>
+      {% if result.task_name %}<span class="task-context" data-no-i18n>{{ result.task_name }}</span>{% endif %}
     </div>
   </div>
 </header>
@@ -660,7 +658,6 @@ if (IS_FILE) {
 
 
 var runBtn = document.getElementById('runNow');
-var runMsg = document.getElementById('runMsg');
 var reportTask = document.querySelector('[data-task][data-revision]');
 if (runBtn) {
   runBtn.addEventListener('click', function () {
@@ -681,14 +678,6 @@ if (runBtn) {
         runBtn.disabled = busy;
         var t = window.ndT || String;
         runBtn.textContent = t(busy ? 'Running…' : '▸ Run now');
-        if (runMsg) {
-          runMsg.hidden = !busy;
-          if (busy) {
-            runMsg.href = '/history/' + run.id;
-            var kind = t(run.scheduled_for ? '定时检索' : '手动检索');
-            runMsg.textContent = window.ndT ? t('{kind} #{id} 进行中', {kind:kind,id:run.id}) : kind + ' #' + run.id + ' 进行中';
-          }
-        }
         if (window.parent === window && run && reportTask && run.id === Number(reportTask.dataset.task) &&
             run.report_revision > Number(reportTask.dataset.revision)) location.reload();
       } catch (e) { /* Retain the last known state during a short interruption. */ }

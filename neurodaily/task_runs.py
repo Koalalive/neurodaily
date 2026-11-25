@@ -60,7 +60,8 @@ def acquire():
 def begin(config: Config, mode: str, due: datetime | None, *, force: bool = False,
           hours: int | None = None, profile_revision: str | None = None) -> dict:
     start = datetime.now().astimezone()
-    task = {"profile": config.profile, "mode": mode, "status": "running", "phase": "search",
+    task = {"profile": config.profile, "name": task_name(config.profile, start.replace(tzinfo=None).isoformat()),
+            "mode": mode, "status": "running", "phase": "search",
             "started_at": start.replace(tzinfo=None).isoformat(),
             "retrieval_anchor": start.isoformat(), "scheduled_for": due.isoformat() if due else None,
             "finished_at": None, "sources": {}, "stages": {}, "report_ready": False,
@@ -86,6 +87,12 @@ def stage(task: dict, name: str, status: str, error: str = "") -> None:
         task["stages"][name]["error"] = error
     else:
         task["stages"][name].pop("error", None)
+
+
+def task_name(profile: str, started_at: str) -> str:
+    """Stable task label: start time plus the retrieval configuration name."""
+    stamp = (started_at or "").replace("T", " ")[:16]
+    return f"{stamp} · {profile}" if stamp and profile else (profile or stamp or "检索任务")
 
 
 def _json(data) -> str:
@@ -115,7 +122,7 @@ def _checkpoint(result: DigestResult) -> str:
 def load_result(run_id: int) -> DigestResult | None:
     history.init_db()
     with history._LOCK, closing(history._connect()) as conn:
-        row = conn.execute("SELECT checkpoint FROM search_history WHERE id=?", (run_id,)).fetchone()
+        row = conn.execute("SELECT checkpoint, task FROM search_history WHERE id=?", (run_id,)).fetchone()
     if not row or not row[0]:
         return None
     data = json.loads(row[0])
@@ -123,6 +130,9 @@ def load_result(run_id: int) -> DigestResult | None:
     data["items"] = items
     data["sections"] = {key: [items[index] for index in group] for key, group in data["sections"].items()}
     data["config"] = Config.from_dict(data["config"])
+    task = json.loads(row["task"]) if row["task"] else {}
+    data["task_name"] = task.get("name") or task_name(
+        data.get("config_profile", ""), task.get("started_at", data.get("generated_at", "")))
     return DigestResult(**data, history_id=run_id)
 
 
