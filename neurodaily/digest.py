@@ -151,6 +151,16 @@ def _mark_match(item, plan, scoped=None) -> str:
     return matched.status
 
 
+def _source_needs_retry(diagnostics: dict) -> bool:
+    """Retry transient source failures once; never hammer a blocked URL."""
+    if diagnostics.get("status") not in {"failed", "timeout", "limited"}:
+        return False
+    errors = " ".join(str(value) for value in diagnostics.get("request_errors", []))
+    return not any(marker in errors.casefold() for marker in (
+        "blocked", "unresolved", "invalid", "not a valid", "unsupported",
+    ))
+
+
 def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, preview=False,
                    progress=None, cached=None, checkpoint=None, check_cancelled=None, as_of=None):
     from .sources.http import capture_requests
@@ -160,12 +170,16 @@ def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, pr
                if config.source_opts(name).get("enabled", True) is not False
                and (not preview or _preview_source(config, name))]
     cached = cached or {}
+    # A failed cached source is not a completed result. Re-fetch it on resume;
+    # successful and empty checkpoints remain reusable.
+    usable_cache = {name: entry for name, entry in cached.items()
+                    if entry[1].get("status") not in {"failed", "timeout", "limited"}}
 
     def source_status(diagnostics):
         return {key: diagnostics[key] for key in ("status", "count", "fetched", "ms")}
 
     if progress:
-        progress({name: source_status(cached[name][1]) if name in cached else {"status": "pending"}
+        progress({name: source_status(usable_cache[name][1]) if name in usable_cache else {"status": "pending"}
                   for name, _ in enabled})
     if not enabled:
         return [], []
@@ -211,11 +225,12 @@ def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, pr
             ]
         return filtered, diagnostics
 
-    outputs = {name: cached[name] for name, _ in enabled if name in cached}
+    outputs = {name: usable_cache[name] for name, _ in enabled if name in usable_cache}
     if check_cancelled:
         check_cancelled()
     with ThreadPoolExecutor(max_workers=min(8, len(enabled))) as executor:
-        futures = {executor.submit(fetch_one, name, fetch): name for name, fetch in enabled if name not in cached}
+        futures = {executor.submit(fetch_one, name, fetch): name for name, fetch in enabled
+                   if name not in usable_cache}
         for future in as_completed(futures):
             name = futures[future]
             found, diagnostics = outputs[name] = future.result()
@@ -230,6 +245,25 @@ def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, pr
                     for pending in futures:
                         pending.cancel()
                     raise
+        # Retry transient failures once. This is intentionally source-local:
+        # successful sources are not fetched again, and blocked/invalid URLs
+        # are not retried because retrying cannot repair them.
+        retry_names = [name for name, (_, diagnostics) in outputs.items()
+                       if _source_needs_retry(diagnostics)]
+        if retry_names:
+            if progress:
+                progress({name: {"status": "pending"} for name in retry_names})
+            time.sleep(0.5)
+            with ThreadPoolExecutor(max_workers=min(8, len(retry_names))) as executor:
+                retry_futures = {executor.submit(fetch_one, name, dict(enabled)[name]): name
+                                 for name in retry_names}
+                for future in as_completed(retry_futures):
+                    name = retry_futures[future]
+                    found, diagnostics = outputs[name] = future.result()
+                    if checkpoint:
+                        checkpoint(name, found, diagnostics)
+                    if progress:
+                        progress({name: source_status(diagnostics)})
     items = [item for name, _ in enabled for item in outputs[name][0]]
     health = [entry[1] for entry in outputs.values()]
     health.sort(key=lambda row: row["source"])
