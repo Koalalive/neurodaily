@@ -236,7 +236,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         cfg = _cfg()
         previous = _latest_report(cfg, include_demo=False)
         if previous is not None:
-            return _report(previous, ui, settings_link=not ui)
+            return _report(previous, ui, settings_link=True)
         result = app.state.last_run
         if result is not None and result.config_profile != cfg.profile:
             result = None
@@ -569,7 +569,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         path = os.path.join(cfg.output_dir(), base)
         if not os.path.exists(path):
             return HTMLResponse("<h3>report not found</h3>", status_code=404)
-        return _report(path, ui)
+        return _report(path, ui, settings_link=True)
 
     @app.get("/settings", response_class=HTMLResponse)
     def settings_page():
@@ -1038,7 +1038,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     def report_latest(ui: bool = False):
         path = _latest_report(_cfg())
         if path is not None:
-            return _report(path, ui)
+            return _report(path, ui, settings_link=True)
         return JSONResponse({"error": "no report yet"}, status_code=404)
 
     @app.get("/api/launchd/status")
@@ -1239,11 +1239,11 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         row = hist.get_run(run_id)
         task = row and row["task"]
         if task and task["report_ready"] and Path(task["report_file"]).is_file():
-            return _report(task["report_file"], ui)
+            return _report(task["report_file"], ui, settings_link=True)
         if row and not task and row.get("report_path"):
             path = Path(_cfg().output_dir(), os.path.basename(row["report_path"]))
             if path.is_file():
-                return _report(path, ui)
+                return _report(path, ui, settings_link=True)
         response = _page("<h3>日报未生成或已清理。</h3>")
         response.status_code = 404
         return response
