@@ -321,6 +321,8 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     </div>
     <div class="inline" style="margin-top:12px">
       <span class="pill" id="ldstat">Scheduler: …</span>
+      <button type="button" id="service-toggle">暂停定时检索/邮件</button>
+      <span id="service-toggle-status" class="mini" role="status"></span>
       <span id="launchd_controls" hidden>
         <button onclick="launchd('install')">Install / update schedule</button>
         <button class="warn" onclick="launchd('uninstall')">Uninstall schedule</button>
@@ -1305,6 +1307,10 @@ async function loadLaunchdStatus(){
       ? t(s.loaded?'Desktop schedule: daily at {time} (local time)':'Desktop schedule: off',{time:s.schedule})
       : t('Scheduler: {loaded} / {installed} ({time})',{
           loaded:t(s.loaded?'loaded':'not loaded'),installed:t(s.installed?'installed':'not installed'),time:s.schedule});
+    var toggle=el('service-toggle');
+    toggle.textContent=s.paused?'继续定时检索/邮件':'暂停定时检索/邮件';
+    toggle.dataset.paused=s.paused?'1':'0';
+    el('service-toggle-status').textContent=s.paused?'定时检索与邮件已暂停，Web 仍可访问。':'';
     var time=function(value){return new Date(value).toLocaleString(document.documentElement.lang);};
     if(desktop&&s.loaded){
       if(s.state==='paused') scheduleText+=' · '+t('Paused');
@@ -1559,6 +1565,22 @@ document.querySelector('main').addEventListener('input',function(event){
 document.querySelector('main').addEventListener('change',function(event){
   if(!event.target.closest('#search_builder, #optimization-workbench')) markPreviewStale();
 });
+async function toggleServiceSchedule(){
+  var button=el('service-toggle'), status=el('service-toggle-status');
+  var action=button.dataset.paused==='1'?'resume':'pause';
+  button.disabled=true; status.textContent='Working…';
+  try{
+    var response=await fetch('/api/service/'+action,{method:'POST'});
+    var result=await response.json();
+    if(!response.ok) throw new Error(result.error||'request failed');
+    await loadLaunchdStatus();
+    await loadDiagnostics();
+    status.textContent=action==='pause'?'已暂停未来定时检索和邮件；Web 仍可访问。':'已恢复定时检索和邮件。';
+  }catch(e){status.textContent='操作失败：'+e.message;}
+  finally{button.disabled=false;}
+}
+el('service-toggle').addEventListener('click',toggleServiceSchedule);
+
 async function loadDiagnostics(){
   var message=el('diag-message');
   if(message) message.textContent='Checking…';
@@ -1580,6 +1602,7 @@ async function loadDiagnostics(){
     var recipients=(email.recipients||[]).length||(email.to||[]).length;
     var emailReceipts=receipts.filter(function(row){return row.channel==='email';});
     var emailText=email.enabled===false?'disabled':'enabled; '+recipients+' recipient(s); '+(push.password_set?'SMTP configured':'SMTP password missing');
+    if(scheduler.paused) emailText+=' · paused by service';
     if(emailReceipts.length){
       emailText += ' · latest task: '+emailReceipts.map(function(row){return row.status;}).join(', ');
     }
