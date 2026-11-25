@@ -88,6 +88,22 @@ class LiteratureSourceTests(unittest.TestCase):
         self.assertEqual(stats.as_dict(1)["candidate_count"], 15)
         self.assertTrue(stats.as_dict(1)["truncated"])
 
+    def test_arxiv_legacy_pushes_keywords_and_categories_in_one_query(self):
+        config = DEFAULT_CONFIG()
+        config.search = {}
+        config.global_keywords = ["brain-computer interface"]
+        config.sources["arxiv"]["retrieval_date_range"] = ["2026-11-01", "2026-11-10"]
+        for discipline in config.disciplines[1:]:
+            discipline.enabled = False
+        config.disciplines[0].arxiv_cats = ["q-bio.NC"]
+        with patch.object(arxiv, "_page", return_value=([], 0)) as page:
+            self.assertEqual(arxiv.fetch(config), [])
+        query = page.call_args.args[0]
+        self.assertIn("cat:q-bio.NC", query)
+        self.assertIn('all:"brain-computer interface"', query)
+        self.assertIn("submittedDate:", query)
+        self.assertEqual(page.call_count, 1)
+
     def test_arxiv_pages_advanced_candidates_without_merging_publisher_doi(self):
         config = DEFAULT_CONFIG()
         config.search = {"query": "TI=learning AND PY=2024"}

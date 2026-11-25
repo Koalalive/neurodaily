@@ -5,6 +5,8 @@ filter by category + keyword matching client-side.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from datetime import datetime, timedelta
 import re
 import unicodedata
@@ -58,79 +60,99 @@ def fetch(config, logger=None) -> list[Item]:
     exact = _native_categories(plan.root) if advanced else ()
     category_limit = 2 if preview else 4
     categories = exact if 0 < len(exact) <= category_limit else ("",)
-    max_results = max(1, int(opts.get("max_results", 1_000_000)))
+    requested = int(opts.get("max_results", 1_000_000))
+    max_results = max(1, requested)
     if preview:
         max_results = min(max_results, 30)
-    # Page size is 30 in the bioRxiv detail API. The old 7-page cap silently
-    # truncated larger settings; derive pages from the requested result count.
+    # The detail API serves 30 records per page. Fetch each server/category
+    # stream concurrently; page requests inside one stream stay ordered.
     max_pages = 1 if preview else max(1, (max_results + 29) // 30)
-    items: dict[str, Item] = {}
+    concurrency = max(1, min(8, int(opts.get("concurrency", 4))))
+    jobs = [(server, category) for server in ("biorxiv", "medrxiv") for category in categories]
 
-    for server in ("biorxiv", "medrxiv"):
-        server_limit = (max_results + 1) // 2 if preview and server == "biorxiv" else max_results
-        for category in categories:
-            description = f"{server}: {start_s} – {end_s}"
-            record_query(f"{description} · category={category}" if category else description)
-            offset = 0
-            total = None
-            stream_complete = False
-            for _ in range(max_pages):
-                response = get(
-                    f"https://api.{server}.org/details/{server}/{start_s}/{end_s}/{offset}",
-                    params={"category": category} if category else None,
-                    timeout=8.0 if preview else 20.0,
-                    retries=0 if preview else 2,
-                )
-                if response is None:
-                    break
-                try:
-                    data = response.json()
-                    collection = data["collection"]
-                    if not isinstance(collection, list):
-                        raise ValueError("invalid collection")
-                    messages = data.get("messages") or []
-                    raw_total = str(messages[0].get("total", "")) if messages else ""
-                except (ValueError, KeyError, TypeError, AttributeError):
-                    record_failure(f"Invalid {server} API response")
-                    break
-                if offset == 0 and raw_total.isdecimal():
-                    total = int(raw_total)
-                    record_candidates(total)
-                if total is None:
-                    record_candidates(len(collection))
-                for record in collection:
-                    if not isinstance(record, dict):
-                        record_failure(f"Invalid {server} paper metadata")
-                        continue
-                    title = record.get("title") or ""
-                    if not title:
-                        continue
-                    abstract = record.get("abstract") or ""
-                    doi = record.get("doi") or ""
-                    category_name = record.get("category") or ""
-                    if not advanced and bio_cats and category_name and category_name.casefold() not in bio_cats:
-                        continue
-                    hay = f"{title} {abstract}".casefold()
-                    if keywords and not any(k in hay for k in keywords):
-                        continue
-                    identifier = doi.casefold() or f"{server}:{title.casefold()}"
-                    previous = items.get(identifier)
-                    version = _version(record.get("version"))
-                    if previous and _version(previous.extra.get("version")) >= version:
-                        continue
-                    if not previous and len(items) >= server_limit:
-                        mark_sampled(truncated=True)
-                        continue
-                    items[identifier] = _item(server, record, title, abstract, doi, category_name)
-                offset += len(collection)
-                if len(collection) < 30 or (total is not None and offset >= total):
-                    stream_complete = True
-                    break
-                if len(items) >= server_limit:
-                    break
-            if not stream_complete and offset:
-                mark_sampled(truncated=True)
-    return list(items.values())
+    def collect(server: str, category: str):
+        local: dict[str, Item] = {}
+        description = f"{server}: {start_s} – {end_s}"
+        record_query(f"{description} · category={category}" if category else description)
+        offset = 0
+        total = None
+        stream_complete = False
+        for _ in range(max_pages):
+            response = get(
+                f"https://api.{server}.org/details/{server}/{start_s}/{end_s}/{offset}",
+                params={"category": category} if category else None,
+                timeout=8.0 if preview else 20.0,
+                retries=0 if preview else 2,
+            )
+            if response is None:
+                break
+            try:
+                data = response.json()
+                collection = data["collection"]
+                if not isinstance(collection, list):
+                    raise ValueError("invalid collection")
+                messages = data.get("messages") or []
+                raw_total = str(messages[0].get("total", "")) if messages else ""
+            except (ValueError, KeyError, TypeError, AttributeError):
+                record_failure(f"Invalid {server} API response")
+                break
+            if offset == 0 and raw_total.isdecimal():
+                total = int(raw_total)
+                record_candidates(total)
+            if total is None:
+                record_candidates(len(collection))
+            for record in collection:
+                if not isinstance(record, dict):
+                    record_failure(f"Invalid {server} paper metadata")
+                    continue
+                title = record.get("title") or ""
+                if not title:
+                    continue
+                abstract = record.get("abstract") or ""
+                doi = record.get("doi") or ""
+                category_name = record.get("category") or ""
+                if not advanced and bio_cats and category_name and category_name.casefold() not in bio_cats:
+                    continue
+                hay = f"{title} {abstract}".casefold()
+                if keywords and not any(k in hay for k in keywords):
+                    continue
+                identifier = doi.casefold() or f"{server}:{title.casefold()}"
+                previous = local.get(identifier)
+                version = _version(record.get("version"))
+                if previous and _version(previous.extra.get("version")) >= version:
+                    continue
+                local[identifier] = _item(server, record, title, abstract, doi, category_name)
+            offset += len(collection)
+            if len(collection) < 30 or (total is not None and offset >= total):
+                stream_complete = True
+                break
+        if not stream_complete and offset:
+            mark_sampled(truncated=True)
+        return local
+
+    outputs = []
+    if len(jobs) <= 1:
+        outputs = [collect(*job) for job in jobs]
+    else:
+        with ThreadPoolExecutor(max_workers=min(concurrency, len(jobs)),
+                                thread_name_prefix="biorxiv-page") as pool:
+            # copy_context preserves request diagnostics for each worker.
+            futures = [pool.submit(copy_context().run, collect, *job) for job in jobs]
+            outputs = [future.result() for future in futures]
+
+    items: dict[str, Item] = {}
+    for local in outputs:
+        for identifier, item in local.items():
+            previous = items.get(identifier)
+            if previous and _version(previous.extra.get("version")) >= _version(item.extra.get("version")):
+                continue
+            items[identifier] = item
+
+    result = list(items.values())
+    if len(result) > max_results:
+        mark_sampled(truncated=True)
+        result = result[:max_results]
+    return result
 
 
 def _name_key(value: str) -> tuple[str, ...]:

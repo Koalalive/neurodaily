@@ -136,15 +136,21 @@ def fetch(config, logger=None) -> list[Item]:
         limit = min(max_results, 30) if preview else max_results
         keywords = []
     else:
-        queries = [f"cat:{_escape_query(cat)}" for cat in cats]
-        if window:
-            queries = [f"{query} AND {date_term}" for query in queries]
-            cutoff = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
-        if preview and len(queries) > 4:
-            queries = queries[:4]
-            mark_sampled(truncated=True)
-        limit = min(max_results, 30) if preview else max_results
+        # Push categories and keywords to arXiv in one query instead of
+        # downloading every category page and filtering only locally. The
+        # local keyword predicate below is retained as a precision guard.
         keywords = [k.casefold() for k in config.all_keywords()]
+        native = build_search_query(cats, config.all_keywords())
+        if native:
+            query = f"({native}) AND {date_term}" if window else native
+            queries = [query]
+        else:
+            queries = []
+        if preview and queries:
+            queries = queries[:4]
+        limit = min(max_results, 30) if preview else max_results
+        if window:
+            cutoff = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
 
     items: list[Item] = []
     seen_urls: set[str] = set()
