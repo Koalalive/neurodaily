@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "NeuroDaily",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "identifier": "com.neurodaily.app",
   "build": {
     "frontendDist": "../frontend"

@@ -147,17 +147,17 @@ Releases 包含 Windows NSIS 和 MSI、Linux DEB 和 AppImage，共 4 个安装�
 
 ```bash
 # Formula/neurodaily.rb 的 tag 与 version 对齐后
-git tag -a cli-v1.0.10 -m "NeuroDaily 1.0.10 CLI + Homebrew"
-git push origin cli-v1.0.10
+git tag -a cli-v1.0.11 -m "NeuroDaily 1.0.11 CLI + Homebrew"
+git push origin cli-v1.0.11
 ```
 
 用户升级：
 
 ```bash
-python -m pip install neurodaily-1.0.10-py3-none-any.whl
+python -m pip install neurodaily-1.0.11-py3-none-any.whl
 # 或
 brew update && brew upgrade koalalive/neurodaily/neurodaily
 ```
 
-等需要全平台时，再打 `v1.0.10` tag（与 `cli-v1.0.10` 可以是同一提交）。
+等需要全平台时，再打 `v1.0.11` tag（与 `cli-v1.0.11` 可以是同一提交）。
 
