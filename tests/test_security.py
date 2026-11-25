@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import httpx
 
-from neurodaily.security import external_url, validate_http_url, validate_label, within
+from neurodaily.security import external_url, public_addresses, trusted_fake_ip_host, validate_http_url, validate_label, within
 from neurodaily.sources.http import _SourceTransport
 
 
@@ -29,6 +29,21 @@ class SecurityGuardTests(unittest.TestCase):
                     validate_http_url(url, resolve=False)
         self.assertEqual(validate_http_url("https://example.test/feed", resolve=False),
                          "https://example.test/feed")
+
+    def test_trusted_feed_hosts_allow_fake_ip_only(self):
+        def fake_dns(host, port, **kwargs):
+            address = "198.18.0.157" if host == "www.nature.com" else "198.18.0.160"
+            return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (address, port))]
+
+        self.assertTrue(trusted_fake_ip_host("www.nature.com"))
+        self.assertFalse(trusted_fake_ip_host("evil.example"))
+        with patch("neurodaily.security.socket.getaddrinfo", side_effect=fake_dns):
+            self.assertEqual(public_addresses("www.nature.com", 443, allow_fake_ip=True),
+                             ("198.18.0.157",))
+            with self.assertRaises(ValueError):
+                public_addresses("www.nature.com", 443, allow_fake_ip=False)
+            with self.assertRaises(ValueError):
+                public_addresses("evil.example", 443, allow_fake_ip=True)
 
     def test_schedule_label_rejects_paths(self):
         self.assertEqual(validate_label("com.neurodaily.daily"), "com.neurodaily.daily")

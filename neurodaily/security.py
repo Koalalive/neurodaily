@@ -9,6 +9,25 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+# Mihomo/Clash fake-IP pools use this benchmark range. It is not a private
+# network, but it is intentionally not globally routable. Permit it only for
+# an explicit list of official public feed hosts.
+_FAKE_IP_NETWORK = ipaddress.ip_network("198.18.0.0/15")
+_TRUSTED_FEED_SUFFIXES = (
+    "nature.com", "science.org", "cell.com", "thelancet.com",
+    "psychiatryonline.org", "fda.gov", "jamanetwork.com",
+    "elifesciences.org", "sciencedirect.com", "neurology.org",
+    "pnas.org", "sciencedaily.com", "sciencenews.org", "chinanews.com.cn",
+)
+
+
+def trusted_fake_ip_host(host: str | None) -> bool:
+    """Whether a host is allowed to resolve to a local proxy fake-IP."""
+    if os.environ.get("NEURODAILY_ALLOW_FAKE_IP", "1") == "0":
+        return False
+    normalized = (host or "").strip().casefold().rstrip(".")
+    return any(normalized == suffix or normalized.endswith("." + suffix)
+               for suffix in _TRUSTED_FEED_SUFFIXES)
 
 
 def external_url(value: str | None) -> str:
@@ -36,7 +55,7 @@ def allow_private_sources() -> bool:
 
 
 def validate_http_url(value: str, *, allow_private: bool | None = None,
-                     resolve: bool = True) -> str:
+                     resolve: bool = True, allow_fake_ip: bool = False) -> str:
     """Validate an HTTP(S) URL and reject private/reserved destinations.
 
     DNS is resolved before the check, so a hostname such as
@@ -54,13 +73,16 @@ def validate_http_url(value: str, *, allow_private: bool | None = None,
         allow_private = allow_private_sources()
     hosts = (parts.hostname,)
     if resolve:
-        public_addresses(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80), allow_private)
+        public_addresses(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80),
+                         allow_private, allow_fake_ip=allow_fake_ip)
     elif not allow_private:
         _check_public_addresses(hosts)
     return url
 
 
-def public_addresses(host: str, port: int, allow_private: bool = False) -> tuple[str, ...]:
+def public_addresses(host: str, port: int, allow_private: bool = False,
+                     *, allow_fake_ip: bool = False) -> tuple[str, ...]:
+    allow_fake_ip = allow_fake_ip and trusted_fake_ip_host(host)
     try:
         addresses = tuple(dict.fromkeys(info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)))
     except OSError as exc:
@@ -68,11 +90,11 @@ def public_addresses(host: str, port: int, allow_private: bool = False) -> tuple
     if not addresses:
         raise ValueError("Source host could not be resolved")
     if not allow_private:
-        _check_public_addresses(addresses)
+        _check_public_addresses(addresses, allow_fake_ip=allow_fake_ip)
     return addresses
 
 
-def _check_public_addresses(hosts) -> None:
+def _check_public_addresses(hosts, *, allow_fake_ip: bool = False) -> None:
     for raw in hosts:
         try:
             ip = ipaddress.ip_address(raw)
@@ -82,6 +104,8 @@ def _check_public_addresses(hosts) -> None:
             continue
         if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
             ip = ip.ipv4_mapped
+        if allow_fake_ip and ip in _FAKE_IP_NETWORK:
+            continue
         if not ip.is_global or ip.is_reserved or ip.is_multicast or getattr(ip, "is_site_local", False):
             raise ValueError("URL resolves to a private or reserved address")
 
