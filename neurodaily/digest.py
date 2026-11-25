@@ -248,12 +248,18 @@ def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, pr
         # Retry transient failures once. This is intentionally source-local:
         # successful sources are not fetched again, and blocked/invalid URLs
         # are not retried because retrying cannot repair them.
-        retry_names = [name for name, (_, diagnostics) in outputs.items()
-                       if _source_needs_retry(diagnostics)]
-        if retry_names:
+        # Three complete retry rounds (first attempt + three retries). Each
+        # round only retries transient failures that have not recovered.
+        for retry_round in range(3):
+            retry_names = [name for name, (_, diagnostics) in outputs.items()
+                           if _source_needs_retry(diagnostics)]
+            if not retry_names:
+                break
+            if check_cancelled:
+                check_cancelled()
             if progress:
                 progress({name: {"status": "pending"} for name in retry_names})
-            time.sleep(0.5)
+            time.sleep(0.5 * (2 ** retry_round))
             with ThreadPoolExecutor(max_workers=min(8, len(retry_names))) as executor:
                 retry_futures = {executor.submit(fetch_one, name, dict(enabled)[name]): name
                                  for name in retry_names}

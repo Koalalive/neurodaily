@@ -359,7 +359,7 @@ class SearchTaskTests(unittest.TestCase):
             self.assertEqual(restarted.get(f"/api/ui/reports?after={new}").json(), {"reports": []})
             self.assertIn('lang="ru"', restarted.get(f"/history/{new}/report?ui=1").text)
 
-    def test_transient_source_failure_is_retried_once(self):
+    def test_transient_source_failure_is_retried_three_rounds(self):
         from neurodaily.digest import _fetch_sources
         from neurodaily.models import Item
         from neurodaily.search import compile_search
@@ -368,13 +368,13 @@ class SearchTaskTests(unittest.TestCase):
 
         def fixture(config, logger=None):
             calls.append(1)
-            if len(calls) == 1:
+            if len(calls) <= 3:
                 raise TimeoutError("temporary source outage")
             return [Item(title="Recovered", source="fixture", date=datetime.now().date().isoformat())]
 
         with mock.patch("neurodaily.digest.registry_for", return_value={"fixture": fixture}):
             items, health = _fetch_sources(self.cfg, compile_search({}, []), {"paper": 24}, 24)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 4)
         self.assertEqual(items[0].title, "Recovered")
         self.assertEqual(health[0]["status"], "ok")
 

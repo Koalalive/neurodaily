@@ -26,6 +26,21 @@ class ScholarConferenceNewsTests(unittest.TestCase):
         self.assertTrue(all(item.kind == "conference" for item in items))
         self.assertTrue(any(date.fromisoformat(item.date) >= date.today() for item in items))
 
+    def test_google_news_falls_back_to_public_neuroscience_rss(self):
+        feed = b"""<rss version="2.0"><channel><title>Fallback</title>
+        <item><title>Brain circuit discovery</title><link>https://example.test/fallback</link>
+        <pubDate>Mon, 23 Nov 2026 00:00:00 GMT</pubDate><description>Neuroscience summary</description>
+        </item></channel></rss>"""
+        response = Mock()
+        response.content = feed
+        cfg = DEFAULT_CONFIG()
+        cfg.sources["google_news_zh"] = {"enabled": True, "max_results": 10, "lookback_days": 30}
+        with patch("neurodaily.sources.google_news.get", side_effect=[None, response, response, response]) as get:
+            items = google_news.fetch(cfg)
+        self.assertEqual(items[0].title, "Brain circuit discovery")
+        self.assertTrue(items[0].extra["fallback"])
+        self.assertGreaterEqual(get.call_count, 2)
+
     def test_google_news_chinese_source_parses_rss(self):
         response = Mock()
         response.content = b'''<rss version="2.0"><channel><title>Google News</title>

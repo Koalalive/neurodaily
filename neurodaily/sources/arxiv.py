@@ -5,6 +5,8 @@ fielded searches. Complete abstracts are retained for local rule evaluation.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -154,43 +156,76 @@ def fetch(config, logger=None) -> list[Item]:
 
     items: list[Item] = []
     seen_urls: set[str] = set()
-    for query in queries:
-        offset = 0
-        total = None
-        while offset < limit:
-            size = min(60, limit - offset)
-            result = _page(query, offset, size, preview)
-            if result is None:
-                break
-            entries, reported_total = result
-            if offset == 0:
-                total = reported_total
-                if advanced and total is not None:
-                    record_candidates(total)
-            if not advanced or total is None:
-                record_candidates(len(entries))
-            for entry in entries:
-                item = _parse_entry(entry)
-                if item is None or item.url in seen_urls:
-                    continue
-                if not advanced and item.extra.get("published_online"):
-                    try:
-                        published = datetime.fromisoformat(item.extra["published_online"].replace("Z", "+00:00"))
-                        if published.tzinfo is None:
-                            published = published.replace(tzinfo=timezone.utc)
-                        if published < cutoff:
-                            continue
-                    except ValueError:
-                        pass
-                if keywords:
-                    hay = f"{item.title} {item.extra.get('abstract', '')}".casefold()
-                    if not any(k in hay for k in keywords):
+    concurrency = max(1, min(4, int(opts.get("concurrency", 4))))
+    if preview:
+        concurrency = 1
+
+    def consume(entries):
+        for entry in entries:
+            item = _parse_entry(entry)
+            if item is None or item.url in seen_urls:
+                continue
+            if not advanced and item.extra.get("published_online"):
+                try:
+                    published = datetime.fromisoformat(item.extra["published_online"].replace("Z", "+00:00"))
+                    if published.tzinfo is None:
+                        published = published.replace(tzinfo=timezone.utc)
+                    if published < cutoff:
                         continue
-                seen_urls.add(item.url)
-                items.append(item)
-            offset += len(entries)
-            if not advanced or len(entries) < size or (total is not None and offset >= total):
+                except ValueError:
+                    pass
+            if keywords:
+                hay = f"{item.title} {item.extra.get('abstract', '')}".casefold()
+                if not any(k in hay for k in keywords):
+                    continue
+            seen_urls.add(item.url)
+            items.append(item)
+
+    for query in queries:
+        first_size = min(60, limit)
+        result = _page(query, 0, first_size, preview)
+        if result is None:
+            continue
+        entries, reported_total = result
+        total = reported_total
+        if total is not None:
+            record_candidates(total)
+        elif not advanced:
+            record_candidates(len(entries))
+        consume(entries)
+        if len(entries) < first_size:
+            continue
+
+        end_at = min(limit, total) if total is not None else limit
+        offsets = list(range(60, end_at, 60))
+        if not offsets:
+            continue
+        if preview or concurrency <= 1 or len(offsets) == 1:
+            page_results = []
+            for offset in offsets:
+                page = _page(query, offset, min(60, end_at - offset), preview)
+                page_results.append((offset, page))
+        else:
+            with ThreadPoolExecutor(max_workers=min(concurrency, len(offsets)),
+                                    thread_name_prefix="arxiv-page") as pool:
+                futures = [
+                    (offset, pool.submit(copy_context().run, _page, query, offset,
+                                         min(60, end_at - offset), preview))
+                    for offset in offsets
+                ]
+                page_results = [(offset, future.result()) for offset, future in futures]
+        failed_page = False
+        for offset, page in page_results:
+            if page is None:
+                failed_page = True
+                continue
+            page_entries, _ = page
+            if not advanced or total is None:
+                record_candidates(len(page_entries))
+            consume(page_entries)
+            if len(page_entries) < min(60, end_at - offset):
                 break
-        if offset >= limit and (total is None or offset < total):
+        if failed_page or (end_at >= limit and total is not None and limit < total):
             mark_sampled(truncated=True)
+
     return items

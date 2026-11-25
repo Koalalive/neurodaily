@@ -24,6 +24,11 @@ DEFAULT_QUERIES = (
     "功能磁共振",
     "神经影像",
 )
+# Public, stable RSS fallbacks used only when Google News is unreachable.
+FALLBACK_FEEDS = (
+    "https://www.sciencedaily.com/rss/mind_brain.xml",
+    "https://www.sciencenews.org/topic/neuroscience/feed",
+)
 
 
 def _query(opts: dict) -> str:
@@ -31,6 +36,65 @@ def _query(opts: dict) -> str:
     if isinstance(queries, str):
         queries = [queries]
     return " OR ".join(f"({str(q).strip()})" for q in queries if str(q).strip())
+
+
+def _fallback_news(config, opts, cutoff: str, end: str, limit: int) -> list[Item]:
+    """Use public science RSS when Google News is blocked or empty.
+
+    This is deliberately a public-feed fallback, not a browser scrape. The
+    query's Chinese keywords are not meaningful on English science feeds, so
+    the profile's global keywords are used for local relevance filtering.
+    """
+    feeds = opts.get("fallback_feeds") or FALLBACK_FEEDS
+    if not isinstance(feeds, (list, tuple)):
+        feeds = FALLBACK_FEEDS
+    from ..security import validate_http_url
+
+    # The fallback feeds are already neuroscience-specific. Do not require
+    # the profile's narrow keyword set, or a valid feed can still yield zero.
+    keywords = [str(k).casefold() for k in (opts.get("fallback_keywords") or []) if str(k).strip()]
+    out: list[Item] = []
+    seen: set[str] = set()
+    for feed_url in feeds:
+        if not isinstance(feed_url, str) or not feed_url.strip():
+            continue
+        try:
+            validate_http_url(feed_url, resolve=False)
+        except ValueError:
+            continue
+        response = get(feed_url, timeout=15.0, retries=1, user_agent="Mozilla/5.0 NeuroDaily")
+        if response is None:
+            continue
+        try:
+            parsed = feedparser.parse(response.content)
+        except Exception:
+            continue
+        if not parsed.get("version"):
+            continue
+        record_candidates(len(parsed.entries))
+        for entry in parsed.entries:
+            title = strip_html(entry.get("title", ""))
+            link = entry.get("link", "")
+            if not title or not link or link in seen:
+                continue
+            published = parse_date_any(entry.get("published") or entry.get("updated"))
+            if published and not cutoff <= published <= end:
+                continue
+            summary = strip_html(entry.get("summary") or entry.get("description") or "")[:1000]
+            hay = f"{title} {summary}".casefold()
+            if keywords and not any(keyword in hay for keyword in keywords):
+                continue
+            seen.add(link)
+            source = strip_html(entry.get("source", {}).get("title", "") if isinstance(entry.get("source"), dict) else "")
+            if source and title.endswith(" - " + source):
+                title = title[: -len(source) - 3].strip()
+            out.append(Item(title=title, url=link, summary=summary, source="google_news_zh",
+                            kind="news", date=published,
+                            extra={"publisher": source, "feed": "公开新闻 RSS fallback",
+                                   "query": "fallback", "fallback": True, "fallback_url": feed_url}))
+            if len(out) >= limit:
+                return out
+    return out
 
 
 def fetch(config, logger=None) -> list[Item]:
@@ -53,6 +117,10 @@ def fetch(config, logger=None) -> list[Item]:
     record_query(f"Google News 中文 · {cutoff}–{end}" if fixed else f"Google News 中文 · {lookback} 天")
     response = get(url, timeout=20.0, retries=1, user_agent="Mozilla/5.0 NeuroDaily")
     if response is None:
+        fallback = _fallback_news(config, opts, cutoff, end, limit)
+        if fallback:
+            record_failure("Google News 不可达，已使用公开 RSS fallback")
+            return fallback
         return []
     try:
         parsed = feedparser.parse(response.content)
@@ -87,4 +155,9 @@ def fetch(config, logger=None) -> list[Item]:
             mark_sampled(truncated=True)
             break
     items.sort(key=lambda item: item.date, reverse=True)
+    if not items:
+        fallback = _fallback_news(config, opts, cutoff, end, limit)
+        if fallback:
+            record_failure("Google News 无可解析结果，已使用公开 RSS fallback")
+            return fallback
     return items
