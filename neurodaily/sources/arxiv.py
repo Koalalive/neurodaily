@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
+import os
 import re
+from threading import Lock
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
@@ -20,6 +23,25 @@ NS = {
     "arxiv": "http://arxiv.org/schemas/atom",
     "open": "http://a9.com/-/spec/opensearch/1.1/",
 }
+try:
+    _ARXIV_INTERVAL = max(0.0, float(os.environ.get("NEURODAILY_ARXIV_INTERVAL", "3")))
+except (TypeError, ValueError):
+    _ARXIV_INTERVAL = 3.0
+_ARXIV_GATE = Lock()
+_ARXIV_LAST = 0.0
+
+
+def _wait_for_arxiv_slot():
+    """Respect arXiv's conservative request cadence across worker threads."""
+    global _ARXIV_LAST
+    if _ARXIV_INTERVAL <= 0:
+        return
+    with _ARXIV_GATE:
+        now = time.monotonic()
+        delay = _ARXIV_INTERVAL - (now - _ARXIV_LAST)
+        if delay > 0:
+            time.sleep(delay)
+        _ARXIV_LAST = time.monotonic()
 
 
 def _escape_query(q: str) -> str:
@@ -90,6 +112,8 @@ def _parse_entry(entry) -> Item | None:
 
 def _page(query: str, offset: int, size: int, preview: bool):
     record_query(query)
+    if not preview:
+        _wait_for_arxiv_slot()
     response = get("https://export.arxiv.org/api/query", params={
         "search_query": query,
         "start": offset,

@@ -4,9 +4,11 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from threading import Lock
+from threading import BoundedSemaphore, Lock
+import os
 import time
 import httpx
+from urllib.parse import urlsplit
 
 from ..security import allow_private_sources, public_addresses, validate_http_url
 
@@ -14,6 +16,27 @@ DEFAULT_TIMEOUT = 20.0
 DEFAULT_HEADERS = {
     "User-Agent": "NeuroDaily/0.1 (personal research digest; contact: local)",
 }
+
+try:
+    _SOURCE_CONCURRENCY = max(1, min(64, int(os.environ.get("NEURODAILY_SOURCE_CONCURRENCY", "8"))))
+except (TypeError, ValueError):
+    _SOURCE_CONCURRENCY = 8
+try:
+    _HOST_CONCURRENCY = max(1, min(32, int(os.environ.get("NEURODAILY_HOST_CONCURRENCY", "8"))))
+except (TypeError, ValueError):
+    _HOST_CONCURRENCY = 8
+_SOURCE_LIMIT = BoundedSemaphore(_SOURCE_CONCURRENCY)
+_host_limits: dict[str, BoundedSemaphore] = {}
+_host_limits_lock = Lock()
+
+
+def _host_limit(url: str):
+    try:
+        host = urlsplit(url).hostname or ""
+    except ValueError:
+        host = ""
+    with _host_limits_lock:
+        return _host_limits.setdefault(host, BoundedSemaphore(_HOST_CONCURRENCY))
 
 
 class _SourceBudgetExceeded(httpx.RequestError):
@@ -198,18 +221,19 @@ def get(url: str, params: dict | None = None, timeout: float = DEFAULT_TIMEOUT,
     kind, message = "failed", "HTTP request failed"
     for attempt in range(retries + 1):
         try:
-            if untrusted_url:
-                resp = _source_client.get(url, params=params, timeout=timeout, headers=request_headers)
-            elif connect_close:
-                fresh_headers = {**DEFAULT_HEADERS, **request_headers, "Connection": "close"}
-                with httpx.Client(timeout=timeout, headers=fresh_headers,
-                                  follow_redirects=True, event_hooks=_source_get_events) as fresh:
-                    resp = fresh.get(url, params=params, timeout=timeout)
-            elif request_headers:
-                resp = _client.get(url, params=params, timeout=timeout,
-                                   headers=request_headers)
-            else:
-                resp = _client.get(url, params=params, timeout=timeout)
+            with _SOURCE_LIMIT, _host_limit(url):
+                if untrusted_url:
+                    resp = _source_client.get(url, params=params, timeout=timeout, headers=request_headers)
+                elif connect_close:
+                    fresh_headers = {**DEFAULT_HEADERS, **request_headers, "Connection": "close"}
+                    with httpx.Client(timeout=timeout, headers=fresh_headers,
+                                      follow_redirects=True, event_hooks=_source_get_events) as fresh:
+                        resp = fresh.get(url, params=params, timeout=timeout)
+                elif request_headers:
+                    resp = _client.get(url, params=params, timeout=timeout,
+                                       headers=request_headers)
+                else:
+                    resp = _client.get(url, params=params, timeout=timeout)
             if resp.status_code < 400 or resp.status_code in accepted_statuses:
                 return resp
             kind = "limited" if resp.status_code == 429 else "failed"

@@ -10,6 +10,7 @@ from contextvars import copy_context
 from ._discovery import fixed_bounds
 from .generic import entry_references
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
+from .feed_cache import fetch_feed
 from .journalpapers import _doi
 from ..models import Item
 
@@ -55,13 +56,14 @@ def _fetch_meta_description(url: str) -> str:
 def _parse_feed(url: str, kind: str, *, preview: bool = False) -> list[Item]:
     """Parse one feed URL into Items (caller applies the result limit)."""
     # feedparser.parse(url) blocks without timeout and stalls the fetch pool.
-    resp = get(url, timeout=8.0 if preview else 15.0, retries=0 if preview else 1,
-               user_agent="python-httpx", untrusted_url=True)
-    if resp is None:
+    content = fetch_feed(url, timeout=8.0 if preview else 15.0,
+                         retries=0 if preview else 1,
+                         user_agent="python-httpx", untrusted_url=True, getter=get)
+    if content is None:
         record_failure("Policy RSS unavailable")
         return []
     try:
-        parsed = feedparser.parse(resp.content)
+        parsed = feedparser.parse(content)
     except Exception:
         record_failure("Policy RSS could not be parsed")
         return []

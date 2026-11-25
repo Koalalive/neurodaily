@@ -15,6 +15,7 @@ from html.parser import HTMLParser
 
 from ._discovery import fixed_bounds
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
+from .feed_cache import fetch_feed
 from ..models import Item
 from ..security import external_url
 
@@ -98,14 +99,15 @@ def fetch_rss(name: str, config, logger=None) -> list[Item]:
     record_query("Configured RSS feed")
     mark_sampled()
     preview = bool(opts.get("preview"))
-    resp = get(url, timeout=8.0 if preview else 15.0, retries=0 if preview else 1,
-               user_agent="python-httpx", untrusted_url=True)
-    if resp is None:
+    content = fetch_feed(url, timeout=8.0 if preview else 15.0,
+                         retries=0 if preview else 1,
+                         user_agent="python-httpx", untrusted_url=True, getter=get)
+    if content is None:
         if logger:
             logger.warning("generic rss %s: fetch failed", name)
         return []
     try:
-        parsed = feedparser.parse(resp.content)
+        parsed = feedparser.parse(content)
     except Exception:
         record_failure("The configured RSS feed could not be parsed")
         return []

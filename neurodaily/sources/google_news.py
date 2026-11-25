@@ -26,8 +26,13 @@ DEFAULT_QUERIES = (
 )
 # Public, stable RSS fallbacks used only when Google News is unreachable.
 FALLBACK_FEEDS = (
+    "https://www.chinanews.com.cn/rss/scroll-news.xml",
     "https://www.sciencedaily.com/rss/mind_brain.xml",
     "https://www.sciencenews.org/topic/neuroscience/feed",
+)
+_FALLBACK_CN_KEYWORDS = (
+    "脑科学", "神经科学", "脑机接口", "脑电", "脑磁图",
+    "功能磁共振", "神经影像", "大脑", "神经", "精神",
 )
 
 
@@ -58,6 +63,9 @@ def _fallback_news(config, opts, cutoff: str, end: str, limit: int) -> list[Item
     for feed_url in feeds:
         if not isinstance(feed_url, str) or not feed_url.strip():
             continue
+        feed_keywords = keywords
+        if "chinanews.com.cn" in feed_url:
+            feed_keywords = [term.casefold() for term in _FALLBACK_CN_KEYWORDS]
         try:
             validate_http_url(feed_url, resolve=False)
         except ValueError:
@@ -86,7 +94,7 @@ def _fallback_news(config, opts, cutoff: str, end: str, limit: int) -> list[Item
                 continue
             summary = strip_html(entry.get("summary") or entry.get("description") or "")[:1000]
             hay = f"{title} {summary}".casefold()
-            if keywords and not any(keyword in hay for keyword in keywords):
+            if feed_keywords and not any(keyword in hay for keyword in feed_keywords):
                 continue
             seen.add(link)
             source = strip_html(entry.get("source", {}).get("title", "") if isinstance(entry.get("source"), dict) else "")

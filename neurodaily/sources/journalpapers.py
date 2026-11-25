@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from ._discovery import fixed_bounds
 
 from .http import get, mark_sampled, parse_date_any, record_candidates, record_failure, record_query, strip_html
+from .feed_cache import fetch_feed
 from ..models import Item
 
 try:
@@ -57,12 +58,13 @@ def _doi(entry) -> str:
 
 def _parse_feed(config, journal_name: str, rss_url: str, *, advanced: bool = False,
                 preview: bool = False, aliases=(), issns=()) -> list[Item]:
-    resp = get(rss_url, timeout=8.0 if preview else 15.0,
-               retries=0 if preview else 1, user_agent="python-httpx", untrusted_url=True)
-    if resp is None:
+    content = fetch_feed(rss_url, timeout=8.0 if preview else 15.0,
+                         retries=0 if preview else 1,
+                         user_agent="python-httpx", untrusted_url=True, getter=get)
+    if content is None:
         return []
     try:
-        parsed = feedparser.parse(resp.content)
+        parsed = feedparser.parse(content)
     except Exception:
         record_failure("A journal RSS feed could not be parsed")
         return []
