@@ -516,6 +516,10 @@ class WindowTests(unittest.TestCase):
             for source, target in expected.items():
                 self.assertEqual(messages.get(source), target)
 
+    def test_cross_day_dedup_is_opt_in(self):
+        from neurodaily.config import DEFAULT_CONFIG
+        self.assertFalse(DEFAULT_CONFIG().output["seen_dedup"])
+
     def test_default_windows(self):
         w = DEFAULT_CONFIG().windows
         for key in ("daily_paper_hours", "news_hours"):

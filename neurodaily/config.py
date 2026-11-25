@@ -518,6 +518,7 @@ def DEFAULT_CONFIG() -> Config:
     }
     output = {
         "dir": DEFAULT_DIRS["output"],
+        "seen_dedup": False,
         # Timestamped so every run (including the daily 08:00 job) writes a NEW
         # html instead of overwriting the same day's file.
         "filename_format": "neurodaily_%Y-%m-%d_%H%M%S.html",
