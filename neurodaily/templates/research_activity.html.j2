@@ -9,11 +9,13 @@
     #research-activity :focus-visible{outline:2px solid #b3d9ff;outline-offset:3px}
     #research-activity .ra-map{width:100%;aspect-ratio:2;position:relative;overflow:hidden;border:1px solid #334f70;border-radius:12px;background:#0b172a}
     #research-activity canvas{width:100%;height:100%;display:block}
-    #research-activity [data-kind=paper]{--ra-color:#c8a96b}
-    #research-activity [data-kind=trial]{--ra-color:#8da7a1}
-    #research-activity [data-kind=news]{--ra-color:#d6c7a7}
-    #research-activity [data-kind=industry]{--ra-color:#a99b83}
-    #research-activity [data-kind=conference]{--ra-color:#b8aaa2}
+    #research-activity [data-kind=paper]{--ra-color:#e6ae3f}
+    #research-activity [data-kind=trial]{--ra-color:#34c7b1}
+    #research-activity [data-kind=news]{--ra-color:#f07a5f}
+    #research-activity [data-kind=industry]{--ra-color:#a887f0}
+    #research-activity [data-kind=conference]{--ra-color:#5aa7f0}
+    #research-activity .ra-controls button[data-kind]{color:var(--ra-color);border-color:color-mix(in srgb,var(--ra-color) 55%,#455d79)}
+    #research-activity .ra-controls button[data-kind][aria-pressed=true]{background:color-mix(in srgb,var(--ra-color) 20%,#1c2b40);border-color:var(--ra-color)}
     #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0b172a;border-radius:20px;padding:0 4px;background:var(--ra-color,#b2c9de);color:#101928;font-size:11px;font-weight:750}
     #research-activity .ra-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em;background:var(--ra-color,#b2c9de)}
     #research-activity .ra-marker:hover,#research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#fff;background:var(--ra-color,#b2c9de)}
@@ -231,7 +233,10 @@
         const categoryIds = ids.filter(id => kind(id) === type);
         const button = control(type === 'all' ? c.all : `${c[type]} (${categoryIds.length})`);
         button.dataset.filter = type;
-        if (type !== 'all') button.prepend(dot(type));
+        if (type !== 'all') {
+          button.dataset.kind = type;
+          button.prepend(dot(type));
+        }
         button.setAttribute('aria-pressed', String(type === selected));
         button.addEventListener('click', () => {
           selected = type;
