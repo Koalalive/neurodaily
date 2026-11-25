@@ -291,6 +291,9 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
       <label><input type="checkbox" id="topic_ai_labels"> 用大模型标注主题</label>
     </div>
     <div class="inline" style="margin-top:10px">
+      <label>主题标签并发数 <input id="topic_concurrency" type="number" min="1" max="4" value="4" style="width:70px"></label>
+    </div>
+    <div class="inline" style="margin-top:10px">
       <label>"On This Day" language</label>
       <select id="otd_lang" style="width:160px">
         <option value="zh">Chinese</option>
@@ -848,6 +851,7 @@ function render(){
   el('otd_enabled').checked=(otd.enabled!==false); el('otd_notify').checked=(otd.notify!==false);
   el('topic_map_enabled').checked=(o.topic_map!==false);
   el('topic_ai_labels').checked=(o.topic_ai_labels!==false);
+  el('topic_concurrency').value=o.topic_concurrency||4;
   el('otd_lang').value = otd.lang || 'zh';
   var w = BASE.windows || {};
   el('win_daily').value = (w.daily_paper_hours != null ? w.daily_paper_hours : 36);
@@ -1145,6 +1149,7 @@ function collect(){
   data.output.seen_dedup=el('out_seen_dedup').checked;
   data.output.topic_map=el('topic_map_enabled').checked;
   data.output.topic_ai_labels=el('topic_ai_labels').checked;
+  data.output.topic_concurrency=Number(el('topic_concurrency').value||4);
   data.scheduled=Object.assign({},data.scheduled||{});
   data.scheduled.enabled=el('sch_enabled').checked;
   data.scheduled.hour=parseInt(el('sch_hour').value||'8',10);
