@@ -22,12 +22,34 @@ _TRUSTED_FEED_SUFFIXES = (
 
 
 def trusted_fake_ip_host(host: str | None) -> bool:
-    """Whether a host is allowed to resolve to a local proxy fake-IP."""
-    if os.environ.get("NEURODAILY_ALLOW_FAKE_IP", "1") == "0":
-        return False
+    """Whether a host is one of the known official public feed hosts."""
     normalized = (host or "").strip().casefold().rstrip(".")
     return any(normalized == suffix or normalized.endswith("." + suffix)
                for suffix in _TRUSTED_FEED_SUFFIXES)
+
+
+def allow_fake_ip_for_host(host: str | None, scheme: str = "https") -> bool:
+    """Allow proxy fake-IP for public HTTPS hostnames.
+
+    A fake-IP is not a real destination address: TLS still verifies the
+    original hostname and the proxy remains the only route. Never allow it for
+    localhost, private suffixes, IP literals, or plain HTTP.
+    """
+    if os.environ.get("NEURODAILY_ALLOW_FAKE_IP", "1") == "0":
+        return False
+    normalized = (host or "").strip().casefold().rstrip(".")
+    if not normalized or "." not in normalized or scheme not in {"https", "http"}:
+        return False
+    if scheme == "http" and not trusted_fake_ip_host(normalized):
+        return False
+    if normalized in {"localhost", "localhost.localdomain"} or normalized.endswith((".local", ".lan", ".internal", ".arpa")):
+        return False
+    try:
+        ipaddress.ip_address(normalized)
+        return False
+    except ValueError:
+        pass
+    return True
 
 
 def external_url(value: str | None) -> str:
@@ -82,7 +104,7 @@ def validate_http_url(value: str, *, allow_private: bool | None = None,
 
 def public_addresses(host: str, port: int, allow_private: bool = False,
                      *, allow_fake_ip: bool = False) -> tuple[str, ...]:
-    allow_fake_ip = allow_fake_ip and trusted_fake_ip_host(host)
+    allow_fake_ip = allow_fake_ip and allow_fake_ip_for_host(host)
     try:
         addresses = tuple(dict.fromkeys(info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)))
     except OSError as exc:

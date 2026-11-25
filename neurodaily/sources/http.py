@@ -10,7 +10,7 @@ import time
 import httpx
 from urllib.parse import urlsplit
 
-from ..security import allow_private_sources, public_addresses, trusted_fake_ip_host, validate_http_url
+from ..security import allow_fake_ip_for_host, allow_private_sources, public_addresses, validate_http_url
 
 DEFAULT_TIMEOUT = 20.0
 DEFAULT_HEADERS = {
@@ -97,7 +97,7 @@ class _SourceTransport(httpx.HTTPTransport):
             host = request.url.raw_host.decode("ascii")
             port = request.url.port or (443 if request.url.scheme == "https" else 80)
             addresses = public_addresses(host, port, allow_private,
-                                         allow_fake_ip=trusted_fake_ip_host(host))
+                                         allow_fake_ip=allow_fake_ip_for_host(host, request.url.scheme))
         except ValueError as exc:
             raise _BlockedSource("Source destination blocked or unresolved", request=request) from exc
         for index, address in enumerate(addresses):
