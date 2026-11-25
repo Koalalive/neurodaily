@@ -9,11 +9,12 @@
     #research-activity :focus-visible{outline:2px solid #b3d9ff;outline-offset:3px}
     #research-activity .ra-map{width:100%;aspect-ratio:2;position:relative;overflow:hidden;border:1px solid #334f70;border-radius:12px;background:#0b172a}
     #research-activity canvas{width:100%;height:100%;display:block}
-    #research-activity [data-kind=paper]{--ra-color:#e6ae3f}
-    #research-activity [data-kind=trial]{--ra-color:#34c7b1}
-    #research-activity [data-kind=news]{--ra-color:#f07a5f}
-    #research-activity [data-kind=industry]{--ra-color:#a887f0}
-    #research-activity [data-kind=conference]{--ra-color:#5aa7f0}
+    /* Shared qualitative palette with the topic landscape. */
+    #research-activity [data-kind=paper]{--ra-color:#56B4E9}
+    #research-activity [data-kind=trial]{--ra-color:#009E73}
+    #research-activity [data-kind=news]{--ra-color:#E69F00}
+    #research-activity [data-kind=industry]{--ra-color:#CC79A7}
+    #research-activity [data-kind=conference]{--ra-color:#F0E442}
     #research-activity .ra-controls button[data-kind]{color:var(--ra-color);border-color:color-mix(in srgb,var(--ra-color) 55%,#455d79)}
     #research-activity .ra-controls button[data-kind][aria-pressed=true]{background:color-mix(in srgb,var(--ra-color) 20%,#1c2b40);border-color:var(--ra-color)}
     #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:23px;height:23px;border:2px solid #0b172a;border-radius:20px;padding:0 4px;background:var(--ra-color,#b2c9de);color:#101928;font-size:11px;font-weight:750}
