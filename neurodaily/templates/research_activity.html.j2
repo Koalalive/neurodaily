@@ -7,8 +7,12 @@
     #research-activity button{font:inherit;color:#979791;cursor:pointer;background:transparent;border:1px solid #3a3a37;border-radius:1px;padding:3px 8px;font-size:.75rem}
     #research-activity button:hover,#research-activity button[aria-pressed=true]{background:#15140f;border-color:#c8a96b;color:#c8a96b}
     #research-activity :focus-visible{outline:2px solid #b3d9ff;outline-offset:3px}
-    #research-activity .ra-map{width:100%;aspect-ratio:2;position:relative;overflow:hidden;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12}
+    #research-activity .ra-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:14px}
+    #research-activity .ra-map-column{min-width:0}
+    #research-activity .ra-map{width:100%;aspect-ratio:1.8;position:relative;overflow:hidden;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12}
     #research-activity canvas{width:100%;height:100%;display:block}
+    #research-activity .ra-side{padding:12px;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;min-height:180px}
+    #research-activity .ra-side-hint{margin:0;font-size:.86rem;line-height:1.6;color:#77756e}
     /* Shared qualitative palette with the topic landscape. */
     #research-activity [data-kind=paper]{--ra-color:#56B4E9}
     #research-activity [data-kind=trial]{--ra-color:#009E73}
@@ -19,28 +23,37 @@
     #research-activity .ra-controls button{background:transparent;border-color:#3a3a37;border-radius:1px;color:#979791}
     #research-activity .ra-controls button:hover,
     #research-activity .ra-controls button[aria-pressed=true]{background:#15140f;border-color:#c8a96b;color:#c8a96b}
-    #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:24px;height:20px;border:1px solid #0d0f12;border-radius:2px;padding:0 5px;background:var(--ra-color,#b2c9de);color:#071015;font:750 12px/18px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;box-shadow:0 0 0 1px rgba(255,255,255,.22);letter-spacing:-.02em}
+    #research-activity .ra-marker{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;gap:5px;min-width:39px;height:22px;border:1px solid #3a3a37;border-radius:1px;padding:0 6px;background:#0d0f12;color:#ece9e2;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;box-shadow:0 0 0 1px rgba(0,0,0,.35);letter-spacing:-.02em}
+    #research-activity .ra-marker-dot{display:inline-block;flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--ra-color,#b2c9de)}
     #research-activity .ra-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em;background:var(--ra-color,#b2c9de)}
-    #research-activity .ra-marker:hover,#research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#fff;background:var(--ra-color,#b2c9de)}
+    #research-activity .ra-marker:hover,#research-activity .ra-marker[aria-pressed=true]{z-index:2;border-color:#c8a96b;background:#15140f}
     #research-activity .ra-caption{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:.85rem;color:#77756e}
-    #research-activity .ra-results{margin-block:12px 18px;padding:12px;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;color:#ece9e2;scroll-margin-top:12px}
+    #research-activity .ra-results{margin:0;padding:0;border:0;background:transparent;color:#ece9e2;scroll-margin-top:12px}
     #research-activity .ra-results ol{padding-inline-start:1.4rem;margin-bottom:0}
     #research-activity .ra-results li+li{margin-top:10px}
     #research-activity a{color:#c8a96b}
     #research-activity .ra-evidence{font-size:.88rem;overflow-wrap:anywhere;color:#979791}
     #research-activity .ra-deferred{color:#c6a46b}
+    @media(max-width:760px){ #research-activity .ra-layout{grid-template-columns:1fr}}
   </style>
   <h2 data-ra="map">⌖ 研究动态地图</h2>
   <p data-ra="mapNote"></p>
   <div class="ra-controls" aria-label="地图筛选"></div>
-  <div class="ra-map">
-    <canvas width="960" height="480" aria-hidden="true"></canvas>
-    <div class="ra-markers"></div>
+  <div class="ra-layout">
+    <div class="ra-map-column">
+      <div class="ra-map">
+        <canvas width="960" height="480" aria-hidden="true"></canvas>
+        <div class="ra-markers"></div>
+      </div>
+      <div class="ra-caption"><button class="ra-unknown" type="button"></button><span>Made with Natural Earth</span></div>
+      <p class="ra-disabled" hidden></p>
+      <p class="ra-deferred" hidden></p>
+    </div>
+    <aside class="ra-side">
+      <p class="ra-side-hint" data-ra="sideHint"></p>
+      <div class="ra-map-results ra-results" hidden></div>
+    </aside>
   </div>
-  <div class="ra-caption"><button class="ra-unknown" type="button"></button><span>Made with Natural Earth</span></div>
-  <p class="ra-disabled" hidden></p>
-  <p class="ra-deferred" hidden></p>
-  <div class="ra-map-results ra-results" hidden></div>
   <noscript>Enable JavaScript to use the map.</noscript>
   <script type="application/json" id="nd-research-data">{{ activity|tojson }}</script>
   <script>
@@ -49,15 +62,15 @@
     const data = JSON.parse(document.getElementById('nd-research-data').textContent);
     const copies = {
       zh: {map:'⌖ 研究动态地图', mapNote:'点击地点查看定位依据。研究地点、试验站点与末位作者单位分别标注，城市级点位使用城市中心示意。',
-        all:'全部', paper:'论文', trial:'临床试验', news:'新闻与政策', industry:'产业', conference:'学术会议', unknown:'未定位', empty:'当前筛选没有定位结果。', noRecords:'本期没有这类条目。',
+        all:'全部', paper:'论文', trial:'临床试验', news:'新闻与政策', industry:'产业', conference:'学术会议', unknown:'未定位', empty:'当前筛选没有定位结果。', noRecords:'本期没有这类条目。', sideHint:'点击地图上的数字，或上方筛选，查看条目详情。',
         original:'原文', site:'登记坐标', city:'城市级示意', country:'国家级示意', journal_unknown:'期刊待补', disabled:'研究动态地图需要配置大模型 API；未启用时不会生成地图。',
         institution:'作者机构', last_author_institution:'末位作者单位', study_site:'研究地点', trial_site:'试验站点', event:'事件发生地', conference_venue:'会议会址', funding_recipient:'获资方所在地', media_outlet:'媒体机构所在地', publisher:'媒体登记', model:'AI 判定', metadata:'来源元数据'},
       en: {map:'⌖ Research activity map', mapNote:'Select a location to see its evidence. Study sites, trial sites and last-author affiliations are labelled separately. City markers are approximate.',
-        all:'All',paper:'Papers',trial:'Clinical trials',news:'News and policy',industry:'Industry',conference:'Academic conferences',unknown:'Unlocated',empty:'No mapped records match this filter.',noRecords:'No records of this type in this report.',
+        all:'All',paper:'Papers',trial:'Clinical trials',news:'News and policy',industry:'Industry',conference:'Academic conferences',unknown:'Unlocated',empty:'No mapped records match this filter.',noRecords:'No records of this type in this report.',sideHint:'Select a number on the map, or use the filters above, to see details.',
         original:'Source',site:'Registry coordinates',city:'City-level marker',country:'Country-level marker',journal_unknown:'Journal unavailable',disabled:'The research map requires an LLM API. It is disabled when no model is configured.',
         institution:'Author affiliation',last_author_institution:'Last-author affiliation',study_site:'Study site',trial_site:'Trial site',event:'Event location',conference_venue:'Conference venue',funding_recipient:'Funding recipient location',media_outlet:'Media outlet location',publisher:'Publisher registry',model:'AI inference',metadata:'Source metadata'},
       ru: {map:'⌖ Карта исследований',mapNote:'Выберите точку, чтобы увидеть источник геоданных. Места исследований, центры испытаний и организации последних авторов подписаны отдельно. Точки городов приблизительны.',
-        all:'Все',paper:'Публикации',trial:'Клинические исследования',news:'Новости и политика',industry:'Индустрия',conference:'Научные конференции',unknown:'Без геоданных',empty:'Для этого фильтра нет точек на карте.',noRecords:'В этом отчёте нет записей такого типа.',
+        all:'Все',paper:'Публикации',trial:'Клинические исследования',news:'Новости и политика',industry:'Индустрия',conference:'Научные конференции',unknown:'Без геоданных',empty:'Для этого фильтра нет точек на карте.',noRecords:'В этом отчёте нет записей такого типа.',sideHint:'Выберите номер на карте или фильтр выше, чтобы увидеть подробности.',
         original:'Источник',site:'Координаты из реестра',city:'Приблизительная точка города',country:'Приблизительная точка страны',journal_unknown:'Журнал не указан',disabled:'Карта исследований требует API языковой модели; без неё карта не строится.',
         institution:'Организация авторов',last_author_institution:'Организация последнего автора',study_site:'Место исследования',trial_site:'Центр испытания',event:'Место события',conference_venue:'Место проведения конференции',funding_recipient:'Местоположение получателя средств',media_outlet:'Местоположение медиа',publisher:'Реестр издателя',model:'Вывод ИИ',metadata:'Метаданные источника'}
     };
@@ -66,7 +79,7 @@
       const notice = root.querySelector('.ra-disabled');
       notice.textContent = c.disabled;
       notice.hidden = false;
-      for (const selector of ['.ra-controls', '.ra-map', '.ra-caption', '.ra-deferred', '.ra-map-results']) {
+      for (const selector of ['.ra-controls', '.ra-layout', '.ra-deferred']) {
         const node = root.querySelector(selector);
         if (node) node.hidden = true;
       }
@@ -103,6 +116,8 @@
     function show(panel, label, ids, places = [], moveFocus = true) {
       panel.removeAttribute('role');
       panel.hidden = false;
+      const sideHint = root.querySelector('.ra-side-hint');
+      if (sideHint) sideHint.hidden = true;
       const heading = node('h3', label);
       heading.tabIndex = -1;
       panel.replaceChildren(heading);
@@ -205,10 +220,14 @@
         for (const group of groups) {
           const ids = [...new Set(group.places.map(place => place.id))];
           const label = [...new Set(group.places.map(placeName))].join(' · ');
-          const button = control(ids.length.toString());
+          const button = control();
           button.className = 'ra-marker';
           const kinds = new Set(ids.map(kind));
           if (kinds.size === 1) button.dataset.kind = kind(ids[0]);
+          const markerDot = node('span');
+          markerDot.className = 'ra-marker-dot';
+          const markerCount = node('span', ids.length.toString());
+          button.append(markerDot, markerCount);
           button.style.left = group.x + 'px';
           button.style.top = group.y + 'px';
           button.setAttribute('aria-label', label + ' · ' + ids.length);
