@@ -7,11 +7,11 @@
     #research-activity button{font:inherit;color:#979791;cursor:pointer;background:transparent;border:1px solid #3a3a37;border-radius:1px;padding:3px 8px;font-size:.75rem}
     #research-activity button:hover,#research-activity button[aria-pressed=true]{background:#15140f;border-color:#c8a96b;color:#c8a96b}
     #research-activity :focus-visible{outline:2px solid #b3d9ff;outline-offset:3px}
-    #research-activity .ra-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:14px}
+    #research-activity .ra-layout{display:block}
     #research-activity .ra-map-column{min-width:0}
     #research-activity .ra-map{width:100%;aspect-ratio:1.8;position:relative;overflow:hidden;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12}
     #research-activity canvas{width:100%;height:100%;display:block}
-    #research-activity .ra-side{padding:12px;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;min-height:180px}
+    #research-activity .ra-side{margin-top:12px;padding:12px;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;min-height:0}
     #research-activity .ra-side-hint{margin:0;font-size:.88rem;line-height:1.55;color:#77756e}
     #research-activity .ra-side p{font-size:.88rem;line-height:1.55}
     /* Shared qualitative palette with the topic landscape. */
@@ -35,7 +35,7 @@
     #research-activity a{color:#c8a96b}
     #research-activity .ra-evidence{font-size:.88rem;overflow-wrap:anywhere;color:#979791}
     #research-activity .ra-deferred{color:#c6a46b}
-    @media(max-width:760px){ #research-activity .ra-layout{grid-template-columns:1fr}}
+    @media(max-width:760px){ #research-activity .ra-layout{display:block}}
   </style>
   <h2 data-ra="map">⌖ 研究动态地图</h2>
   <p data-ra="mapNote"></p>

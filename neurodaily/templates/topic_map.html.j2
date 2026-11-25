@@ -3,9 +3,9 @@
     #topic-map{margin-block:1.5rem;padding:clamp(12px,2.5vw,24px);border:1px solid #2d2d2b;border-radius:2px;background:transparent;color:#ece9e2}
     #topic-map h2,#topic-map h3,#topic-map h4{color:#ece9e2;margin:0 0 .6em}
     #topic-map p{color:#979791}
-    #topic-map .tm-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(220px,.8fr);gap:14px}
+    #topic-map .tm-layout{display:block}
     #topic-map .tm-canvas{width:100%;aspect-ratio:1.8;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;cursor:crosshair}
-    #topic-map .tm-side{padding:12px;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;min-height:220px}
+    #topic-map .tm-side{margin-top:14px;padding:12px;border:1px solid #3a3a37;border-radius:1px;background:#0d0f12;min-height:0}
     #topic-map .tm-side h3{font-size:1rem;margin-bottom:8px}
     #topic-map .tm-side p{margin:.35em 0;font-size:.88rem;line-height:1.55}
     #topic-map .tm-side a{color:#c8a96b}
@@ -15,7 +15,7 @@
     #topic-map .tm-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em}
     #topic-map .tm-note{font-size:.82rem;color:#77756e}
     #topic-map .tm-method{color:#c8a96b;font-size:.7rem;letter-spacing:.06em}
-    @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
+    @media(max-width:760px){ #topic-map .tm-layout{display:block}}
   </style>
   {% set tm_title = {'zh':'◌ 主题景观','en':'◌ Topic landscape','ru':'◌ Тематический ландшафт'}.get(language, '◌ 主题景观') %}
   {% set tm_note = {'zh':'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。','en':'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.','ru':'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.'}.get(language, 'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。') %}
