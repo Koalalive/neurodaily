@@ -21,6 +21,7 @@ import os
 import re
 from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
+from threading import BoundedSemaphore
 from urllib.parse import urlsplit
 
 import httpx
@@ -43,6 +44,13 @@ DEFAULT_CFG = {
 }
 
 PROMPT_VERSION = 12
+# Every summary, geography and topic-label call shares this process-wide gate.
+# Keep the concurrency bounded across nested task pools (default 8).
+try:
+    _AI_CONCURRENCY = max(1, min(32, int(os.environ.get("NEURODAILY_AI_CONCURRENCY", "8"))))
+except (TypeError, ValueError):
+    _AI_CONCURRENCY = 8
+_AI_LIMIT = BoundedSemaphore(_AI_CONCURRENCY)
 
 SYSTEM_PROMPT = (
     "你是神经科学与生物医药领域的资深情报分析师。仅依据用户提供的今日抓取条目，"
@@ -516,8 +524,9 @@ def _chat_request(base_url: str, model: str, key: str, messages: list[dict],
             local = ipaddress.ip_address(host).is_loopback
         except ValueError:
             local = host == "localhost"
-        response = httpx.post(url, headers={"Authorization": f"Bearer {key}"}, json=request,
-                              timeout=timeout, trust_env=not local)
+        with _AI_LIMIT:
+            response = httpx.post(url, headers={"Authorization": f"Bearer {key}"}, json=request,
+                                  timeout=timeout, trust_env=not local)
         response.raise_for_status()
         status = "invalid_response"
         body = response.json()

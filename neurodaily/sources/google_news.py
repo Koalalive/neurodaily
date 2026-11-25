@@ -62,7 +62,11 @@ def _fallback_news(config, opts, cutoff: str, end: str, limit: int) -> list[Item
             validate_http_url(feed_url, resolve=False)
         except ValueError:
             continue
-        response = get(feed_url, timeout=15.0, retries=1, user_agent="Mozilla/5.0 NeuroDaily")
+        # Built-in fallbacks are hardcoded trusted public feeds; user-supplied
+        # feeds must pass through the SSRF transport.
+        trusted = feed_url in FALLBACK_FEEDS
+        response = get(feed_url, timeout=15.0, retries=1, user_agent="Mozilla/5.0 NeuroDaily",
+                       untrusted_url=not trusted)
         if response is None:
             continue
         try:

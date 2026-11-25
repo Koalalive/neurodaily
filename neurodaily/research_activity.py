@@ -1,6 +1,8 @@
 """Build the daily research map from the report's records."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 import hashlib
 import json
 from functools import lru_cache
@@ -57,13 +59,23 @@ def enrich_geography(result: DigestResult) -> bool:
         candidates = [item for _, item in mapped.values()
                       if item.kind in {"news", "policy", "funding", "drug", "device"} and item.url
                       and not item.extra.get("article_text")][:24]
-        for item in candidates:
-            response = _get(item.url, timeout=8.0, retries=0,
-                            user_agent="Mozilla/5.0 NeuroDaily", untrusted_url=True)
-            if response is not None:
-                text = _strip_html(response.text)
-                if text:
-                    item.extra["article_text"] = text[:4000]
+
+        def fetch_article_text(item):
+            try:
+                response = _get(item.url, timeout=8.0, retries=0,
+                                user_agent="Mozilla/5.0 NeuroDaily", untrusted_url=True)
+                if response is not None:
+                    text = _strip_html(response.text)
+                    if text:
+                        item.extra["article_text"] = text[:4000]
+            except Exception:
+                return
+
+        if candidates:
+            with ThreadPoolExecutor(max_workers=min(4, len(candidates)),
+                                    thread_name_prefix="geo-article") as pool:
+                list(pool.map(copy_context().run, [lambda item=item: fetch_article_text(item)
+                                                   for item in candidates]))
     except Exception:
         pass
 

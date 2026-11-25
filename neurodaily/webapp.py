@@ -407,7 +407,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                         metrics = for_item(item, cfg)
                         if metrics:
                             item.extra["metrics"] = metrics
-                stage("metrics", "completed", checkpoint=result)
+                stage("metrics", "completed")
             except Exception:
                 stage("metrics", "failed", "期刊指标更新失败。")
 
@@ -426,20 +426,20 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             if summaries:
                 result.ai_summary_meta = {"model": load_cfg().get("model", ""),
                                           "languages": sorted(summaries)}
-            stage("ai", "completed" if summaries else "skipped", checkpoint=result, set_phase=False)
+            stage("ai", "completed" if summaries else "skipped", set_phase=False)
 
         def run_geography():
             from .research_activity import enrich_geography
             if enrich_geography(result):
                 partial = bool((result.geography or {}).get("deferred"))
-                stage("geolocation", "partial" if partial else "completed", checkpoint=result, set_phase=False)
+                stage("geolocation", "partial" if partial else "completed", set_phase=False)
             else:
                 stage("geolocation", "skipped", "未启用或缺少大模型 API。", set_phase=False)
 
         def run_topics():
             from .topic_map import enrich_topics
             if enrich_topics(result):
-                stage("topics", "completed", checkpoint=result, set_phase=False)
+                stage("topics", "completed", set_phase=False)
             else:
                 stage("topics", "skipped", "LDA/scikit-learn 未启用或语料不足。", set_phase=False)
 
