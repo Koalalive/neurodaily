@@ -66,8 +66,20 @@
     fitCanvas();
     let selectedTopic = 'all';
     let selectedPoint = null;
-    const topicColors = ['#c8a96b', '#8da7a1', '#b8aaa2', '#a99b83', '#d6c7a7', '#7e9b95', '#c2b59a', '#77756e'];
-    const color = id => topicColors[Number(id) % topicColors.length];
+    // High-contrast, mostly colorblind-safe palette on the dark canvas.
+    // The first 24 are curated; later LDA topics get deterministic hues so a
+    // 25–30 topic run does not silently reuse the same color.
+    const topicColors = [
+      '#56B4E9', '#E69F00', '#009E73', '#F0E442', '#0072B2', '#D55E00',
+      '#CC79A7', '#8CD17D', '#B6992D', '#499894', '#F1CE63', '#D4A6C8',
+      '#86BCB6', '#E15759', '#76B7B2', '#FF9DA7', '#9C755F', '#B07AA1',
+      '#59A14F', '#EDC948', '#F28E2B', '#4E79A7', '#A0CBE8', '#FFBE7D'
+    ];
+    const color = id => {
+      const number = Number(id);
+      if (Number.isInteger(number) && number >= 0 && number < topicColors.length) return topicColors[number];
+      return 'hsl(' + Math.round((Math.max(0, number || 0) * 137.508) % 360) + ' 78% ' + (number % 2 ? 68 : 56) + '%)';
+    };
     const dot = id => {
       const element = document.createElement('span');
       element.className = 'tm-dot';
