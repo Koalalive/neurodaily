@@ -348,7 +348,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 return
             result.config = cfg
             result.profile_revision = attempt.get("profile_revision")
-            task_runs.stage(attempt, "search", "completed")
+            # Layer 4: a failed optional source degrades the search to partial
+            # instead of blocking the report when another source succeeded.
+            search_status = "partial" if any(not row["ok"] for row in result.health) else "completed"
+            task_runs.stage(attempt, "search", search_status)
             task_runs.save(attempt, result=result, snapshot=snapshot(result, mode))
         else:
             result.config = cfg
