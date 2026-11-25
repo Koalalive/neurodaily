@@ -8,7 +8,7 @@ RETRY_DELAY = timedelta(minutes=5)
 
 
 def scheduled_time(scheduled: dict) -> time | None:
-    if not scheduled.get("enabled"):
+    if not scheduled.get("enabled") or scheduled.get("paused"):
         return None
     try:
         return time(int(scheduled.get("hour", 8)), int(scheduled.get("minute", 0)))

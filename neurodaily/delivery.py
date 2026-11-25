@@ -145,10 +145,14 @@ def run_email_queue(now: datetime | None = None) -> dict:
     return outcomes
 
 
-def run_email_queue_loop(stop) -> None:
+def run_email_queue_loop(stop, config_path: str | None = None) -> None:
+    from .config import Config
+
     while not stop.is_set():
         try:
-            run_email_queue()
+            cfg = Config.load(config_path)
+            if not (cfg.scheduled or {}).get("paused"):
+                run_email_queue()
         except Exception:
             _LOG.exception("Email queue worker failed")
         stop.wait(30)

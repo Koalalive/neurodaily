@@ -12,12 +12,20 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import signal
+import socket
 import subprocess
 import sys
+import time
+import urllib.request
+from pathlib import Path
 
 from . import __version__
 from .config import Config, DEFAULT_CONFIG, DEFAULT_DIRS
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _ensure_imports():
@@ -747,6 +755,145 @@ def cmd_mcp(args) -> int:
     return 0
 
 
+def _service_url(port: int) -> str:
+    return f"http://127.0.0.1:{port}"
+
+
+def _service_pid_path(port: int) -> Path:
+    return Path(DEFAULT_DIRS["output"]) / f"neurodaily-web-{port}.pid"
+
+
+def _service_json(port: int, path: str) -> dict:
+    with urllib.request.urlopen(_service_url(port) + path, timeout=2.5) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _service_port_open(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.7):
+            return True
+    except OSError:
+        return False
+
+
+def _service_pids(port: int) -> list[int]:
+    pids = []
+    pid_file = _service_pid_path(port)
+    try:
+        pids.append(int(pid_file.read_text(encoding="utf-8").strip()))
+    except (OSError, ValueError):
+        pass
+    # A service started manually has no PID file; locate only the listener on
+    # the requested local port rather than killing every NeuroDaily process.
+    try:
+        result = subprocess.run(["lsof", "-ti", f"tcp:{port}"], capture_output=True,
+                                text=True, timeout=5)
+        pids.extend(int(value) for value in result.stdout.split() if value.isdigit())
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return list(dict.fromkeys(pids))
+
+
+def _service_stop(port: int) -> bool:
+    pids = _service_pids(port)
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    deadline = time.monotonic() + 10
+    while pids and time.monotonic() < deadline and _service_port_open(port):
+        time.sleep(0.2)
+    for pid in pids:
+        try:
+            os.kill(pid, 0)
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    try:
+        _service_pid_path(port).unlink(missing_ok=True)
+    except OSError:
+        pass
+    return not _service_port_open(port)
+
+
+def _service_start(args) -> int:
+    port = int(args.port)
+    if _service_port_open(port):
+        print(f"[neurodaily] service already running at {_service_url(port)}")
+        return 0
+    config_path = getattr(args, "config", None)
+    output = Path(DEFAULT_DIRS["output"])
+    output.mkdir(parents=True, exist_ok=True)
+    log_path = output / f"webapp-{port}.log"
+    command = [sys.executable, "-m", "neurodaily", "web", "--port", str(port), "--no-open"]
+    if config_path:
+        command += ["--config", str(config_path)]
+    log = log_path.open("ab")
+    process = subprocess.Popen(command, cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT,
+                               start_new_session=True)
+    _service_pid_path(port).write_text(str(process.pid), encoding="utf-8")
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            print(f"[neurodaily] service exited during startup; see {log_path}")
+            return 1
+        if _service_port_open(port):
+            print(f"[neurodaily] service started at {_service_url(port)} (pid {process.pid})")
+            print(f"[neurodaily] log: {log_path}")
+            return 0
+        time.sleep(0.3)
+    print(f"[neurodaily] service did not become ready; see {log_path}")
+    return 1
+
+
+def _service_pause(args, paused: bool) -> int:
+    cfg = Config.load(getattr(args, "config", None))
+    cfg.scheduled["paused"] = paused
+    cfg.save(getattr(args, "config", None))
+    state = "paused" if paused else "resumed"
+    print(f"[neurodaily] scheduled search and email {state}")
+    return 0
+
+
+def cmd_service(args) -> int:
+    action = args.service_action
+    if action == "start":
+        return _service_start(args)
+    if action == "stop":
+        ok = _service_stop(int(args.port))
+        print(f"[neurodaily] service {'stopped' if ok else 'could not be stopped'}")
+        return 0 if ok else 1
+    if action == "restart":
+        _service_stop(int(args.port))
+        return _service_start(args)
+    if action == "pause":
+        return _service_pause(args, True)
+    if action == "resume":
+        return _service_pause(args, False)
+    if action == "status":
+        port = int(args.port)
+        running = _service_port_open(port)
+        cfg = Config.load(getattr(args, "config", None))
+        paused = bool((cfg.scheduled or {}).get("paused"))
+        print(f"[neurodaily] service: {'running' if running else 'stopped'} ({_service_url(port)})")
+        print(f"[neurodaily] scheduled retrieval/email: {'paused' if paused else 'active'}")
+        if running:
+            try:
+                status = _service_json(port, "/api/launchd/status")
+                print(f"[neurodaily] scheduler: {status.get('backend')} / {status.get('state')} / "
+                      f"{status.get('schedule') or '—'}")
+                if status.get("next_run"):
+                    print(f"[neurodaily] next run: {status['next_run']}")
+                search = _service_json(port, "/api/search/status").get("search") or {}
+                print(f"[neurodaily] current task: #{search.get('id', '—')} / "
+                      f"{search.get('status', '—')} / {search.get('phase', '—')}")
+            except Exception as exc:
+                print(f"[neurodaily] status API unavailable: {exc}")
+        return 0 if running else 1
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="neurodaily",
                                 description="Daily neuroscience/psychiatry digest → HTML.")
@@ -896,6 +1043,15 @@ def build_parser() -> argparse.ArgumentParser:
     quality_p.add_argument("--baseline", help="path to a baseline config JSON for comparison")
     quality_p.add_argument("--top", type=int, default=20, help="size of the ranking cutoff (default: 20)")
     quality_p.set_defaults(func=cmd_search_quality)
+
+    svc_p = sub.add_parser("service", help="manage the background web/scheduler/email service")
+    svc_p.add_argument("--port", type=int, default=8031)
+    svc_p.add_argument("--config", default=argparse.SUPPRESS,
+                       help="config path for this instance")
+    svc_sub = svc_p.add_subparsers(dest="service_action", required=True)
+    for action in ("start", "stop", "restart", "pause", "resume", "status"):
+        svc_sub.add_parser(action)
+    svc_p.set_defaults(func=cmd_service)
 
     mcp_p = sub.add_parser("mcp", help="serve local read-only search evidence over MCP stdio")
     mcp_p.set_defaults(func=cmd_mcp)

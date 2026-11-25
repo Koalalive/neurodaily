@@ -112,7 +112,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                                                 _start_scheduled_search),
                    name="neurodaily-schedule", daemon=True).start()
         from .delivery import run_email_queue_loop
-        email_worker = Thread(target=run_email_queue_loop, args=(stop,),
+        email_worker = Thread(target=run_email_queue_loop, args=(stop, config_path),
                               name="neurodaily-email-queue", daemon=True)
         email_worker.start()
         Thread(target=optimization_worker, args=(optimizer, stop),
@@ -1105,6 +1105,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
     def api_launchd_status():
         cfg = _cfg()
         sched = cfg.scheduled or {}
+        paused = bool(sched.get("paused"))
         if desktop:
             schedule = scheduled_time(sched)
             current = datetime.now()
@@ -1128,8 +1129,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
                 elif not slot:
                     state = "waiting"
             return JSONResponse({"backend": "desktop", "loaded": due is not None,
+                                 "paused": paused,
                                  "schedule": schedule.strftime("%H:%M") if schedule is not None else "",
-                                 "state": state, "next_run": next_run.isoformat() if next_run else None,
+                                 "state": "paused" if paused else state,
+                                 "next_run": next_run.isoformat() if next_run else None,
                                  "last_run": hist.desktop_schedule_result(cfg.profile)})
         label = _launchd_label()
         dest = os.path.expanduser(f"~/Library/LaunchAgents/{label}.plist")
@@ -1142,9 +1145,31 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         return JSONResponse({
             "installed": os.path.exists(dest),
             "loaded": loaded,
+            "paused": paused,
             "label": label,
+            "state": "paused" if paused else ("scheduled" if loaded else "off"),
             "schedule": f"{int(sched.get('hour', 8)):02d}:{int(sched.get('minute', 0)):02d}",
         })
+
+    @app.post("/api/service/pause")
+    def api_service_pause():
+        try:
+            cfg = _cfg()
+            cfg.scheduled["paused"] = True
+            cfg.save(config_path)
+        except Exception as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        return JSONResponse({"ok": True, "paused": True})
+
+    @app.post("/api/service/resume")
+    def api_service_resume():
+        try:
+            cfg = _cfg()
+            cfg.scheduled["paused"] = False
+            cfg.save(config_path)
+        except Exception as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        return JSONResponse({"ok": True, "paused": False})
 
     @app.post("/api/launchd/install")
     def api_launchd_install():

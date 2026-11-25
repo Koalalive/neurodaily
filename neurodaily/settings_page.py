@@ -329,6 +329,35 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     <p class="hint" id="schedule_hint"></p>
   </section>
 
+  <section id="service-diagnostics">
+    <h2>Service diagnostics</h2>
+    <p class="desc">Live status for the scheduled search worker and email delivery. This checks the local service APIs; it does not expose logs or secrets.</p>
+    <div class="grid2">
+      <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
+        <h3 style="margin-top:0;font-size:.9rem">Service</h3>
+        <p id="diag-service" class="mini">Checking…</p>
+      </div>
+      <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
+        <h3 style="margin-top:0;font-size:.9rem">Scheduler</h3>
+        <p id="diag-scheduler" class="mini">Checking…</p>
+      </div>
+      <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
+        <h3 style="margin-top:0;font-size:.9rem">Current task</h3>
+        <p id="diag-task" class="mini">Checking…</p>
+      </div>
+      <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
+        <h3 style="margin-top:0;font-size:.9rem">Email delivery</h3>
+        <p id="diag-email" class="mini">Checking…</p>
+      </div>
+    </div>
+    <div class="inline" style="margin-top:10px">
+      <button type="button" id="diag-refresh">↻ Refresh diagnostics</button>
+      <button type="button" id="diag-pause">Pause scheduled search &amp; email</button>
+      <button type="button" id="diag-resume">Resume scheduled search &amp; email</button>
+      <span id="diag-message" role="status" class="mini"></span>
+    </div>
+  </section>
+
   <section>
     <h2>Policy / news RSS</h2>
     <div id="policy_feeds"></div>
@@ -1278,7 +1307,8 @@ async function loadLaunchdStatus(){
           loaded:t(s.loaded?'loaded':'not loaded'),installed:t(s.installed?'installed':'not installed'),time:s.schedule});
     var time=function(value){return new Date(value).toLocaleString(document.documentElement.lang);};
     if(desktop&&s.loaded){
-      if(s.state==='running') scheduleText+=' · '+t('Searching now');
+      if(s.state==='paused') scheduleText+=' · '+t('Paused');
+      else if(s.state==='running') scheduleText+=' · '+t('Searching now');
       else if(s.state==='waiting') scheduleText+=' · '+t('Waiting to start');
       else if(s.state==='retrying') scheduleText+=' · '+t('Last attempt failed. Retry {time}',{time:time(s.next_run)});
       else if(s.next_run) scheduleText+=' · '+t('Next {time}',{time:time(s.next_run)});
@@ -1529,9 +1559,65 @@ document.querySelector('main').addEventListener('input',function(event){
 document.querySelector('main').addEventListener('change',function(event){
   if(!event.target.closest('#search_builder, #optimization-workbench')) markPreviewStale();
 });
+async function loadDiagnostics(){
+  var message=el('diag-message');
+  if(message) message.textContent='Checking…';
+  try{
+    var [statusResponse, searchResponse, schedulerResponse, pushResponse]=await Promise.all([
+      fetch('/api/status',{cache:'no-store'}),
+      fetch('/api/search/status',{cache:'no-store'}),
+      fetch('/api/launchd/status',{cache:'no-store'}),
+      fetch('/api/push',{cache:'no-store'})
+    ]);
+    var status=statusResponse.ok?await statusResponse.json():{};
+    var search=searchResponse.ok?(await searchResponse.json()).search:null;
+    var scheduler=schedulerResponse.ok?await schedulerResponse.json():{};
+    var push=pushResponse.ok?await pushResponse.json():{};
+    var task=search&&search.id?search:null;
+    var receipts=[];
+    if(task){try{var h=await fetch('/api/history/'+task.id,{cache:'no-store'});if(h.ok)receipts=(await h.json()).receipts||[];}catch(_){}}
+    var email=push.email||{};
+    var recipients=(email.recipients||[]).length||(email.to||[]).length;
+    var emailReceipts=receipts.filter(function(row){return row.channel==='email';});
+    var emailText=email.enabled===false?'disabled':'enabled; '+recipients+' recipient(s); '+(push.password_set?'SMTP configured':'SMTP password missing');
+    if(emailReceipts.length){
+      emailText += ' · latest task: '+emailReceipts.map(function(row){return row.status;}).join(', ');
+    }
+    var schedulerText=(scheduler.backend||'?')+' · '+(scheduler.state||'?')+' · '+(scheduler.schedule||'—');
+    if(scheduler.next_run) schedulerText+=' · next '+new Date(scheduler.next_run).toLocaleString(document.documentElement.lang);
+    if(scheduler.last_run) schedulerText+=' · last '+(scheduler.last_run.status||'?')+' '+new Date(scheduler.last_run.finished_at||scheduler.last_run.due||Date.now()).toLocaleString(document.documentElement.lang);
+    var taskText=task?('#'+task.id+' · '+(task.status||'?')+' · '+(task.phase||'?')+' · '+(task.item_count||0)+' items':'No task recorded');
+    if(search&&search.report_ready) taskText+=' · report ready';
+    if(search&&search.error) taskText+=' · '+search.error;
+    el('diag-service').textContent='online · profile '+(status.profile||'?')+' · last run '+(status.last_run?new Date(status.last_run).toLocaleString(document.documentElement.lang):'—');
+    el('diag-scheduler').textContent=schedulerText;
+    el('diag-task').textContent=taskText;
+    el('diag-email').textContent=emailText;
+    if(message) message.textContent='Updated '+new Date().toLocaleTimeString(document.documentElement.lang);
+  }catch(e){
+    if(message) message.textContent='Diagnostics unavailable: '+e.message;
+  }
+}
+el('diag-refresh').addEventListener('click',loadDiagnostics);
+async function diagControl(action){
+  var message=el('diag-message');
+  try{
+    var response=await fetch('/api/service/'+action,{method:'POST',headers:{'Content-Type':'application/json'}});
+    var result=await response.json();
+    if(!response.ok) throw new Error(result.error||'request failed');
+    message.textContent=action==='pause'?'Scheduled search and email paused.':'Scheduled search and email resumed.';
+    await loadDiagnostics();
+    await loadLaunchdStatus();
+  }catch(e){message.textContent='Action failed: '+e.message;}
+}
+el('diag-pause').addEventListener('click',function(){diagControl('pause');});
+el('diag-resume').addEventListener('click',function(){diagControl('resume');});
+
 load();
 loadUiLanguage();
+loadDiagnostics();
 setInterval(function(){if(desktopScheduler&&!document.hidden) loadLaunchdStatus();},10000);
+setInterval(function(){if(!document.hidden) loadDiagnostics();},10000);
 </script>
 </body></html>
 """

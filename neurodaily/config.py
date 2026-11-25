@@ -534,6 +534,7 @@ def DEFAULT_CONFIG() -> Config:
     }
     scheduled = {
         "enabled": True,
+        "paused": False,
         "hour": 8,
         "minute": 0,
         "launchd": {

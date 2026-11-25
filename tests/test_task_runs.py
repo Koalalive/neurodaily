@@ -380,6 +380,16 @@ class SearchTaskTests(unittest.TestCase):
         self.assertEqual(items[0].title, "Recovered")
         self.assertEqual(health[0]["status"], "ok")
 
+    def test_service_pause_keeps_web_api_alive_and_marks_scheduler_paused(self):
+        paused = self.client.post("/api/service/pause")
+        self.assertEqual(paused.status_code, 200)
+        status = self.client.get("/api/launchd/status").json()
+        self.assertTrue(status["paused"])
+        self.assertEqual(status["state"], "paused")
+        resumed = self.client.post("/api/service/resume")
+        self.assertEqual(resumed.status_code, 200)
+        self.assertFalse(self.client.get("/api/launchd/status").json()["paused"])
+
     def test_source_progress_has_initial_and_finished_states(self):
         from neurodaily.digest import _fetch_sources
         from neurodaily.models import Item

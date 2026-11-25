@@ -29,6 +29,15 @@ neurodaily web --port 8032 --config /tmp/neurodaily-b/config.json --no-open
 ```
 `--config` 可写在子命令后；不同实例应使用独立配置文件，避免共享历史/队列。
 
+## 服务控制
+```bash
+neurodaily service start          # 后台启动 Web + 定时检索/邮件
+neurodaily service status         # 查看服务、调度器、当前任务
+neurodaily service pause          # 只暂停未来定时检索/邮件，Web 继续工作
+neurodaily service resume
+neurodaily service stop           # 停止整个后台服务
+```
+
 ## 其他
 ```bash
 neurodaily demo --no-open                       # 离线演示
