@@ -99,7 +99,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 <!-- OPTIMIZATION_HEAD -->
 </head>
 <body>
-<header><h1>⚙ NeuroDaily Settings</h1><a href="/">← Back to dashboard</a><span class="mini" id="cfgpath"></span></header>
+<header><h1>NeuroDaily Settings</h1><a href="/">← Back to dashboard</a><span class="mini" id="cfgpath"></span></header>
 <main>
   <section>
     <label for="ui_language">界面语言</label>

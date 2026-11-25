@@ -70,3 +70,60 @@ def inject_ui_theme(html: str) -> str:
     if "<body" in html:
         return html.replace("<body", style + "<body", 1)
     return style + html
+
+# Visible app-shell pass: the token-only theme above is not enough for the
+# dense settings page. These rules turn the surrounding app into the same
+# editorial surface as the report.
+UI_CSS += r"""
+body > header {
+  min-height: 112px !important; padding: 30px 30px 24px !important;
+  border-bottom: 1px solid var(--line) !important;
+  background: radial-gradient(70% 120% at 12% 0%, #17171a 0%, transparent 72%), var(--bg) !important;
+}
+body > header h1 {
+  color: var(--text) !important; font-size: clamp(1.8rem, 3.2vw, 2.8rem) !important;
+  line-height: 1.05 !important; letter-spacing: -.03em !important;
+}
+body > header h1::before {
+  content: "NEURODAILY / SETTINGS"; display: block; margin-bottom: 10px;
+  color: var(--accent) !important; font: 500 .56em/1.2 var(--serif);
+  letter-spacing: .16em;
+}
+body > header a { color: var(--muted) !important; font-size: .76rem !important; }
+body > header .mini { color: #77756e !important; }
+main { max-width: 1120px !important; padding: 34px 30px 76px !important; }
+section {
+  background: transparent !important; border: 0 !important;
+  border-top: 1px solid var(--line) !important; border-radius: 0 !important;
+  padding: 26px 0 24px !important; margin: 0 0 10px !important;
+}
+section h2 { font-size: clamp(1.35rem, 2vw, 1.75rem) !important; margin-bottom: 6px !important; }
+section .desc { color: var(--muted) !important; max-width: 76ch; margin-bottom: 16px !important; }
+section > .inline:first-of-type { gap: 18px !important; }
+input, select, textarea { min-height: 34px; }
+input, select, textarea, button { font-size: .82rem !important; }
+button.primary {
+  background: var(--accent) !important; color: #171207 !important;
+  border: 1px solid var(--accent) !important; border-radius: 1px !important;
+  padding: 8px 18px !important;
+}
+button { padding: 6px 10px !important; }
+.j-metrics { border-bottom-color: var(--line) !important; }
+.j-metrics summary { color: var(--accent) !important; }
+footer {
+  border-top: 1px solid var(--line) !important; padding: 18px 30px !important;
+  background: var(--bg) !important;
+}
+.optimization-chat-column, .optimization-evidence-column, .optimization-card,
+#optimization-chat { background: transparent !important; border: 1px solid var(--line) !important; }
+.optimization-columns { gap: 28px !important; }
+#optimization-workbench { border-top-color: var(--line) !important; margin-top: 28px !important; }
+#optimization-workbench h3 { font-size: 1.35rem !important; }
+#optimization-chat { min-height: 9rem; }
+.optimization-heading { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+@media (max-width: 640px) {
+  body > header { min-height: 0 !important; padding: 24px 18px 18px !important; }
+  main { padding: 24px 18px 64px !important; }
+  section { padding: 22px 0 20px !important; }
+}
+"""
