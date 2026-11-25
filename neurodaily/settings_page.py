@@ -292,6 +292,13 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     </div>
     <div class="inline" style="margin-top:10px">
       <label>主题标签并发数 <input id="topic_concurrency" type="number" min="1" max="4" value="4" style="width:70px"></label>
+      <label>报告语言
+        <select id="report_language" style="width:130px">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+          <option value="ru">Русский</option>
+        </select>
+      </label>
     </div>
     <div class="inline" style="margin-top:10px">
       <label>"On This Day" language</label>
@@ -852,6 +859,7 @@ function render(){
   el('topic_map_enabled').checked=(o.topic_map!==false);
   el('topic_ai_labels').checked=(o.topic_ai_labels!==false);
   el('topic_concurrency').value=o.topic_concurrency||4;
+  el('report_language').value=o.report_language||'zh';
   el('otd_lang').value = otd.lang || 'zh';
   var w = BASE.windows || {};
   el('win_daily').value = (w.daily_paper_hours != null ? w.daily_paper_hours : 36);
@@ -1150,6 +1158,7 @@ function collect(){
   data.output.topic_map=el('topic_map_enabled').checked;
   data.output.topic_ai_labels=el('topic_ai_labels').checked;
   data.output.topic_concurrency=Number(el('topic_concurrency').value||4);
+  data.output.report_language=el('report_language').value||'zh';
   data.scheduled=Object.assign({},data.scheduled||{});
   data.scheduled.enabled=el('sch_enabled').checked;
   data.scheduled.hour=parseInt(el('sch_hour').value||'8',10);

@@ -18,7 +18,7 @@ class AiSummaryLanguageTests(unittest.TestCase):
             return f"summary-{kwargs.get('language')}"
 
         with patch.object(ai_summary, "generate", side_effect=fake_generate):
-            out = ai_summary.generate_all(result, {"enabled": True})
+            out = ai_summary.generate_all(result, {"enabled": True}, languages=("zh", "en", "ru"))
         self.assertEqual(out["en"], "summary-en")
         self.assertEqual(set(out), {"zh", "en", "ru"})
         self.assertEqual(result.ai_summaries["ru"], "summary-ru")

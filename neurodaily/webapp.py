@@ -165,10 +165,10 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         return HTMLResponse(localize_document(inject_ui_theme(html), _language()),
                             headers={"Cache-Control": "no-store"})
 
-    def _report_response(html, *, localize=True, feedback=False):
+    def _report_response(html, *, localize=True, feedback=False, language=None):
         from .report_security import protect_report
 
-        language = _language()
+        language = language or _language()
         html = localize_document(html, language) if localize else html
         html, headers = protect_report(html, language, feedback=feedback)
         return HTMLResponse(html, headers=headers)
@@ -178,17 +178,20 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
         from .report_feedback import attach_controls
 
         path = Path(path)
+        cfg = _cfg()
+        report_language = cfg.output.get("report_language") or "zh"
         html = path.read_text(encoding="utf-8", errors="replace")
         if ui:
             if 'name="nd-report-date"' not in html:
                 date = _saved_report_date(path, html)
                 html = html.replace("</head>", f'<meta name="nd-report-date" content="{date}"></head>', 1)
             html = re.sub(r'<details id="bibliometrics"\b[^>]*>[\s\S]*?</details>', "", html, count=1)
-            html = refresh_saved_research_map(html, _language())
+            html = refresh_saved_research_map(html, report_language)
         if settings_link:
             html = html.replace("</body>", DASHBOARD_SETTINGS_LINK + "</body>", 1)
         html, feedback = attach_controls(html, path, _cfg().profile)
-        return _report_response(html, localize=ui or settings_link, feedback=feedback)
+        return _report_response(html, localize=ui or settings_link, feedback=feedback,
+                                language=report_language)
 
     def _cfg() -> Config:
         try:
@@ -373,7 +376,7 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             cfg.profile, attempt.get("started_at", ""))
         base = getattr(app.state, "base_url", "") or "http://127.0.0.1:8031"
         result.report_base_url = base
-        result.report_locale = _language()
+        result.report_locale = cfg.output.get("report_language") or "zh"
 
         def publish_report(revision):
             stage("report", "running")
@@ -420,9 +423,24 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             if not complete(name):
                 enrichment.append((name, operation))
 
+        def required_summary_languages():
+            languages = ["zh"]
+            report_language = cfg.output.get("report_language") or "zh"
+            if report_language in {"en", "ru"}:
+                languages.append(report_language)
+            try:
+                from . import mailer
+                for recipient in mailer.recipients(mailer.load_cfg()):
+                    language = str(recipient.get("language") or "zh")
+                    if language in {"en", "ru"} and language not in languages:
+                        languages.append(language)
+            except Exception:
+                pass
+            return tuple(languages)
+
         def run_ai_summary():
             from .ai_summary import generate_all, load_cfg
-            summaries = generate_all(result, load_cfg())
+            summaries = generate_all(result, load_cfg(), languages=required_summary_languages())
             if summaries:
                 result.ai_summary_meta = {"model": load_cfg().get("model", ""),
                                           "languages": sorted(summaries)}

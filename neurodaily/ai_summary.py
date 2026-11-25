@@ -46,11 +46,12 @@ DEFAULT_CFG = {
 PROMPT_VERSION = 12
 # Every summary, geography and topic-label call shares this process-wide gate.
 # Keep the concurrency bounded across nested task pools (default 8).
+# 0 means no global cap. A positive value is opt-in for rate-limited providers.
 try:
-    _AI_CONCURRENCY = max(1, min(32, int(os.environ.get("NEURODAILY_AI_CONCURRENCY", "8"))))
+    _AI_CONCURRENCY = max(0, min(32, int(os.environ.get("NEURODAILY_AI_CONCURRENCY", "0"))))
 except (TypeError, ValueError):
-    _AI_CONCURRENCY = 8
-_AI_LIMIT = BoundedSemaphore(_AI_CONCURRENCY)
+    _AI_CONCURRENCY = 0
+_AI_LIMIT = BoundedSemaphore(_AI_CONCURRENCY) if _AI_CONCURRENCY else None
 
 SYSTEM_PROMPT = (
     "你是神经科学与生物医药领域的资深情报分析师。仅依据用户提供的今日抓取条目，"
@@ -524,9 +525,13 @@ def _chat_request(base_url: str, model: str, key: str, messages: list[dict],
             local = ipaddress.ip_address(host).is_loopback
         except ValueError:
             local = host == "localhost"
-        with _AI_LIMIT:
+        if _AI_LIMIT is None:
             response = httpx.post(url, headers={"Authorization": f"Bearer {key}"}, json=request,
                                   timeout=timeout, trust_env=not local)
+        else:
+            with _AI_LIMIT:
+                response = httpx.post(url, headers={"Authorization": f"Bearer {key}"}, json=request,
+                                      timeout=timeout, trust_env=not local)
         response.raise_for_status()
         status = "invalid_response"
         body = response.json()
@@ -643,11 +648,11 @@ def generate(result, cfg: dict | None = None, force: bool = False,
 
 
 def generate_all(result, cfg: dict | None = None, *, force: bool = False,
-                 languages: tuple[str, ...] = ("zh", "en", "ru")) -> dict[str, str]:
-    """Generate and cache the daily summary in several languages."""
+                 languages: tuple[str, ...] = ("zh",)) -> dict[str, str]:
+    """Generate and cache the daily summary in the requested languages."""
     cfg = cfg or load_cfg()
     summaries: dict[str, str] = {}
-    for language in languages:
+    for language in dict.fromkeys(languages or ("zh",)):
         try:
             text = generate(result, cfg, force=force, language=language)
             if text:

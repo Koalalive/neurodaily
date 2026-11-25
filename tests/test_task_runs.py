@@ -348,6 +348,8 @@ class SearchTaskTests(unittest.TestCase):
         self.assertIn("尚无已保存的日报", self.client.get("/?ui=1").text)
         self.assertEqual(self.client.post("/api/ui/preferences", json={"language": "fr"}).status_code, 400)
         self.assertEqual(self.client.post("/api/ui/preferences", json={"language": "ru"}).status_code, 200)
+        self.cfg.output["report_language"] = "ru"
+        self.cfg.save(self.config_path)
         with TestClient(create_app(self.config_path)) as restarted:
             self.assertEqual(restarted.get("/api/ui/preferences").json(), {"language": "ru"})
             self.assertIn('<html lang="ru">', restarted.get("/desktop").text)
