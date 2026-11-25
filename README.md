@@ -292,7 +292,7 @@ cd desktop/tauri && npm install && npm run icon && npx tauri build
 ```jsonc
 {
   "disciplines": [ { "name": "Epilepsy", "mesh_terms": ["Epilepsy"], "keywords": ["seizure"] } ],
-  "sources": { "pubmed": { "enabled": true, "max_results": 500, "lookback_days": 2 } },
+  "sources": { "pubmed": { "enabled": true, "max_results": 0, "lookback_days": 2 } },
   "journals": [ { "name": "Neuron", "rss": "https://www.cell.com/...", "category": "neuroscience" } ]
 }
 ```

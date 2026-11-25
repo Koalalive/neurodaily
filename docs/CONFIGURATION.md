@@ -104,7 +104,7 @@ neurodaily profile doctor neuro-copy
 通用字段：
 
 ```json
-{ "enabled": true, "max_results": 500, "lookback_days": 2 }
+{ "enabled": true, "max_results": 0, "lookback_days": 2, "concurrency": 4 }
 ```
 
 #### 配置化源（无需写代码）
@@ -114,9 +114,10 @@ neurodaily profile doctor neuro-copy
 | `type` | 必填 | `rss` 或 `json_api` |
 | `url` | 必填 | 源地址 |
 | `kind` | 可选 | `paper/drug/device/trial/news/policy/conference/funding` |
-| `max_results` | 可选 | 本地上限 |
-| `lookback_days` | 可选 | 按发布日期过滤 |
+| `max_results` | 可选 | 本地上限；`0` 表示不限制条目数 |
+| `lookback_days` | 可选 | 按发布日期过滤；内置源默认 2 天 |
 | `filter_keywords` | 可选 | 标题+摘要任一命中才保留 |
+| `concurrency` | 可选 | 内置 `arxiv`/`biorxiv` 的抓取并发；默认分别为 4 / 8 |
 | `items_path` | JSON 源 | 列表在响应中的路径，如 `data.items` |
 | `map` | JSON 源 | 字段映射：`title/url/summary/date/doi/authors` |
 
@@ -147,6 +148,8 @@ JSON API 示例：
   "enabled": true
 }
 ```
+
+> `max_results: 0` 表示不限制条目数；内置源默认使用不限条目，具体并发和回看天数见上表。
 
 > 提示：Google News 按相关度排序，务必在查询里加 `when:7d`（或更大窗口），否则会被 `lookback_days` 全部过滤。
 
@@ -336,7 +339,13 @@ neurodaily config describe
 |---|---|---|
 | `windows.daily_paper_hours` | `36` | 定时任务只保留最近 36 小时的论文 |
 | `windows.manual_paper_hours` | `240` | 手动 `run --mode manual` / Run now 的默认论文窗口 |
-| `windows.other_lookback_days` | `7` | 非论文（试验/政策/产业）回看天数 |
+| `windows.trials_hours` | `168` | 临床试验窗口 |
+| `windows.funding_hours` | `168` | Funding 窗口 |
+| `windows.news_hours` | `36` | 新闻/政策窗口 |
+| `output.seen_dedup` | `false` | 是否隐藏前一天已出现条目 |
+| `output.report_language` | `zh` | 日报呈现语言：`zh` / `en` / `ru` |
+| `output.topic_concurrency` | `4` | 主题标签模型并发数，范围 1–4 |
+| `scheduled.paused` | `false` | 暂停未来定时检索和邮件队列，Web 仍可运行 |
 | `scheduled.on_this_day.lang` | `zh` | 史论语言：`zh`/`en`/`ru`；CLI 覆盖 `run --lang en` |
 
 论文窗口在抓取后统一过滤；无日期的论文保留（宁可多推，不静默丢）。

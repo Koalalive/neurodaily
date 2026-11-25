@@ -156,43 +156,45 @@
   "sources": {
     "journal": {
       "enabled": true,
-      "max_results": 500,
-      "lookback_days": 1
+      "max_results": 0,
+      "lookback_days": 2
     },
     "arxiv": {
       "enabled": true,
-      "max_results": 500,
-      "lookback_days": 1
+      "max_results": 0,
+      "lookback_days": 2,
+      "concurrency": 4
     },
     "pubmed": {
       "enabled": true,
-      "max_results": 500,
-      "lookback_days": 1
+      "max_results": 0,
+      "lookback_days": 2
     },
     "biorxiv": {
       "enabled": true,
-      "max_results": 500,
-      "lookback_days": 1
+      "max_results": 0,
+      "lookback_days": 2,
+      "concurrency": 8
     },
     "fda_drugs": {
       "enabled": true,
-      "max_results": 500,
-      "lookback_days": 1
+      "max_results": 0,
+      "lookback_days": 2
     },
     "fda_devices": {
       "enabled": true,
-      "max_results": 500,
-      "lookback_days": 1
+      "max_results": 0,
+      "lookback_days": 2
     },
     "trials": {
       "enabled": true,
-      "max_results": 500,
-      "lookback_days": 1
+      "max_results": 0,
+      "lookback_days": 7
     },
     "policy": {
       "enabled": true,
-      "max_results": 500,
-      "lookback_days": 1
+      "max_results": 0,
+      "lookback_days": 2
     },
     "neuro_vc_bci": {
       "type": "rss",
@@ -244,12 +246,33 @@
         "medtech",
         "therap"
       ]
+    },
+    "conferences": {
+      "enabled": true,
+      "max_results": 0,
+      "lookback_days": 365
+    },
+    "google_news_zh": {
+      "enabled": true,
+      "max_results": 0,
+      "lookback_days": 2,
+      "queries": [
+        "脑科学 OR 神经科学",
+        "脑机接口",
+        "脑电 研究",
+        "脑磁图",
+        "功能磁共振",
+        "神经影像"
+      ]
     }
   },
   "output": {
     "dir": "~/neurodaily/output",
     "filename_format": "neurodaily_%Y-%m-%d_%H%M%S.html",
-    "open_on_finish": true
+    "open_on_finish": true,
+    "seen_dedup": false,
+    "report_language": "zh",
+    "topic_concurrency": 4
   },
   "scheduled": {
     "enabled": true,
@@ -264,7 +287,8 @@
       "label": "com.neurodaily.daily",
       "stdout": "~/neurodaily/output/launchd_stdout.log",
       "stderr": "~/neurodaily/output/launchd_stderr.log"
-    }
+    },
+    "paused": false
   },
   "policy_feeds": [
     "https://www.nimh.nih.gov/news/index.rss",
@@ -462,8 +486,8 @@
     "daily_paper_hours": 36,
     "manual_paper_hours": 240,
     "other_lookback_days": 7,
-    "trials_hours": 36,
-    "funding_hours": 36,
+    "trials_hours": 168,
+    "funding_hours": 168,
     "news_hours": 36
   }
 }
