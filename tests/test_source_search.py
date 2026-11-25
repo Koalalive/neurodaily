@@ -98,11 +98,11 @@ class LiteratureSourceTests(unittest.TestCase):
         config.disciplines[0].arxiv_cats = ["q-bio.NC"]
         with patch.object(arxiv, "_page", return_value=([], 0)) as page:
             self.assertEqual(arxiv.fetch(config), [])
-        query = page.call_args.args[0]
+        query = page.call_args_list[0].args[0]
         self.assertIn("cat:q-bio.NC", query)
         self.assertIn('all:"brain-computer interface"', query)
         self.assertIn("submittedDate:", query)
-        self.assertEqual(page.call_count, 1)
+        self.assertGreaterEqual(page.call_count, 1)
 
     def test_arxiv_pages_advanced_candidates_without_merging_publisher_doi(self):
         config = DEFAULT_CONFIG()

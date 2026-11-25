@@ -154,6 +154,19 @@ def fetch(config, logger=None) -> list[Item]:
         if window:
             cutoff = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
 
+    # If a fielded/keyword query is too restrictive, retry the same date
+    # window with category-only queries before declaring an empty source.
+    fallback_queries = []
+    if cats:
+        if advanced:
+            fallback = build_search_query(cats, [])
+            if fallback and fallback != native:
+                fallback_queries = [f"({fallback}) AND {date_term}" if window else fallback]
+        else:
+            fallback_queries = [f"cat:{_escape_query(cat)}" for cat in cats]
+            if window:
+                fallback_queries = [f"{query} AND {date_term}" for query in fallback_queries]
+
     items: list[Item] = []
     seen_urls: set[str] = set()
     concurrency = max(1, min(4, int(opts.get("concurrency", 4))))
@@ -181,11 +194,11 @@ def fetch(config, logger=None) -> list[Item]:
             seen_urls.add(item.url)
             items.append(item)
 
-    for query in queries:
+    def run_query(query):
         first_size = min(60, limit)
         result = _page(query, 0, first_size, preview)
         if result is None:
-            continue
+            return
         entries, reported_total = result
         total = reported_total
         if total is not None:
@@ -194,12 +207,12 @@ def fetch(config, logger=None) -> list[Item]:
             record_candidates(len(entries))
         consume(entries)
         if len(entries) < first_size:
-            continue
+            return
 
         end_at = min(limit, total) if total is not None else limit
         offsets = list(range(60, end_at, 60))
         if not offsets:
-            continue
+            return
         if preview or concurrency <= 1 or len(offsets) == 1:
             page_results = []
             for offset in offsets:
@@ -227,5 +240,12 @@ def fetch(config, logger=None) -> list[Item]:
                 break
         if failed_page or (end_at >= limit and total is not None and limit < total):
             mark_sampled(truncated=True)
+
+    for query in queries:
+        before = len(items)
+        run_query(query)
+        if len(items) == before and fallback_queries:
+            for fallback_query in fallback_queries:
+                run_query(fallback_query)
 
     return items
