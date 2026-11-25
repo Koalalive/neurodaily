@@ -1607,7 +1607,7 @@ async function loadDiagnostics(){
     var schedulerText=(scheduler.backend||'?')+' · '+(scheduler.state||'?')+' · '+(scheduler.schedule||'—');
     if(scheduler.next_run) schedulerText+=' · next '+new Date(scheduler.next_run).toLocaleString(document.documentElement.lang);
     if(scheduler.last_run) schedulerText+=' · last '+(scheduler.last_run.status||'?')+' '+new Date(scheduler.last_run.finished_at||scheduler.last_run.due||Date.now()).toLocaleString(document.documentElement.lang);
-    var taskText=task?('#'+task.id+' · '+(task.status||'?')+' · '+(task.phase||'?')+' · '+(task.item_count||0)+' items':'No task recorded');
+    var taskText=task?('#'+task.id+' · '+(task.status||'?')+' · '+(task.phase||'?')+' · '+(task.item_count||0)+' items'):'No task recorded';
     if(search&&search.report_ready) taskText+=' · report ready';
     if(search&&search.error) taskText+=' · '+search.error;
     el('diag-service').textContent='online · profile '+(status.profile||'?')+' · last run '+(status.last_run?new Date(status.last_run).toLocaleString(document.documentElement.lang):'—');
