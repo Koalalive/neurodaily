@@ -97,9 +97,9 @@ def build_text(result, max_items: int = 8) -> str:
     otd = getattr(result, "on_this_day", None) or []
     if otd:
         e = otd[0]
-        lines.append(f"📅 历史上的今天：{e.get('title')}（{e.get('year')}）")
+        lines.append(f"◷ 历史上的今天：{e.get('title')}（{e.get('year')}）")
     if papers:
-        lines.append("📄 今日精选：")
+        lines.append("▤ 今日精选：")
         for i, it in enumerate(papers[:max_items], 1):
             line = f"{i}. {it.title}"
             if url := external_url(it.url):
@@ -150,7 +150,7 @@ def send_all(result, cfg: dict | None = None) -> dict:
 
 def send_test(cfg: dict | None = None) -> dict:
     cfg = load_cfg() if cfg is None else cfg
-    text = "NeuroDaily webhook 测试成功 ✅"
+    text = "NeuroDaily webhook 测试成功 ✓"
     out = {}
     if cfg.get("feishu"):
         send_feishu(cfg["feishu"], text)

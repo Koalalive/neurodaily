@@ -24,9 +24,9 @@ Webhook 地址无法解析或指向受限制的网络。|The webhook address cou
 无法读取界面语言。|Could not read the interface language.|Не удалось прочитать язык интерфейса.
 无法保存界面语言。|Could not save the interface language.|Не удалось сохранить язык интерфейса.
 神通寰宇 · 设置|NeuroDaily — Settings|NeuroDaily — Настройки
-⚙ 神通寰宇设置|⚙ NeuroDaily Settings|⚙ Настройки NeuroDaily
+◈ 神通寰宇设置|◈ NeuroDaily Settings|◈ Настройки NeuroDaily
 ← 返回日报|← Back to dashboard|← К сводке
-⚙ 设置|⚙ Settings|⚙ Настройки
+◈ 设置|◈ Settings|◈ Настройки
 设置|Settings|Настройки
 历史记录|History|История
 运行历史|Run history|История запусков
@@ -50,7 +50,7 @@ Webhook 地址无法解析或指向受限制的网络。|The webhook address cou
 例如填 36，把本次论文、试验、融资和新闻的窗口设为最近 36 小时。|Enter 36 to look for papers, trials, funding and news from the last 36 hours.|Например, 36 — поиск публикаций, исследований, финансирования и новостей за последние 36 часов.
 返回设置|Back to settings|К настройкам
 开始检索|Start search|Начать поиск
-▶ 开始检索|▶ Run now|▶ Запустить поиск
+▸ 开始检索|▸ Run now|▸ Запустить поиск
 正在检索…|Running…|Поиск…
 查看任务进度|View progress|Ход выполнения
 定时检索正在运行|Scheduled search is running|Идёт поиск по расписанию
@@ -392,11 +392,11 @@ JCR 年份|JCR year|Год JCR
 已导入 {profile}|Imported {profile}|Импортировано: {profile}
 导入失败 · {error}|Import failed · {error}|Ошибка импорта · {error}
 正在保存…|Saving…|Сохранение…
-✅ 已保存 → {path}|✅ Saved → {path}|✅ Сохранено → {path}
+✓ 已保存 → {path}|✓ Saved → {path}|✓ Сохранено → {path}
 保存失败。{error}|Save failed. {error}|Ошибка сохранения. {error}
 恢复默认设置？这将覆盖当前设置。|Reset to defaults? This overwrites current settings.|Восстановить значения по умолчанию? Текущие настройки будут заменены.
-✅ 已恢复默认|✅ Reset to defaults|✅ Настройки сброшены
-❌ 重置失败|❌ Reset failed|❌ Не удалось сбросить настройки
+✓ 已恢复默认|✓ Reset to defaults|✓ Настройки сброшены
+× 重置失败|× Reset failed|× Не удалось сбросить настройки
 保存后生效。启动或唤醒时，软件会补跑当天错过的检索。最小化窗口可继续运行，退出应用将停止定时服务。|Save to apply. The app catches up on today’s missed time when it starts or wakes. Minimize the window to keep it running. Quitting stops the scheduled service.|Сохраните настройки. При запуске или выходе из сна приложение выполняет пропущенный за сегодня поиск. В свёрнутом приложении расписание работает, при выходе служба останавливается.
 更改时间后，请点击「安装或更新定时任务」。|After changing the time, click Install / update schedule to apply.|После изменения времени установите или обновите расписание.
 桌面定时：每日 {time}（本地时间）|Desktop schedule: daily at {time} (local time)|Расписание: ежедневно в {time} (местное время)
@@ -416,7 +416,7 @@ JCR 年份|JCR year|Год JCR
 正在执行…|Working…|Выполняется…
 已安装或更新|installed/updated|установлено или обновлено
 已移除|Uninstalled|Удалено
-❌ 操作失败|❌ Action failed|❌ Не удалось выполнить действие
+× 操作失败|× Action failed|× Не удалось выполнить действие
 （已设置）|(set)|(задано)
 （未设置）|(not set)|(не задано)
 无法保存推送设置|Failed to save push settings|Не удалось сохранить настройки рассылки
@@ -432,24 +432,24 @@ JCR 年份|JCR year|Год JCR
 无法保存 AI 设置|Could not save AI settings|Не удалось сохранить настройки ИИ
 目录|Contents|Содержание
 ↑ 顶部|↑ Top|↑ Наверх
-🧠 AI 摘要|🧠 AI summary|🧠 ИИ-резюме
-🧠 今日 AI 摘要|🧠 Today’s AI summary|🧠 ИИ-резюме за сегодня
+✦ AI 摘要|✦ AI summary|✦ ИИ-резюме
+✦ 今日 AI 摘要|✦ Today’s AI summary|✦ ИИ-резюме за сегодня
 由 AI 依据当日抓取内容生成，仅供参考；请以原文为准。|AI generated this summary from today’s results. Consult the original sources for details.|ИИ подготовил резюме по сегодняшним результатам. Подробности смотрите в первоисточниках.
-📅 历史上的今天|📅 On this day|📅 Этот день в истории
+◷ 历史上的今天|◷ On this day|◷ Этот день в истории
 历史上的今天|On this day|Этот день в истории
-📄 最新论文|📄 Latest Papers|📄 Новые публикации
-💊 产业与融资|💊 Industry and funding|💊 Индустрия и финансирование
-🧪 临床试验|🧪 Clinical trials|🧪 Клинические исследования
-🏛️ 政策与新闻|🏛️ Policy and news|🏛️ Политика и новости
-📚 期刊|📚 Journals|📚 Журналы
-📡 来源状态|📡 Source Health|📡 Состояние источников
-🧪 Clinical Trials|🧪 Clinical Trials|🧪 Клинические испытания
-🗓️ Academic Conferences|🗓️ Academic Conferences|🗓️ Академические конференции
-🗓️ 学术会议|🗓️ Academic conferences|🗓️ Академические конференции
+▤ 最新论文|▤ Latest Papers|▤ Новые публикации
+◇ 产业与融资|◇ Industry and funding|◇ Индустрия и финансирование
+◉ 临床试验|◉ Clinical trials|◉ Клинические исследования
+⌂ 政策与新闻|⌂ Policy and news|⌂ Политика и новости
+▥ 期刊|▥ Journals|▥ Журналы
+◍ 来源状态|◍ Source Health|◍ Состояние источников
+◉ Clinical Trials|◉ Clinical Trials|◉ Клинические испытания
+▦ Academic Conferences|▦ Academic Conferences|▦ Академические конференции
+▦ 学术会议|▦ Academic conferences|▦ Академические конференции
 学术会议|Academic conferences|Академические конференции
-🧭 主题景观|🧭 Topic landscape|🧭 Тематический ландшафт
+◌ 主题景观|◌ Topic landscape|◌ Тематический ландшафт
 主题景观|Topic landscape|Тематический ландшафт
-🗺️ 研究动态地图|🗺️ Research activity map|🗺️ Карта исследовательской активности
+⌖ 研究动态地图|⌖ Research activity map|⌖ Карта исследовательской активности
 研究动态地图|Research activity map|Карта исследовательской активности
 检索时间窗|Search window|Окно поиска
 Trials|Trials|Испытания
@@ -466,9 +466,9 @@ Academic Conferences|Academic Conferences|Академические конфе�
 产业|Industry|Индустрия
 试验与会议|Trials / Conf|Исследования и конференции
 政策与新闻|Policy / News|Политика и новости
-🧪 临床试验与会议动态|🧪 Trials & Conference Signals|🧪 Клинические исследования и конференции
-💊 产业与监管进展|💊 Commercial & Regulatory Progress|💊 Индустрия и регуляторные новости
-🏛️ 新闻与政策|🏛️ News and policy|🏛️ Новости и политика
+◉ 临床试验与会议动态|◉ Trials & Conference Signals|◉ Клинические исследования и конференции
+◇ 产业与监管进展|◇ Commercial & Regulatory Progress|◇ Индустрия и регуляторные новости
+⌂ 新闻与政策|⌂ News and policy|⌂ Новости и политика
 聚焦领域内的 PubMed、arXiv 和 bioRxiv 最新论文。|New PubMed, arXiv, and bioRxiv preprints matching your focus.|Новые публикации по вашим темам из PubMed, arXiv и bioRxiv.
 近期 FDA 药品审批和 510(k) 医疗器械许可。|Recent FDA drug approvals and 510(k) device clearances.|Недавние одобрения лекарств FDA и разрешения на устройства по процедуре 510(k).
 新增与更新的临床研究及会议动态。|New + updated clinical studies and event signals.|Новые и обновлённые клинические исследования, а также новости мероприятий.

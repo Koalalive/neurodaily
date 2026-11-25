@@ -6,7 +6,7 @@ DASHBOARD_SETTINGS_LINK = (
     '<a href="/settings" style="position:fixed;top:12px;right:16px;z-index:9999;'
     'background:#0e1013;border:1px solid #c8a96b;color:#c8a96b;padding:6px 12px;'
     'border-radius:2px;text-decoration:none;font:600 13px Georgia,serif;">'
-    "⚙ Settings</a>"
+    "◈ Settings</a>"
 )
 
 SETTINGS_HTML = r"""<!DOCTYPE html>
@@ -453,7 +453,7 @@ function addSearchTerm(container, focus){
     '<select class="term-mode" aria-label="Match type"><option value="phrase">Match phrase</option>'+
     '<option value="AND">All words</option><option value="OR">Any word</option></select>'+
     '<input class="term-value" aria-label="Search terms" placeholder="Enter words or a phrase" spellcheck="false">'+
-    '<button type="button" class="del" aria-label="Remove condition">✕</button>';
+    '<button type="button" class="del" aria-label="Remove condition">×</button>';
   row.querySelector('button').onclick=function(){
     var next=(row.nextElementSibling||row.previousElementSibling);
     var target=next?next.querySelector('.term-field'):container.parentElement.querySelector('.add-term');
@@ -525,7 +525,7 @@ function addSearchSet(number,expression,focus){
   row.innerHTML='<label for="search_set_'+esc(number)+'">#'+esc(number)+'</label>'+
     '<input class="set-expression" id="search_set_'+esc(number)+'" placeholder=\'TI="working memory"\' spellcheck="false">'+
     '<button type="button" class="insert-set">'+esc(t('Use #{number}',{number:number}))+'</button>'+
-    '<button type="button" class="del remove-set" aria-label="'+esc(t('Remove search set #{number}',{number:number}))+'">✕</button>';
+    '<button type="button" class="del remove-set" aria-label="'+esc(t('Remove search set #{number}',{number:number}))+'">×</button>';
   var field=row.querySelector('input');
   field.value=expression||'';
   row.querySelector('.insert-set').onclick=function(){
@@ -765,7 +765,7 @@ function disciplineRow(x){
     '<input class="d-bio" placeholder="bioRxiv categories" value="'+esc(csv(x.bio_cats))+'">'+
     '<input class="d-kw" placeholder="Keywords" value="'+esc(csv(x.keywords))+'">'+
     '<label><input type="checkbox" class="d-en" '+(x.enabled!==false?'checked':'')+'> On</label>'+
-    '<button class="del" onclick="this.closest(\'.row\').remove();markPreviewStale();">✕</button>';
+    '<button class="del" onclick="this.closest(\'.row\').remove();markPreviewStale();">×</button>';
   return d;
 }
 function addDiscipline(){el('disciplines').appendChild(disciplineRow({}));}
@@ -790,7 +790,7 @@ function feedRow(u, kind){
   var d=document.createElement('div'); d.className='row feed';
   d.innerHTML='<input class="feed" value="'+esc(u)+'">'+
     '<select class="feed-kind" aria-label="订阅源内容类型"><option value="">自动识别</option><option value="paper">论文</option><option value="news">新闻</option><option value="policy">政策</option><option value="funding">资助</option><option value="conference">会议</option></select>'+
-    '<button class="del" onclick="this.closest(\'.row\').remove()">✕</button>';
+    '<button class="del" onclick="this.closest(\'.row\').remove()">×</button>';
   d.querySelector('.feed-kind').value=kind||'';
   return d;
 }
@@ -810,7 +810,7 @@ function journalRow(x){
     '<input class="j-url" placeholder="Website URL" value="'+esc(x.url)+'">'+
     '<input class="j-rss" placeholder="RSS (optional)" value="'+esc(x.rss)+'">'+
     '<input class="j-cat" placeholder="Category" value="'+esc(x.category)+'">'+
-    '<button class="del" onclick="this.closest(\'.row\').remove();markPreviewStale();">✕</button>'+
+    '<button class="del" onclick="this.closest(\'.row\').remove();markPreviewStale();">×</button>'+
     '<label class="j-aliases">Journal aliases<input class="j-alias" value="'+esc(csv(x.aliases))+'"></label>'+
     '<label class="j-issns">ISSNs<input class="j-issn" value="'+esc(csv(x.issns))+'"></label>'+
     '<details class="j-metrics"><summary>Journal metrics and tags</summary><div class="j-metrics-fields">'+
@@ -1063,9 +1063,9 @@ async function importAppSettings(input){
     var response=await fetch('/api/app-settings/import',{method:'POST',headers:configHeaders(savedConfigVersion),body:text});
     var result=await response.json();
     if(!response.ok||!result.ok) throw new Error(t(result.error||'导入失败'));
-    status.textContent='✅ 已导入应用设置';
+    status.textContent='✓ 已导入应用设置';
     await load();
-  }catch(e){status.textContent='❌ '+e.message;}
+  }catch(e){status.textContent='× '+e.message;}
 }
 
 async function previewProfileFile(input){
@@ -1232,20 +1232,20 @@ async function save(){
     if(out.ok){
       BASE=data;
       rememberSavedConfig(data,r.headers.get('ETag'));
-      el('msg').textContent=t('✅ Saved → {path}',{path:out.path}); el('msg').className='ok';
+      el('msg').textContent=t('✓ Saved → {path}',{path:out.path}); el('msg').className='ok';
       loadLaunchdStatus();
       return true;
     }
     el('msg').textContent=t('Save failed. {error}',{error:t(searchError(out))}); el('msg').className='bad'; return false;
-  }catch(e){el('msg').textContent='❌ '+e; el('msg').className='bad'; return false;}
+  }catch(e){el('msg').textContent='× '+e; el('msg').className='bad'; return false;}
 }
 
 async function resetDefaults(){
   if(!confirm(t('Reset to defaults? This overwrites current settings.'))) return;
   var r=await fetch('/api/config/reset',{method:'POST',headers:configHeaders(savedConfigVersion)});
   var out=await r.json();
-  if(out.ok){await load(); el('msg').textContent='✅ Reset to defaults'; el('msg').className='ok';}
-  else{el('msg').textContent='❌ '+t(out.error||'Reset failed'); el('msg').className='bad';}
+  if(out.ok){await load(); el('msg').textContent='✓ Reset to defaults'; el('msg').className='ok';}
+  else{el('msg').textContent='× '+t(out.error||'Reset failed'); el('msg').className='bad';}
 }
 
 var desktopScheduler=false;
@@ -1285,7 +1285,7 @@ async function launchd(action){
   el('msg').textContent='Working…'; el('msg').className='';
   var r=await fetch('/api/launchd/'+action,{method:'POST'});
   var out=await r.json();
-  el('msg').textContent = out.ok ? ('✅ '+t(action==='install'?'installed/updated':'Uninstalled')) : t('❌ Action failed');
+  el('msg').textContent = out.ok ? ('✓ '+t(action==='install'?'installed/updated':'Uninstalled')) : t('× Action failed');
   el('msg').className = out.ok?'ok':'bad';
   loadPush();
   loadLaunchdStatus();
@@ -1302,7 +1302,7 @@ function recipientRow(x){
   d.innerHTML='<input class="r-address" type="email" placeholder="name@example.com" value="'+esc(x.address)+'">'+
     '<input class="r-time" type="time" value="'+esc(x.time)+'" title="本地推送时间">'+
     '<select class="r-lang"><option value="zh">中文</option><option value="en">English</option><option value="ru">Русский</option></select>'+
-    '<button type="button" class="del" onclick="this.closest(\'.row\').remove()">✕</button>';
+    '<button type="button" class="del" onclick="this.closest(\'.row\').remove()">×</button>';
   d.querySelector('.r-lang').value=x.language||'zh';
   return d;
 }
@@ -1465,7 +1465,7 @@ async function saveSettings(continueToSearch){
         location.href='/run';
       }
     }
-  }catch(e){ el('msg').className='bad'; el('msg').textContent='❌ '+e; }
+  }catch(e){ el('msg').className='bad'; el('msg').textContent='× '+e; }
   finally{el('saveRun').disabled=false;el('saveOnly').disabled=false;}
 }
 

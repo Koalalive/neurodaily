@@ -185,8 +185,8 @@ def _inject_ai_summary(html: str, result: DigestResult, language: str = "zh") ->
     import html as _html
     meta = getattr(result, "ai_summary_meta", {}) or {}
     model = _html.escape(str(meta.get("model", "AI")))
-    ai_title = {"zh": "🧠 今日 AI 摘要", "en": "🧠 Today’s AI summary",
-                "ru": "🧠 ИИ-резюме за сегодня"}.get(language, "🧠 今日 AI 摘要")
+    ai_title = {"zh": "✦ 今日 AI 摘要", "en": "✦ Today’s AI summary",
+                "ru": "✦ ИИ-резюме за сегодня"}.get(language, "✦ 今日 AI 摘要")
     allowed = {it.url for it in (getattr(result, "items", None) or []) if getattr(it, "url", None)}
     refs = getattr(result, "ai_summary_refs", {}) or {}
     paras = render_ai_text(text, allowed, refs)

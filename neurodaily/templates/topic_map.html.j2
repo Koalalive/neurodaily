@@ -17,7 +17,7 @@
     #topic-map .tm-method{color:#c8a96b;font-size:.7rem;letter-spacing:.06em}
     @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
   </style>
-  {% set tm_title = {'zh':'🧭 主题景观','en':'🧭 Topic landscape','ru':'🧭 Тематический ландшафт'}.get(language, '🧭 主题景观') %}
+  {% set tm_title = {'zh':'◌ 主题景观','en':'◌ Topic landscape','ru':'◌ Тематический ландшафт'}.get(language, '◌ 主题景观') %}
   {% set tm_note = {'zh':'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。','en':'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.','ru':'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.'}.get(language, 'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。') %}
   <h2 data-tm="title">{{ tm_title }} <span style="font-size:.7em;font-weight:400;color:#9fb3c8">LDA + t-SNE</span></h2>
   <p class="tm-note" data-tm="note">{{ tm_note }}</p>
@@ -37,9 +37,9 @@
     const root = document.getElementById('topic-map');
     const data = JSON.parse(document.getElementById('nd-topic-data').textContent);
     const tm = {
-      zh: {title:'🧭 主题景观 LDA + t-SNE', note:'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。', select:'选择圆点', hint:'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。', all:'全部', items:'个条目', topics:'个主题', original:'阅读原文 ↗', confidence:'主题置信度：', topic:'主题', aiLabel:'AI 标注', fallbackLabel:'关键词回退', kinds:{paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}},
-      en: {title:'🧭 Topic landscape LDA + t-SNE', note:'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.', select:'Select a point', hint:'Color is the dominant LDA topic; closer points have more similar topic distributions.', all:'All', items:'items', topics:'topics', original:'Read source ↗', confidence:'Topic confidence: ', topic:'Topic', aiLabel:'AI labeled', fallbackLabel:'Keyword fallback', kinds:{paper:'Paper',trial:'Trial',news:'News',policy:'Policy',funding:'Industry',conference:'Conference'}},
-      ru: {title:'🧭 Тематический ландшафт LDA + t-SNE', note:'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.', select:'Выберите точку', hint:'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.', all:'Все', items:'записей', topics:'тем', original:'Открыть источник ↗', confidence:'Уверенность темы: ', topic:'Тема', aiLabel:'Метка ИИ', fallbackLabel:'Ключевые слова', kinds:{paper:'Статья',trial:'Испытание',news:'Новость',policy:'Политика',funding:'Индустрия',conference:'Конференция'}}
+      zh: {title:'◌ 主题景观 LDA + t-SNE', note:'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。', select:'选择圆点', hint:'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。', all:'全部', items:'个条目', topics:'个主题', original:'阅读原文 ↗', confidence:'主题置信度：', topic:'主题', aiLabel:'AI 标注', fallbackLabel:'关键词回退', kinds:{paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}},
+      en: {title:'◌ Topic landscape LDA + t-SNE', note:'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.', select:'Select a point', hint:'Color is the dominant LDA topic; closer points have more similar topic distributions.', all:'All', items:'items', topics:'topics', original:'Read source ↗', confidence:'Topic confidence: ', topic:'Topic', aiLabel:'AI labeled', fallbackLabel:'Keyword fallback', kinds:{paper:'Paper',trial:'Trial',news:'News',policy:'Policy',funding:'Industry',conference:'Conference'}},
+      ru: {title:'◌ Тематический ландшафт LDA + t-SNE', note:'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.', select:'Выберите точку', hint:'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.', all:'Все', items:'записей', topics:'тем', original:'Открыть источник ↗', confidence:'Уверенность темы: ', topic:'Тема', aiLabel:'Метка ИИ', fallbackLabel:'Ключевые слова', kinds:{paper:'Статья',trial:'Испытание',news:'Новость',policy:'Политика',funding:'Индустрия',conference:'Конференция'}}
     }[{{ language|tojson }}] || null;
     if (tm) {
       const title = root.querySelector('[data-tm="title"]'); if (title) title.textContent = tm.title;
@@ -57,6 +57,13 @@
     const intro = [...side.childNodes];
     const legend = root.querySelector('.tm-legend');
     const ctx = canvas.getContext('2d');
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    function fitCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.round(rect.width * dpr));
+      canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    }
+    fitCanvas();
     let selectedTopic = 'all';
     let selectedPoint = null;
     const topicColors = ['#c8a96b', '#8da7a1', '#b8aaa2', '#a99b83', '#d6c7a7', '#7e9b95', '#c2b59a', '#77756e'];
@@ -99,8 +106,8 @@
         ctx.fillStyle = color(p.topic); ctx.fill();
         ctx.lineWidth = p === selectedPoint ? 3 : 1.2; ctx.strokeStyle = p === selectedPoint ? '#fff' : '#0b172a'; ctx.stroke();
       }
-      ctx.fillStyle = '#77756e'; ctx.font = '18px -apple-system,Segoe UI,sans-serif';
-      ctx.fillText(visible.length + ' ' + (tm?.items || '个条目') + ' · ' + topics.length + ' ' + (tm?.topics || '个主题'), 18, 28);
+      ctx.fillStyle = '#77756e'; ctx.font = '18px "Source Serif 4", "Iowan Old Style", "Noto Serif CJK SC", "Songti SC", Georgia, serif';
+      ctx.fillText(visible.length + ' ' + (tm?.items || '个条目') + ' · ' + topics.length + ' ' + (tm?.topics || '个主题'), 18 * dpr, 28 * dpr);
     }
     const topicById = new Map(topics.map(topic => [topic.id, topic]));
     const labelFor = topic => topic?.labels?.[lang] || topic?.label || ((tm?.topic || '主题') + ' ' + topic?.id);
@@ -157,6 +164,8 @@
     for (const t of topics.filter(topic => topic.size)) legend.append(chip(labelFor(t) + ' · ' + t.size, t.id));
     canvas.addEventListener('click', pick);
     draw();
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => { fitCanvas(); draw(); }).observe(canvas);
+    else window.addEventListener('resize', () => { fitCanvas(); draw(); });
   })();
   </script>
 </section>

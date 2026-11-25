@@ -43,7 +43,7 @@ def cmd_run(args) -> int:
             if _mr:
                 print(f"[neurodaily] journal metrics refreshed: {_mr}")
         except Exception as e:
-            print(f"[neurodaily] ⚠ metrics skipped: {e}")
+            print(f"[neurodaily] ! metrics skipped: {e}")
     if getattr(args, "demo", False):
         from .demo import build_result
         print("[neurodaily] demo mode: offline sample data (no network)")
@@ -61,20 +61,20 @@ def cmd_run(args) -> int:
                 if summaries:
                     result.ai_summary_meta = {"model": _ai.load_cfg().get("model", ""),
                                               "languages": sorted(summaries)}
-                    print(f"[neurodaily] 🧠 AI summary generated: {', '.join(sorted(summaries))}")
+                    print(f"[neurodaily] ✦ AI summary generated: {', '.join(sorted(summaries))}")
         except Exception as e:
-            print(f"[neurodaily] ⚠ AI summary skipped: {e}")
+            print(f"[neurodaily] ! AI summary skipped: {e}")
         try:
             from .research_activity import enrich_geography
             enrich_geography(result)
         except Exception:
-            print("[neurodaily] ⚠ AI geography unavailable; the map will use source metadata.")
+            print("[neurodaily] ! AI geography unavailable; the map will use source metadata.")
         try:
             from .topic_map import enrich_topics
             if enrich_topics(result):
-                print("[neurodaily] 🧭 LDA+t-SNE topic map generated")
+                print("[neurodaily] ◌ LDA+t-SNE topic map generated")
         except Exception as e:
-            print(f"[neurodaily] ⚠ topic map skipped: {e}")
+            print(f"[neurodaily] ! topic map skipped: {e}")
     # default filename from config
     from datetime import datetime
     fmt = cfg.output.get("filename_format") or "neurodaily_%Y-%m-%d.html"
@@ -89,12 +89,12 @@ def cmd_run(args) -> int:
               f"Reason: {result.skipped_reason}")
         print(f"    use --force to re-run, or --dedupe to honor same-day de-dup")
         return 0
-    print(f"[neurodaily] ✅ wrote {len(result.items)} items → {path}")
+    print(f"[neurodaily] ✓ wrote {len(result.items)} items → {path}")
     for h in result.health:
         status = h.get("status", "ok" if h["ok"] else "failed")
         print(f"    {h['source']:<16} {status:<8} {h['count']:>3} items  {h['ms']}ms")
     if result.errors:
-        print("[neurodaily] ⚠ source errors:")
+        print("[neurodaily] ! source errors:")
         for e in result.errors:
             print(f"    - {e}")
     if not getattr(args, "demo", False):
@@ -104,7 +104,7 @@ def cmd_run(args) -> int:
             if outcomes:
                 print(f"[neurodaily] delivery: {outcomes}")
         except Exception as e:
-            print(f"[neurodaily] ⚠ delivery failed: {e}")
+            print(f"[neurodaily] ! delivery failed: {e}")
     try:
         from .onthisday import should_notify as _should_notify, is_enabled as _otd_enabled, day_label
         from .notify import notify_on_this_day
@@ -351,8 +351,8 @@ def cmd_launchd(args) -> int:
         subprocess.run(["launchctl", "unload", dest], check=False)
         r = subprocess.run(["launchctl", "load", "-w", dest], check=False)
         if r.returncode != 0:
-            print(f"[neurodaily] ⚠ launchctl load returned {r.returncode}")
-        print(f"[neurodaily] ✅ installed LaunchAgent {label} at {dest}")
+            print(f"[neurodaily] ! launchctl load returned {r.returncode}")
+        print(f"[neurodaily] ✓ installed LaunchAgent {label} at {dest}")
         print(f"    runs daily at {int(cfg.scheduled.get('hour', 8)):02d}:{int(cfg.scheduled.get('minute', 0)):02d}")
         print("    verify with:  launchctl list | grep neurodaily")
         return 0
@@ -361,7 +361,7 @@ def cmd_launchd(args) -> int:
         subprocess.run(["launchctl", "unload", dest], check=False)
         if os.path.exists(dest):
             os.remove(dest)
-        print(f"[neurodaily] ✅ removed LaunchAgent {label}")
+        print(f"[neurodaily] ✓ removed LaunchAgent {label}")
         return 0
     if args.launchd_action == "show":
         print(content)

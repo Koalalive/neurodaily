@@ -33,22 +33,22 @@ _WEEKDAYS_BY_LANG = {
     "ru": ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"],
 }
 _LABELS = {
-    "zh": {"latest": "📄 最新论文", "industry": "💊 商业与监管",
-           "trials": "🧪 临床试验", "policy": "🏛️ 政策与新闻",
-           "items": "条", "papers": "篇论文", "summary": "🧠 今日 AI 摘要",
-           "otd": "📅 历史上的今天", "conferences": "🗓️ 学术会议", "footer": "本邮件由 NeuroDaily 自动生成。",
+    "zh": {"latest": "▤ 最新论文", "industry": "◇ 商业与监管",
+           "trials": "◉ 临床试验", "policy": "⌂ 政策与新闻",
+           "items": "条", "papers": "篇论文", "summary": "✦ 今日 AI 摘要",
+           "otd": "◷ 历史上的今天", "conferences": "▦ 学术会议", "footer": "本邮件由 NeuroDaily 自动生成。",
            "attach": "完整交互式报告见附件 HTML（若附件缺失则因体积超限）。",
            "subject": "神经病专家的厕所读物-{date} {weekday}"},
-    "en": {"latest": "📄 Latest papers", "industry": "💊 Industry & regulatory",
-           "trials": "🧪 Clinical trials", "policy": "🏛️ Policy & news",
-           "items": "items", "papers": "papers", "summary": "🧠 AI daily overview",
-           "otd": "📅 On this day", "conferences": "🗓️ Academic conferences", "footer": "Generated automatically by NeuroDaily.",
+    "en": {"latest": "▤ Latest papers", "industry": "◇ Industry & regulatory",
+           "trials": "◉ Clinical trials", "policy": "⌂ Policy & news",
+           "items": "items", "papers": "papers", "summary": "✦ AI daily overview",
+           "otd": "◷ On this day", "conferences": "▦ Academic conferences", "footer": "Generated automatically by NeuroDaily.",
            "attach": "The complete interactive report is attached as HTML.",
            "subject": "NeuroDaily Digest-{date} {weekday}"},
-    "ru": {"latest": "📄 Новые публикации", "industry": "💊 Индустрия и регулирование",
-           "trials": "🧪 Клинические испытания", "policy": "🏛️ Политика и новости",
-           "items": "записей", "papers": "публикаций", "summary": "🧠 ИИ-обзор дня",
-           "otd": "📅 В этот день", "conferences": "🗓️ Академические конференции", "footer": "Письмо сформировано автоматически NeuroDaily.",
+    "ru": {"latest": "▤ Новые публикации", "industry": "◇ Индустрия и регулирование",
+           "trials": "◉ Клинические испытания", "policy": "⌂ Политика и новости",
+           "items": "записей", "papers": "публикаций", "summary": "✦ ИИ-обзор дня",
+           "otd": "◷ В этот день", "conferences": "▦ Академические конференции", "footer": "Письмо сформировано автоматически NeuroDaily.",
            "attach": "Полный интерактивный отчёт приложен в HTML.",
            "subject": "NeuroDaily — {date} {weekday}"},
 }
@@ -313,7 +313,7 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
 
     lines = [f"NeuroDaily {date} {weekday} — {len(result.items)} {labels['items']}", ""]
     if ai:
-        lines += [f"== {_ai_title.replace('🧠 ','')} ==", ai, ""]
+        lines += [f"== {_ai_title.replace('✦ ','')} ==", ai, ""]
     if otd:
         lines.append("== 历史上的今天 ==")
         for e in otd:
@@ -517,7 +517,7 @@ def send_test(cfg: dict | None = None) -> None:
     cfg = cfg or load_cfg()
     subject = "NeuroDaily 邮件测试"
     html = ('<div style="font-family:-apple-system,sans-serif;padding:16px">'
-            '<h2 style="color:#0369a1">NeuroDaily 邮件配置成功 ✅</h2>'
+            '<h2 style="color:#0369a1">NeuroDaily 邮件配置成功 ✓</h2>'
             '<p>如果你收到这封邮件，说明 SMTP 与收件人配置可用。</p></div>')
     send_with_retry(subject, html, "NeuroDaily 邮件配置成功", cfg)
 

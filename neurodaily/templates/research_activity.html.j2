@@ -24,7 +24,7 @@
     #research-activity a{color:#9addff}
     #research-activity .ra-evidence{font-size:.88rem;overflow-wrap:anywhere}
   </style>
-  <h2 data-ra="map">🗺️ 研究动态地图</h2>
+  <h2 data-ra="map">⌖ 研究动态地图</h2>
   <p data-ra="mapNote"></p>
   <div class="ra-controls" aria-label="地图筛选"></div>
   <div class="ra-map">
@@ -42,15 +42,15 @@
     const root = document.getElementById('research-activity');
     const data = JSON.parse(document.getElementById('nd-research-data').textContent);
     const copies = {
-      zh: {map:'🗺️ 研究动态地图', mapNote:'点击地点查看定位依据。研究地点、试验站点与末位作者单位分别标注，城市级点位使用城市中心示意。',
+      zh: {map:'⌖ 研究动态地图', mapNote:'点击地点查看定位依据。研究地点、试验站点与末位作者单位分别标注，城市级点位使用城市中心示意。',
         all:'全部', paper:'论文', trial:'临床试验', news:'新闻与政策', industry:'产业', conference:'学术会议', unknown:'未定位', empty:'当前筛选没有定位结果。', noRecords:'本期没有这类条目。',
         original:'原文', site:'登记坐标', city:'城市级示意', country:'国家级示意', journal_unknown:'期刊待补', disabled:'研究动态地图需要配置大模型 API；未启用时不会生成地图。',
         institution:'作者机构', last_author_institution:'末位作者单位', study_site:'研究地点', trial_site:'试验站点', event:'事件发生地', conference_venue:'会议会址', funding_recipient:'获资方所在地', media_outlet:'媒体机构所在地', publisher:'媒体登记', model:'AI 判定', metadata:'来源元数据'},
-      en: {map:'🗺️ Research activity map', mapNote:'Select a location to see its evidence. Study sites, trial sites and last-author affiliations are labelled separately. City markers are approximate.',
+      en: {map:'⌖ Research activity map', mapNote:'Select a location to see its evidence. Study sites, trial sites and last-author affiliations are labelled separately. City markers are approximate.',
         all:'All',paper:'Papers',trial:'Clinical trials',news:'News and policy',industry:'Industry',conference:'Academic conferences',unknown:'Unlocated',empty:'No mapped records match this filter.',noRecords:'No records of this type in this report.',
         original:'Source',site:'Registry coordinates',city:'City-level marker',country:'Country-level marker',journal_unknown:'Journal unavailable',disabled:'The research map requires an LLM API. It is disabled when no model is configured.',
         institution:'Author affiliation',last_author_institution:'Last-author affiliation',study_site:'Study site',trial_site:'Trial site',event:'Event location',conference_venue:'Conference venue',funding_recipient:'Funding recipient location',media_outlet:'Media outlet location',publisher:'Publisher registry',model:'AI inference',metadata:'Source metadata'},
-      ru: {map:'🗺️ Карта исследований',mapNote:'Выберите точку, чтобы увидеть источник геоданных. Места исследований, центры испытаний и организации последних авторов подписаны отдельно. Точки городов приблизительны.',
+      ru: {map:'⌖ Карта исследований',mapNote:'Выберите точку, чтобы увидеть источник геоданных. Места исследований, центры испытаний и организации последних авторов подписаны отдельно. Точки городов приблизительны.',
         all:'Все',paper:'Публикации',trial:'Клинические исследования',news:'Новости и политика',industry:'Индустрия',conference:'Научные конференции',unknown:'Без геоданных',empty:'Для этого фильтра нет точек на карте.',noRecords:'В этом отчёте нет записей такого типа.',
         original:'Источник',site:'Координаты из реестра',city:'Приблизительная точка города',country:'Приблизительная точка страны',journal_unknown:'Журнал не указан',disabled:'Карта исследований требует API языковой модели; без неё карта не строится.',
         institution:'Организация авторов',last_author_institution:'Организация последнего автора',study_site:'Место исследования',trial_site:'Центр испытания',event:'Место события',conference_venue:'Место проведения конференции',funding_recipient:'Местоположение получателя средств',media_outlet:'Местоположение медиа',publisher:'Реестр издателя',model:'Вывод ИИ',metadata:'Метаданные источника'}
@@ -140,10 +140,35 @@
     if (data.land.length && canvas) {
       const map = root.querySelector('.ra-map');
       const ctx = canvas.getContext('2d');
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
       const markers = root.querySelector('.ra-markers');
       const filters = root.querySelector('.ra-controls');
       const unknown = root.querySelector('.ra-unknown');
       const results = root.querySelector('.ra-map-results');
+      function fitCanvas() {
+        const rect = map.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.round(rect.width * dpr));
+        canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      }
+      function drawLand() {
+        const x = lon => (lon + 180) / 360;
+        const y = lat => (90 - lat) / 180;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#202326';
+        ctx.strokeStyle = '#45474a';
+        ctx.lineWidth = Math.max(1, dpr * .7);
+        for (const polygon of data.land) {
+          ctx.beginPath();
+          for (const ring of polygon) {
+            ring.forEach(([lon, lat], i) => ctx[i ? 'lineTo' : 'moveTo'](x(lon)*canvas.width, y(lat)*canvas.height));
+            ctx.closePath();
+          }
+          ctx.fill('evenodd');
+          ctx.stroke();
+        }
+      }
+      fitCanvas();
+      drawLand();
       if (data.deferred.length) {
         const deferred = root.querySelector('.ra-deferred');
         const count = data.deferred.length;
@@ -158,20 +183,6 @@
       let selected = 'all';
       const x = lon => (lon + 180) / 360;
       const y = lat => (90 - lat) / 180;
-      if (ctx) {
-        ctx.fillStyle = '#202326';
-        ctx.strokeStyle = '#45474a';
-        ctx.lineWidth = .7;
-        for (const polygon of data.land) {
-          ctx.beginPath();
-          for (const ring of polygon) {
-            ring.forEach(([lon, lat], i) => ctx[i ? 'lineTo' : 'moveTo'](x(lon)*canvas.width, y(lat)*canvas.height));
-            ctx.closePath();
-          }
-          ctx.fill('evenodd');
-          ctx.stroke();
-        }
-      }
       const matches = id => selected === 'all' || kind(id) === selected;
       function drawMarkers() {
         const groups = [];
@@ -233,8 +244,9 @@
         filters.append(button);
       }
       drawMarkers();
-      if (typeof ResizeObserver === 'function') new ResizeObserver(drawMarkers).observe(map);
-      else window.addEventListener('resize', drawMarkers);
+      const redraw = () => { fitCanvas(); drawLand(); drawMarkers(); };
+      if (typeof ResizeObserver === 'function') new ResizeObserver(redraw).observe(map);
+      else window.addEventListener('resize', redraw);
     }
   })();
   </script>

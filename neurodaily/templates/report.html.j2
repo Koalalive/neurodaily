@@ -78,7 +78,7 @@
           </div>
         {% endif %}
         {% if it.summary %}<p class="summary" data-no-i18n>{{ it.summary }}</p>{% endif %}
-        {% if it.author_display %}<div class="byline"><b>Authors:</b> <span data-no-i18n>{{ it.author_display }}</span>{% if it.corresponding_display %} <span class="corr">✉ <b>Corresponding authors:</b> <span data-no-i18n>{{ it.corresponding_display }}</span></span>{% endif %}</div>{% endif %}
+        {% if it.author_display %}<div class="byline"><b>Authors:</b> <span data-no-i18n>{{ it.author_display }}</span>{% if it.corresponding_display %} <span class="corr">@ <b>Corresponding authors:</b> <span data-no-i18n>{{ it.corresponding_display }}</span></span>{% endif %}</div>{% endif %}
         {% if it.affiliation_display %}<div class="byline aff"><b>Affiliations:</b> <span data-no-i18n>{{ it.affiliation_display }}</span></div>{% endif %}
         {% if it.extra.get('provenance')|default([], true)|length > 1 %}<div class="byline"><b>合并来源</b> · {{ record_links(it.extra.get('provenance')) }}</div>{% endif %}
         {% if it.extra.get('related_versions') %}<div class="byline"><b>相关版本</b> · {{ record_links(it.extra.get('related_versions'), versions=true) }}</div>{% endif %}
@@ -496,25 +496,25 @@ body.editorial .prompt {
 } %}
 {% set category_labels = category_labels.get(language, category_labels['zh']) %}
 {% set ui_labels = {
-  'zh': {'window':'检索时间窗','trials':'🧪 临床试验','trials_desc':'新增或更新的临床研究。','conferences':'🗓️ 学术会议','conferences_desc':'即将召开的会议、截止日期与官网链接。','trials_stat':'试验','conf_stat':'会议'},
-  'en': {'window':'Search window','trials':'🧪 Clinical Trials','trials_desc':'New or updated clinical studies.','conferences':'🗓️ Academic Conferences','conferences_desc':'Upcoming conferences, deadlines and official links.','trials_stat':'Trials','conf_stat':'Conferences'},
-  'ru': {'window':'Окно поиска','trials':'🧪 Клинические испытания','trials_desc':'Новые или обновлённые клинические исследования.','conferences':'🗓️ Академические конференции','conferences_desc':'Ближайшие конференции, дедлайны и официальные ссылки.','trials_stat':'Испытания','conf_stat':'Конференции'}
+  'zh': {'window':'检索时间窗','trials':'◉ 临床试验','trials_desc':'新增或更新的临床研究。','conferences':'▦ 学术会议','conferences_desc':'即将召开的会议、截止日期与官网链接。','trials_stat':'试验','conf_stat':'会议'},
+  'en': {'window':'Search window','trials':'◉ Clinical Trials','trials_desc':'New or updated clinical studies.','conferences':'▦ Academic Conferences','conferences_desc':'Upcoming conferences, deadlines and official links.','trials_stat':'Trials','conf_stat':'Conferences'},
+  'ru': {'window':'Окно поиска','trials':'◉ Клинические испытания','trials_desc':'Новые или обновлённые клинические исследования.','conferences':'▦ Академические конференции','conferences_desc':'Ближайшие конференции, дедлайны и официальные ссылки.','trials_stat':'Испытания','conf_stat':'Конференции'}
 }.get(language, {}) %}
 <div id="top"></div>
 <nav class="toc" aria-label="目录">
   <div class="toc-title">目录</div>
   <a href="#top">↑ 顶部</a>
-  {% if result.ai_summary %}<a href="#ai-summary">🧠 AI 摘要</a>{% endif %}
-  <a href="#research-activity" hidden>🗺️ 研究动态地图</a>
-  <a href="#topic-map" hidden>🧭 主题景观</a>
-  {% if result.on_this_day %}<a href="#on-this-day">📅 历史上的今天</a>{% endif %}
-  <a href="#papers">📄 最新论文</a>
-  <a href="#industry">💊 产业与融资</a>
-  <a href="#trials">🧪 临床试验</a>
-  <a href="#conferences">🗓️ 学术会议</a>
-  <a href="#policy">🏛️ 政策与新闻</a>
-  {% if result.config and result.config.journals %}<a href="#journals">📚 期刊</a>{% endif %}
-  {% if result.health %}<a href="#source-health">📡 来源状态</a>{% endif %}
+  {% if result.ai_summary %}<a href="#ai-summary">✦ AI 摘要</a>{% endif %}
+  <a href="#research-activity" hidden>⌖ 研究动态地图</a>
+  <a href="#topic-map" hidden>◌ 主题景观</a>
+  {% if result.on_this_day %}<a href="#on-this-day">◷ 历史上的今天</a>{% endif %}
+  <a href="#papers">▤ 最新论文</a>
+  <a href="#industry">◇ 产业与融资</a>
+  <a href="#trials">◉ 临床试验</a>
+  <a href="#conferences">▦ 学术会议</a>
+  <a href="#policy">⌂ 政策与新闻</a>
+  {% if result.config and result.config.journals %}<a href="#journals">▥ 期刊</a>{% endif %}
+  {% if result.health %}<a href="#source-health">◍ 来源状态</a>{% endif %}
 </nav>
 <header class="masthead">
   <div class="wrap">
@@ -536,8 +536,8 @@ body.editorial .prompt {
       {% endfor %}
     </div>
     <div class="toolbar">
-      <button class="btn" id="runNow" type="button">▶ Run now</button>
-      <a class="btn ghost" id="settingsLink" href="/settings">⚙ Settings</a>
+      <button class="btn" id="runNow" type="button">▸ Run now</button>
+      <a class="btn ghost" id="settingsLink" href="/settings">◈ Settings</a>
       <a class="btn ghost" id="histLink" href="/history">History</a>
       <a class="btn ghost" id="promptLink" href="/api/prompt" target="_blank" rel="noopener">Focus prompt</a>
       <a class="runmsg" id="runMsg" hidden></a>
@@ -550,13 +550,13 @@ body.editorial .prompt {
 
 <main class="wrap">
   {% if result.delta %}{% include "report_delta.html.j2" %}{% endif %}
-  {{ block_section('papers', '📄 Latest Papers', 'New PubMed, arXiv, and bioRxiv preprints matching your focus.', 'b-doc') }}
-  {{ block_section('industry', '💊 Commercial & Regulatory Progress', 'Drug approvals, device clearances, and funding records.', 'b-drug') }}
+  {{ block_section('papers', '▤ Latest Papers', 'New PubMed, arXiv, and bioRxiv preprints matching your focus.', 'b-doc') }}
+  {{ block_section('industry', '◇ Commercial & Regulatory Progress', 'Drug approvals, device clearances, and funding records.', 'b-drug') }}
   {% set trial_items = categories['trial'] %}
   {% set conference_items = categories['conference'] %}
-  {{ block_section('trials', ui_labels.get('trials', '🧪 Clinical Trials'), ui_labels.get('trials_desc', 'New + updated clinical studies.'), 'b-trial', trial_items) }}
-  {{ block_section('conferences', ui_labels.get('conferences', '🗓️ Academic Conferences'), ui_labels.get('conferences_desc', 'Upcoming conferences, deadlines and official links.'), 'b-conference', conference_items) }}
-  {{ block_section('policy', '🏛️ News and policy', 'Institutional press, agency announcements, and news.', 'b-policy') }}
+  {{ block_section('trials', ui_labels.get('trials', '◉ Clinical Trials'), ui_labels.get('trials_desc', 'New + updated clinical studies.'), 'b-trial', trial_items) }}
+  {{ block_section('conferences', ui_labels.get('conferences', '▦ Academic Conferences'), ui_labels.get('conferences_desc', 'Upcoming conferences, deadlines and official links.'), 'b-conference', conference_items) }}
+  {{ block_section('policy', '⌂ News and policy', 'Institutional press, agency announcements, and news.', 'b-policy') }}
 
   {% if result.config and result.config.journals %}
   <section id="journals">
@@ -580,7 +580,7 @@ body.editorial .prompt {
 
   {% if result.health %}
   <section id="source-health">
-    <h2 class="sec-title"><span class="dot"></span>📡 Source Health</h2>
+    <h2 class="sec-title"><span class="dot"></span>◍ Source Health</h2>
     {% set state_labels = {'ok': '正常', 'empty': '无命中', 'partial': '部分覆盖', 'timeout': '超时', 'limited': '限流', 'failed': '抓取失败', 'disabled': '已停用'} %}
     {% set coverage_labels = {'full': '已按设置完成抓取', 'sampled': '样本范围内的结果', 'partial': '仅覆盖部分请求'} %}
     <div class="health" role="region" aria-label="各来源检索状态" tabindex="0">
@@ -626,7 +626,7 @@ body.editorial .prompt {
   <section>
     <h2 class="sec-title"><span class="dot"></span>Warnings</h2>
     <div class="empty">
-      {% for e in result.errors %}<div>⚠ {{ e }}</div>{% endfor %}
+      {% for e in result.errors %}<div>! {{ e }}</div>{% endfor %}
     </div>
   </section>
   {% endif %}
@@ -687,7 +687,7 @@ if (runBtn) {
         var busy = !!run && run.status === 'running';
         runBtn.disabled = busy;
         var t = window.ndT || String;
-        runBtn.textContent = t(busy ? 'Running…' : '▶ Run now');
+        runBtn.textContent = t(busy ? 'Running…' : '▸ Run now');
         if (runMsg) {
           runMsg.hidden = !busy;
           if (busy) {

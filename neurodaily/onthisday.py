@@ -59,13 +59,13 @@ _refresh_deep_cache()
 
 
 OTD_LABELS = {
-    "zh": {"title": "📅 历史上的今天", "desc": "神经科学 / 神经病学 / 精神病学 / 神经外科史上的今天。",
+    "zh": {"title": "◷ 历史上的今天", "desc": "神经科学 / 神经病学 / 精神病学 / 神经外科史上的今天。",
            "badge_exact": "历史上的今天", "badge_near": "本月近邻", "badge_classic": "经典里程碑",
            "note": "AI 翻译可能不精确，请以原文为准。"},
-    "en": {"title": "📅 On This Day", "desc": "Milestones in neuroscience, neurology, psychiatry and neurosurgery.",
+    "en": {"title": "◷ On This Day", "desc": "Milestones in neuroscience, neurology, psychiatry and neurosurgery.",
            "badge_exact": "On this day", "badge_near": "Nearby", "badge_classic": "Classic milestone",
            "note": "Machine-translated; refer to the Chinese original for precision."},
-    "ru": {"title": "📅 В этот день", "desc": "Важные события в нейронауках, неврологии, психиатрии и нейрохирургии.",
+    "ru": {"title": "◷ В этот день", "desc": "Важные события в нейронауках, неврологии, психиатрии и нейрохирургии.",
            "badge_exact": "В этот день", "badge_near": "Рядом", "badge_classic": "Классический рубеж",
            "note": "Машинный перевод; точность — по китайскому оригиналу."},
 }

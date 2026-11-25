@@ -504,12 +504,12 @@ class WindowTests(unittest.TestCase):
         from neurodaily.ui_translations import _translation_script
         import json, re
         for lang, expected in (
-            ("en", {"🗓️ 学术会议": "🗓️ Academic conferences",
-                    "🧭 主题景观": "🧭 Topic landscape",
-                    "🗺️ 研究动态地图": "🗺️ Research activity map"}),
-            ("ru", {"🗓️ 学术会议": "🗓️ Академические конференции",
-                    "🧭 主题景观": "🧭 Тематический ландшафт",
-                    "🗺️ 研究动态地图": "🗺️ Карта исследовательской активности"}),
+            ("en", {"▦ 学术会议": "▦ Academic conferences",
+                    "◌ 主题景观": "◌ Topic landscape",
+                    "⌖ 研究动态地图": "⌖ Research activity map"}),
+            ("ru", {"▦ 学术会议": "▦ Академические конференции",
+                    "◌ 主题景观": "◌ Тематический ландшафт",
+                    "⌖ 研究动态地图": "⌖ Карта исследовательской активности"}),
         ):
             payload = re.search(r"const messages = (\{.*?\});", _translation_script(lang)).group(1)
             messages = json.loads(payload)

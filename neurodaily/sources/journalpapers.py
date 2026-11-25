@@ -113,11 +113,11 @@ def _split_authors_with_corresponding(author_strings: list[str]) -> tuple[list[s
 
     Some journal feeds return one string like "A. One, B. Two *" per entry, or a
     single combined author blob. We split on commas/semicolons and flag names that
-    carry a correspondence marker (``*``, ``✉``, ``†``) as corresponding authors.
+    carry a correspondence marker (``*``, ``@``, ``†``) as corresponding authors.
     """
     authors: list[str] = []
     corresponding: list[str] = []
-    markers = ("*", "✉", "†", "corresponding", "correspondence", "to whom")
+    markers = ("*", "@", "†", "corresponding", "correspondence", "to whom")
     for blob in author_strings:
         parts = re.split(r"[;,]\s*|\s+and\s+", blob)
         for p in parts:

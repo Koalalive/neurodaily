@@ -137,7 +137,7 @@ small{display:block;color:var(--muted);font-size:.78rem;margin-top:8px}
       }
       if(!r.ok){throw new Error(t(d.detail||d.error||'启动失败'));}
       poll(d.task_id,0);
-    }catch(e){failed('❌ '+e.message);}
+    }catch(e){failed('× '+e.message);}
   };
   go.disabled=true;
   refresh();
