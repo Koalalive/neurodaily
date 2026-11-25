@@ -178,7 +178,8 @@ def _labels(topics: list[dict], chat) -> None:
         return
 
     populated = [topic for topic in topics if topic["size"]]
-    batch_size = 4
+    # Small batches make the JSON response resilient to model-side truncation.
+    batch_size = 2
     for start in range(0, len(populated), batch_size):
         batch = {topic["id"]: topic for topic in populated[start:start + batch_size]}
         payload = [{"id": topic["id"], "terms": topic["terms"][:8],
@@ -192,7 +193,7 @@ def _labels(topics: list[dict], chat) -> None:
                  "(max 6 words) and one very short description (max 100 characters). "
                  "Describe the shared subject, not study conclusions. Do not fabricate findings."},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-            ], 1200)
+            ], 1600)
             applied = _apply_annotations(batch, _parse_annotations(message.get("content", "")))
         except Exception:
             applied = set()
@@ -207,7 +208,7 @@ def _labels(topics: list[dict], chat) -> None:
                     {"role": "user", "content": json.dumps([{
                         "id": topic["id"], "terms": topic["terms"][:8],
                         "examples": [title[:180] for title in topic["examples"]]}], ensure_ascii=False)},
-                ], 600)
+                ], 1000)
                 _apply_annotations({topic["id"]: topic}, _parse_annotations(message.get("content", "")))
             except Exception:
                 continue
