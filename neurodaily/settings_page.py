@@ -338,6 +338,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
       <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
         <h3 style="margin-top:0;font-size:.9rem">Service</h3>
         <p id="diag-service" class="mini">Checking…</p>
+        <p id="diag-health" class="mini"></p>
       </div>
       <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
         <h3 style="margin-top:0;font-size:.9rem">Scheduler</h3>
@@ -1581,45 +1582,48 @@ el('service-toggle').addEventListener('click',toggleServiceSchedule);
 
 async function loadDiagnostics(){
   var message=el('diag-message');
-  if(message) message.textContent='Checking…';
+  if(message) message.textContent=t('Checking live service state…');
   try{
-    var [statusResponse, searchResponse, schedulerResponse, pushResponse]=await Promise.all([
-      fetch('/api/status',{cache:'no-store'}),
-      fetch('/api/search/status',{cache:'no-store'}),
-      fetch('/api/launchd/status',{cache:'no-store'}),
-      fetch('/api/push',{cache:'no-store'})
-    ]);
-    var status=statusResponse.ok?await statusResponse.json():{};
-    var search=searchResponse.ok?(await searchResponse.json()).search:null;
-    var scheduler=schedulerResponse.ok?await schedulerResponse.json():{};
-    var push=pushResponse.ok?await pushResponse.json():{};
-    var task=search&&search.id?search:null;
-    var receipts=[];
-    if(task){try{var h=await fetch('/api/history/'+task.id,{cache:'no-store'});if(h.ok)receipts=(await h.json()).receipts||[];}catch(_){}}
-    var email=push.email||{};
-    var recipients=(email.recipients||[]).length||(email.to||[]).length;
-    var emailReceipts=receipts.filter(function(row){return row.channel==='email';});
-    var emailText=email.enabled===false?'disabled':'enabled; '+recipients+' recipient(s); '+(push.password_set?'SMTP configured':'SMTP password missing');
-    if(scheduler.paused) emailText+=' · paused by service';
-    if(emailReceipts.length){
-      emailText += ' · latest task: '+emailReceipts.map(function(row){return row.status;}).join(', ');
-    }
+    var response=await fetch('/api/service/diagnose',{cache:'no-store'});
+    if(!response.ok) throw new Error('HTTP '+response.status);
+    var report=await response.json();
+    var scheduler=report.scheduler||{};
+    var task=report.task||null;
+    var email=report.email||{};
+    var sources=report.sources||{};
+    var healthRows=Object.keys(sources).map(function(name){
+      var row=sources[name]||{};
+      return {source:name,status:row.status,ok:row.status!=='failed'&&row.status!=='timeout'&&row.status!=='limited',count:row.count,fetched:row.fetched,errors:row.request_errors};
+    });
+    var badSources=healthRows.filter(function(row){
+      return row.status && !['ok','empty'].includes(row.status);
+    });
+    var healthText=badSources.length
+      ? badSources.map(function(row){return row.source+' '+(row.status||'failed')+((row.errors||[]).length?' · '+(row.errors||[]).join('; '):'');}).join(' | ')
+      : (healthRows.length?'all sources ok':'no source health yet');
+    el('diag-health').textContent=t('Sources: {sources}',{sources:healthText});
+    var recipients=email.recipients||0;
+    var emailText=email.enabled===false?t('disabled'):t(email.smtp_configured?'enabled; {count} recipient(s); SMTP configured':'enabled; {count} recipient(s); SMTP password missing',{count:recipients});
+    if(scheduler.paused) emailText+=' · '+t('paused by service');
     var schedulerText=(scheduler.backend||'?')+' · '+(scheduler.state||'?')+' · '+(scheduler.schedule||'—');
     if(scheduler.next_run) schedulerText+=' · next '+new Date(scheduler.next_run).toLocaleString(document.documentElement.lang);
     if(scheduler.last_run) schedulerText+=' · last '+(scheduler.last_run.status||'?')+' '+new Date(scheduler.last_run.finished_at||scheduler.last_run.due||Date.now()).toLocaleString(document.documentElement.lang);
-    var taskText=task?('#'+task.id+' · '+(task.status||'?')+' · '+(task.phase||'?')+' · '+(task.item_count||0)+' items'):'No task recorded';
-    if(search&&search.report_ready) taskText+=' · report ready';
-    if(search&&search.error) taskText+=' · '+search.error;
-    el('diag-service').textContent='online · profile '+(status.profile||'?')+' · last run '+(status.last_run?new Date(status.last_run).toLocaleString(document.documentElement.lang):'—');
+    var taskText=task?('#'+task.id+' · '+(task.status||'?')+' · '+(task.phase||'?')+' · '+(task.item_count||0)+' items'):t('No task recorded');
+    if(task&&task.report_ready) taskText+=' · report ready';
+    if(task&&task.error) taskText+=' · '+task.error;
+    el('diag-service').textContent=t('online · PID {pid} · profile {profile}',{pid:report.service.pid||'?',profile:report.service.profile||'?'});
     el('diag-scheduler').textContent=schedulerText;
     el('diag-task').textContent=taskText;
     el('diag-email').textContent=emailText;
-    if(message) message.textContent='Updated '+new Date().toLocaleTimeString(document.documentElement.lang);
+    if(message) message.textContent=t('实时诊断 · {time}',{time:new Date(report.checked_at).toLocaleTimeString(document.documentElement.lang)});
   }catch(e){
-    if(message) message.textContent='Diagnostics unavailable: '+e.message;
+    if(message) message.textContent=t('Diagnostics unavailable: {error}',{error:e.message});
   }
 }
 el('diag-refresh').addEventListener('click',loadDiagnostics);
+document.getElementById('service-diagnostics').addEventListener('toggle',function(){
+  if(this.open) loadDiagnostics();
+});
 
 load();
 loadUiLanguage();

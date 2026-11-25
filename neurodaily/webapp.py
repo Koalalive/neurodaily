@@ -1151,6 +1151,36 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
             "schedule": f"{int(sched.get('hour', 8)):02d}:{int(sched.get('minute', 0)):02d}",
         })
 
+    @app.get("/api/service/diagnose")
+    def api_service_diagnose():
+        """Return a fresh, read-only snapshot for the settings diagnostics button."""
+        cfg = _cfg()
+        task = task_runs.latest()
+        try:
+            scheduler = json.loads(api_launchd_status().body)
+        except Exception:
+            scheduler = {"backend": "unknown", "state": "unknown"}
+        try:
+            from .mailer import _password as mail_password, load_cfg as load_mail_cfg, recipients as mail_recipients
+            email_cfg = load_mail_cfg()
+            email = {
+                "enabled": email_cfg.get("enabled", True) is not False,
+                "recipients": len(mail_recipients(email_cfg)),
+                "smtp_configured": bool(mail_password(email_cfg)),
+            }
+        except Exception:
+            email = {"enabled": False, "recipients": 0, "smtp_configured": False}
+        return JSONResponse({
+            "checked_at": datetime.now().isoformat(),
+            "service": {"online": True, "pid": os.getpid(), "version": __version__,
+                        "profile": cfg.profile},
+            "scheduler": scheduler,
+            "task": task,
+            "sources": (task or {}).get("sources", {}),
+            "stages": (task or {}).get("stages", {}),
+            "email": email,
+        }, headers={"Cache-Control": "no-store"})
+
     @app.post("/api/service/pause")
     def api_service_pause():
         try:

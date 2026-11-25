@@ -552,6 +552,41 @@ AI 地理定位|AI geography|Геолокация ИИ
 🕸 图谱|🕸 Citation graph|🕸 Граф цитирования
 本地引用网络|Local citation network|Локальная сеть цитирований
 服务未启动：请双击 scripts/启动 NeuroDaily.command，或运行 scripts/start.sh|NeuroDaily is stopped. Open scripts/启动 NeuroDaily.command or run scripts/start.sh.|Служба NeuroDaily остановлена. Откройте scripts/启动 NeuroDaily.command или запустите scripts/start.sh.
+服务诊断|Service diagnostics|Диагностика службы
+服务|Service|Служба
+调度器|Scheduler|Планировщик
+当前任务|Current task|Текущая задача
+邮件投递|Email delivery|Доставка почты
+刷新诊断|Refresh diagnostics|Обновить диагностику
+暂停定时检索/邮件|Pause scheduled search/email|Приостановить поиск и почту по расписанию
+继续定时检索/邮件|Resume scheduled search/email|Возобновить поиск и почту по расписанию
+定时检索与邮件已暂停，Web 仍可访问。|Scheduled search and email are paused; the web UI remains available.|Поиск и почта по расписанию приостановлены; веб-интерфейс доступен.
+已暂停未来定时检索和邮件；Web 仍可访问。|Future scheduled search and email are paused; the web UI remains available.|Будущие поиски и почта по расписанию приостановлены; веб-интерфейс доступен.
+已恢复定时检索和邮件。|Scheduled search and email resumed.|Поиск и почта по расписанию возобновлены.
+操作失败：|Action failed: |Ошибка действия: 
+检查实时服务状态…|Checking live service state…|Проверка текущего состояния службы…
+实时诊断 · {time}|Live diagnosis · {time}|Текущая диагностика · {time}
+来源：{sources}|Sources: {sources}|Источники: {sources}
+所有来源正常|All sources healthy|Все источники работают
+暂无来源健康数据|No source health yet|Данных о состоянии источников пока нет
+暂无任务|No task recorded|Запись о задаче отсутствует
+在线 · PID {pid} · 配置 {profile}|online · PID {pid} · profile {profile}|онлайн · PID {pid} · профиль {profile}
+已停用|disabled|отключено
+已启用；{count} 个收件人；SMTP 已配置|enabled; {count} recipient(s); SMTP configured|включено; получателей: {count}; SMTP настроен
+已启用；{count} 个收件人；SMTP 未配置|enabled; {count} recipient(s); SMTP password missing|включено; получателей: {count}; пароль SMTP отсутствует
+已由服务暂停|paused by service|приостановлено службой
+正常|Healthy|Работает
+无命中|No matches|Совпадений нет
+部分覆盖|Partial coverage|Частичный охват
+超时|Timed out|Время ожидания истекло
+触发限流|Rate limited|Сработало ограничение запросов
+失败|Failed|Ошибка
+正常|ok|ok
+无命中|empty|empty
+部分覆盖|partial|partial
+超时|timeout|timeout
+触发限流|limited|limited
+服务诊断不可用：{error}|Diagnostics unavailable: {error}|Диагностика недоступна: {error}
 """
 
 
