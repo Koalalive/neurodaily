@@ -14,6 +14,7 @@
     #topic-map .tm-chip[aria-pressed=true]{color:#c8a96b;background:#15140f;border-color:#c8a96b}
     #topic-map .tm-dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-inline-end:.5em}
     #topic-map .tm-note{font-size:.82rem;color:#77756e}
+    #topic-map .tm-method{color:#c8a96b;font-size:.7rem;letter-spacing:.06em}
     @media(max-width:760px){ #topic-map .tm-layout{grid-template-columns:1fr}}
   </style>
   {% set tm_title = {'zh':'🧭 主题景观','en':'🧭 Topic landscape','ru':'🧭 Тематический ландшафт'}.get(language, '🧭 主题景观') %}
@@ -36,9 +37,9 @@
     const root = document.getElementById('topic-map');
     const data = JSON.parse(document.getElementById('nd-topic-data').textContent);
     const tm = {
-      zh: {title:'🧭 主题景观 LDA + t-SNE', note:'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。', select:'选择圆点', hint:'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。', all:'全部', items:'个条目', topics:'个主题', original:'阅读原文 ↗', confidence:'主题置信度：', topic:'主题', kinds:{paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}},
-      en: {title:'🧭 Topic landscape LDA + t-SNE', note:'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.', select:'Select a point', hint:'Color is the dominant LDA topic; closer points have more similar topic distributions.', all:'All', items:'items', topics:'topics', original:'Read source ↗', confidence:'Topic confidence: ', topic:'Topic', kinds:{paper:'Paper',trial:'Trial',news:'News',policy:'Policy',funding:'Industry',conference:'Conference'}},
-      ru: {title:'🧭 Тематический ландшафт LDA + t-SNE', note:'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.', select:'Выберите точку', hint:'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.', all:'Все', items:'записей', topics:'тем', original:'Открыть источник ↗', confidence:'Уверенность темы: ', topic:'Тема', kinds:{paper:'Статья',trial:'Испытание',news:'Новость',policy:'Политика',funding:'Индустрия',conference:'Конференция'}}
+      zh: {title:'🧭 主题景观 LDA + t-SNE', note:'X/Y 是主题相似度的二维投影，不是地理坐标。点击圆点查看论文/新闻详情与原文链接。', select:'选择圆点', hint:'颜色表示 LDA 主导主题；位置越近表示主题分布越相似。', all:'全部', items:'个条目', topics:'个主题', original:'阅读原文 ↗', confidence:'主题置信度：', topic:'主题', aiLabel:'AI 标注', fallbackLabel:'关键词回退', kinds:{paper:'论文',trial:'试验',news:'新闻',policy:'政策',funding:'产业',conference:'会议'}},
+      en: {title:'🧭 Topic landscape LDA + t-SNE', note:'X/Y is a 2-D projection of topic similarity, not geography. Click a point for details and the source link.', select:'Select a point', hint:'Color is the dominant LDA topic; closer points have more similar topic distributions.', all:'All', items:'items', topics:'topics', original:'Read source ↗', confidence:'Topic confidence: ', topic:'Topic', aiLabel:'AI labeled', fallbackLabel:'Keyword fallback', kinds:{paper:'Paper',trial:'Trial',news:'News',policy:'Policy',funding:'Industry',conference:'Conference'}},
+      ru: {title:'🧭 Тематический ландшафт LDA + t-SNE', note:'X/Y — двумерная проекция сходства тем, не география. Нажмите точку, чтобы открыть детали и источник.', select:'Выберите точку', hint:'Цвет — доминирующая тема LDA; близкие точки имеют более похожие распределения.', all:'Все', items:'записей', topics:'тем', original:'Открыть источник ↗', confidence:'Уверенность темы: ', topic:'Тема', aiLabel:'Метка ИИ', fallbackLabel:'Ключевые слова', kinds:{paper:'Статья',trial:'Испытание',news:'Новость',policy:'Политика',funding:'Индустрия',conference:'Конференция'}}
     }[{{ language|tojson }}] || null;
     if (tm) {
       const title = root.querySelector('[data-tm="title"]'); if (title) title.textContent = tm.title;
@@ -115,6 +116,10 @@
         note.textContent = meaning;
         side.append(note);
       }
+      const method = document.createElement('p');
+      method.className = 'tm-note tm-method';
+      method.textContent = topic.label_method === 'ai' ? (tm?.aiLabel || 'AI 标注') : (tm?.fallbackLabel || '关键词回退');
+      side.append(method);
     }
     function detail(p) {
       side.replaceChildren();

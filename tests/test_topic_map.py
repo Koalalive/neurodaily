@@ -22,6 +22,43 @@ class TopicMapTests(unittest.TestCase):
         self.assertEqual(topics[1]["descriptions"], {})
         self.assertEqual([row["id"] for row in json.loads(chat.call_args.args[0][1]["content"])], [0])
 
+    def test_complete_ai_annotation_marks_topic_as_ai(self):
+        topics = [{"id": 0, "size": 3, "label": "default", "terms": ["brain"], "examples": ["A study"]}]
+        row = {"id": 0}
+        for language, label, description in (
+            ("zh", "脑刺激", "研究脑刺激。"), ("en", "Brain stimulation", "Studies of brain stimulation."),
+            ("ru", "Стимуляция мозга", "Исследования стимуляции мозга."),
+        ):
+            row[language] = {"label": label, "description": description}
+        chat = Mock(return_value={"content": json.dumps([row])})
+        _labels(topics, chat)
+        self.assertEqual(topics[0]["label_method"], "ai")
+        self.assertEqual(topics[0]["labels"]["ru"], "Стимуляция мозга")
+        self.assertLessEqual(len(topics[0]["descriptions"]["en"]), 120)
+
+    def test_fallback_descriptions_are_short_and_marked(self):
+        topics = [{"id": 0, "size": 2, "label": "default", "terms": ["brain", "sleep"],
+                   "examples": ["A very long representative title that should be shortened"]}]
+        _labels(topics, None)
+        self.assertEqual(topics[0]["label_method"], "fallback")
+        for description in topics[0]["descriptions"].values():
+            self.assertLessEqual(len(description), 120)
+
+    def test_malformed_batch_retries_missing_topics_and_keeps_fallback(self):
+        topics = [{"id": i, "size": 2, "label": f"t{i}", "terms": [f"term{i}"], "examples": [f"title {i}"]}
+                  for i in range(2)]
+        rows = []
+        for topic in topics:
+            row = {"id": topic["id"]}
+            for language in ("zh", "en", "ru"):
+                row[language] = {"label": f"label {language}", "description": f"description {language}"}
+            rows.append(row)
+        chat = Mock(side_effect=[{"content": "not json"}, {"content": json.dumps([rows[0]])},
+                                 {"content": json.dumps([rows[1]])}])
+        _labels(topics, chat)
+        self.assertEqual([topic["label_method"] for topic in topics], ["ai", "ai"])
+        self.assertGreaterEqual(chat.call_count, 2)
+
     def test_annotation_switch_leaves_local_model_available(self):
         result = build_result()
         result.config.output["topic_ai_labels"] = False
