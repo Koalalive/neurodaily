@@ -337,20 +337,20 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
     <div class="grid2">
       <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
         <h3 style="margin-top:0;font-size:.9rem">Service</h3>
-        <p id="diag-service" class="mini">Checking…</p>
+        <p id="diag-service" class="mini" style="min-height:2.6em">Checking…</p>
         <p id="diag-health" class="mini"></p>
       </div>
       <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
         <h3 style="margin-top:0;font-size:.9rem">Scheduler</h3>
-        <p id="diag-scheduler" class="mini">Checking…</p>
+        <p id="diag-scheduler" class="mini" style="min-height:2.6em">Checking…</p>
       </div>
       <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
         <h3 style="margin-top:0;font-size:.9rem">Current task</h3>
-        <p id="diag-task" class="mini">Checking…</p>
+        <p id="diag-task" class="mini" style="min-height:2.6em">Checking…</p>
       </div>
       <div style="border:1px solid var(--line);padding:12px;border-radius:8px">
         <h3 style="margin-top:0;font-size:.9rem">Email delivery</h3>
-        <p id="diag-email" class="mini">Checking…</p>
+        <p id="diag-email" class="mini" style="min-height:2.6em">Checking…</p>
       </div>
     </div>
     <div class="inline" style="margin-top:10px">
@@ -1580,9 +1580,9 @@ async function toggleServiceSchedule(){
 }
 el('service-toggle').addEventListener('click',toggleServiceSchedule);
 
-async function loadDiagnostics(){
+async function loadDiagnostics(silent){
   var message=el('diag-message');
-  if(message) message.textContent=t('Checking live service state…');
+  if(!silent && message) message.textContent=t('Checking live service state…');
   try{
     var response=await fetch('/api/service/diagnose',{cache:'no-store'});
     if(!response.ok) throw new Error('HTTP '+response.status);
@@ -1615,21 +1615,21 @@ async function loadDiagnostics(){
     el('diag-scheduler').textContent=schedulerText;
     el('diag-task').textContent=taskText;
     el('diag-email').textContent=emailText;
-    if(message) message.textContent=t('实时诊断 · {time}',{time:new Date(report.checked_at).toLocaleTimeString(document.documentElement.lang)});
+    if(!silent && message) message.textContent=t('实时诊断 · {time}',{time:new Date(report.checked_at).toLocaleTimeString(document.documentElement.lang)});
   }catch(e){
     if(message) message.textContent=t('Diagnostics unavailable: {error}',{error:e.message});
   }
 }
-el('diag-refresh').addEventListener('click',loadDiagnostics);
+el('diag-refresh').addEventListener('click',function(){loadDiagnostics(false);});
 document.getElementById('service-diagnostics').addEventListener('toggle',function(){
-  if(this.open) loadDiagnostics();
+  if(this.open) loadDiagnostics(false);
 });
 
 load();
 loadUiLanguage();
-loadDiagnostics();
+loadDiagnostics(true);
 setInterval(function(){if(desktopScheduler&&!document.hidden) loadLaunchdStatus();},10000);
-setInterval(function(){if(!document.hidden) loadDiagnostics();},10000);
+setInterval(function(){if(!document.hidden) loadDiagnostics(true);},10000);
 </script>
 </body></html>
 """
