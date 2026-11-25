@@ -226,6 +226,7 @@ def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, pr
         return filtered, diagnostics
 
     outputs = {name: usable_cache[name] for name, _ in enabled if name in usable_cache}
+    attempts = {name: 1 if name in usable_cache else 0 for name, _ in enabled}
     if check_cancelled:
         check_cancelled()
     with ThreadPoolExecutor(max_workers=min(8, len(enabled))) as executor:
@@ -234,6 +235,8 @@ def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, pr
         for future in as_completed(futures):
             name = futures[future]
             found, diagnostics = outputs[name] = future.result()
+            attempts[name] = attempts.get(name, 0) + 1
+            diagnostics["attempts"] = attempts[name]
             if checkpoint:
                 checkpoint(name, found, diagnostics)
             if progress:
@@ -266,6 +269,8 @@ def _fetch_sources(config, plan, windows, other, *, scoped=None, logger=None, pr
                 for future in as_completed(retry_futures):
                     name = retry_futures[future]
                     found, diagnostics = outputs[name] = future.result()
+                    attempts[name] = attempts.get(name, 0) + 1
+                    diagnostics["attempts"] = attempts[name]
                     if checkpoint:
                         checkpoint(name, found, diagnostics)
                     if progress:
