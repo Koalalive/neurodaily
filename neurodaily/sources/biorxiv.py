@@ -58,7 +58,7 @@ def fetch(config, logger=None) -> list[Item]:
     exact = _native_categories(plan.root) if advanced else ()
     category_limit = 2 if preview else 4
     categories = exact if 0 < len(exact) <= category_limit else ("",)
-    max_results = max(1, int(opts.get("max_results", 200)))
+    max_results = max(1, int(opts.get("max_results", 1_000_000)))
     if preview:
         max_results = min(max_results, 30)
     # Page size is 30 in the bioRxiv detail API. The old 7-page cap silently

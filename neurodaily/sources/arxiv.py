@@ -133,7 +133,7 @@ def fetch(config, logger=None) -> list[Item]:
     if advanced:
         native = plan.remote_query("arxiv") or build_search_query(cats, [])
         queries = [f"({native}) AND {date_term}" if native else date_term]
-        limit = min(max_results, 30 if preview else 240)
+        limit = min(max_results, 30) if preview else max_results
         keywords = []
     else:
         queries = [f"cat:{_escape_query(cat)}" for cat in cats]
@@ -143,7 +143,7 @@ def fetch(config, logger=None) -> list[Item]:
         if preview and len(queries) > 4:
             queries = queries[:4]
             mark_sampled(truncated=True)
-        limit = min(max_results, 30 if preview else 60)
+        limit = min(max_results, 30) if preview else max_results
         keywords = [k.casefold() for k in config.all_keywords()]
 
     items: list[Item] = []

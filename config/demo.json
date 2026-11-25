@@ -68,33 +68,33 @@
   "sources": {
     "journal": {
       "enabled": true,
-      "max_results": 300,
+      "max_results": 0,
       "lookback_days": 2
     },
     "pubmed": {
       "enabled": true,
-      "max_results": 300,
+      "max_results": 0,
       "lookback_days": 2
     },
     "biorxiv": {
       "enabled": true,
-      "max_results": 200,
+      "max_results": 0,
       "lookback_days": 2
     },
     "arxiv": {
       "enabled": false,
-      "max_results": 100,
+      "max_results": 0,
       "lookback_days": 2
     },
     "trials": {
       "enabled": true,
-      "max_results": 100,
+      "max_results": 0,
       "lookback_days": 7,
       "query": ""
     },
     "policy": {
       "enabled": true,
-      "max_results": 100,
+      "max_results": 0,
       "lookback_days": 2,
       "feed_kinds": {
         "https://www.nature.com/subjects/neuroscience.rss": "paper",
@@ -111,51 +111,51 @@
     },
     "fda_drugs": {
       "enabled": true,
-      "max_results": 100,
+      "max_results": 0,
       "lookback_days": 2
     },
     "fda_devices": {
       "enabled": true,
-      "max_results": 100,
+      "max_results": 0,
       "lookback_days": 2
     },
     "europe_pmc": {
       "enabled": false,
-      "max_results": 40,
+      "max_results": 0,
       "lookback_days": 2,
       "query": ""
     },
     "openalex": {
       "enabled": false,
-      "max_results": 40,
+      "max_results": 0,
       "lookback_days": 2,
       "query": ""
     },
     "gdelt": {
       "enabled": false,
-      "max_results": 30,
+      "max_results": 0,
       "lookback_days": 2,
       "query": ""
     },
     "nih_brain": {
       "enabled": false,
-      "max_results": 25,
+      "max_results": 0,
       "lookback_days": 7,
       "query": ""
     },
     "crossref": {
       "enabled": false,
-      "max_results": 20,
+      "max_results": 0,
       "lookback_days": 2
     },
     "conferences": {
       "enabled": true,
-      "max_results": 50,
+      "max_results": 0,
       "lookback_days": 365
     },
     "google_news_zh": {
       "enabled": true,
-      "max_results": 100,
+      "max_results": 0,
       "lookback_days": 2,
       "queries": [
         "脑科学 OR 神经科学",

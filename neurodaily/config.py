@@ -24,11 +24,11 @@ DEFAULT_DIRS = {
     "output": os.path.join(_HOME, "output") if _HOME else os.path.join(os.path.expanduser("~"), "neurodaily", "output"),
 }
 OPTIONAL_SOURCES = {
-    "europe_pmc": {"enabled": False, "max_results": 40, "lookback_days": 2},
-    "openalex": {"enabled": False, "max_results": 40, "lookback_days": 2},
-    "gdelt": {"enabled": False, "max_results": 30, "lookback_days": 2},
-    "nih_brain": {"enabled": False, "max_results": 25, "lookback_days": 7},
-    "crossref": {"enabled": False, "max_results": 20, "lookback_days": 2},
+    "europe_pmc": {"enabled": False, "max_results": 0, "lookback_days": 2},
+    "openalex": {"enabled": False, "max_results": 0, "lookback_days": 2},
+    "gdelt": {"enabled": False, "max_results": 0, "lookback_days": 2},
+    "nih_brain": {"enabled": False, "max_results": 0, "lookback_days": 7},
+    "crossref": {"enabled": False, "max_results": 0, "lookback_days": 2},
 }
 RESEARCH_FIELDS = ("profile", "disciplines", "global_keywords", "sources", "windows", "policy_feeds",
                    "journals", "search")
@@ -313,7 +313,13 @@ class Config:
         return out
 
     def source_opts(self, name: str) -> dict:
-        return {**OPTIONAL_SOURCES.get(name, {}), **self.sources.get(name, {})}
+        opts = {**OPTIONAL_SOURCES.get(name, {}), **self.sources.get(name, {})}
+        # max_results=0 is the public "no item cap" setting. Existing source
+        # adapters use a positive integer for their loops/slices; a very high
+        # ceiling preserves their response/request/time guards.
+        if opts.get("max_results") in (None, 0):
+            opts["max_results"] = 1_000_000
+        return opts
 
     # ------------------------------------------------------ structured prompt
     def to_prompt(self) -> str:
@@ -503,18 +509,18 @@ def DEFAULT_CONFIG() -> Config:
         ),
     ]
     sources = {
-        "journal":    {"enabled": True, "max_results": 500, "lookback_days": 2},
-        "arxiv":      {"enabled": True, "max_results": 500, "lookback_days": 2},
-        "pubmed":     {"enabled": True, "max_results": 500, "lookback_days": 2},
-        "biorxiv":    {"enabled": True, "max_results": 500, "lookback_days": 2},
-        "fda_drugs":  {"enabled": True, "max_results": 500, "lookback_days": 2},
-        "fda_devices":{"enabled": True, "max_results": 500, "lookback_days": 2},
-        "trials":     {"enabled": True, "max_results": 500, "lookback_days": 7},
-        "conferences":{"enabled": True, "max_results": 50, "lookback_days": 365},
-        "google_news_zh": {"enabled": True, "max_results": 100, "lookback_days": 2,
+        "journal":    {"enabled": True, "max_results": 0, "lookback_days": 2},
+        "arxiv":      {"enabled": True, "max_results": 0, "lookback_days": 2},
+        "pubmed":     {"enabled": True, "max_results": 0, "lookback_days": 2},
+        "biorxiv":    {"enabled": True, "max_results": 0, "lookback_days": 2},
+        "fda_drugs":  {"enabled": True, "max_results": 0, "lookback_days": 2},
+        "fda_devices":{"enabled": True, "max_results": 0, "lookback_days": 2},
+        "trials":     {"enabled": True, "max_results": 0, "lookback_days": 7},
+        "conferences":{"enabled": True, "max_results": 0, "lookback_days": 365},
+        "google_news_zh": {"enabled": True, "max_results": 0, "lookback_days": 2,
                             "queries": ["脑科学 OR 神经科学", "脑机接口", "脑电 研究",
                                         "脑磁图", "功能磁共振", "神经影像"]},
-        "policy":     {"enabled": True, "max_results": 500, "lookback_days": 2},
+        "policy":     {"enabled": True, "max_results": 0, "lookback_days": 2},
     }
     output = {
         "dir": DEFAULT_DIRS["output"],

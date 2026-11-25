@@ -71,7 +71,7 @@ def enrich(items: list[Item], config) -> int:
     opts = config.source_opts("crossref")
     if not opts.get("enabled"):
         return 0
-    budget = min(30, int(opts["max_results"]))
+    budget = max(1, int(opts.get("max_results", 1_000_000)))
     lookups = {}
     applied = 0
     for item in items:

@@ -67,7 +67,7 @@ class JournalModel(BaseModel):
 class SourceModel(BaseModel):
     model_config = ConfigDict(extra="allow")
     enabled: bool = True
-    max_results: int = Field(20, ge=1, le=5000)
+    max_results: int = Field(0, ge=0, le=1_000_000)
     lookback_days: int = Field(2, ge=1, le=365)
     # generic (config-defined) sources
     type: str | None = None

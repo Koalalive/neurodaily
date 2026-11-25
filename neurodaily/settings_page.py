@@ -256,7 +256,7 @@ html { color-scheme: dark; scrollbar-color: #3a4352 #0b0b0c; scrollbar-width: th
 
   <section>
     <h2>Sources</h2>
-    <p class="desc">Enable, max results per fetch, lookback days.</p>
+    <p class="desc">Enable, max results per fetch (0 = no item cap), lookback days.</p>
     <div id="sources"></div>
   </section>
 

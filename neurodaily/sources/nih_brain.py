@@ -29,12 +29,12 @@ def _published(entry) -> str:
 def fetch(config, logger=None) -> list[Item]:
     opts = config.source_opts("nih_brain")
     requested = int_option(opts.get("max_results"), 40)
-    limit = min(requested, _MAX_RESULTS)
+    limit = requested
     cutoff = (date.today() - timedelta(days=min(int_option(opts.get("lookback_days"), 14), 365))).isoformat()
     start, end = fixed_bounds(opts) or (cutoff, "9999-12-31")
     query = text(opts.get("query")).casefold()
     record_query("NIH News Releases · BRAIN Initiative" + (f" · {query}" if query else ""))
-    mark_sampled(truncated=requested > limit)
+    # no adapter-level item cap
     response = get(BASE, timeout=15, retries=1)
     if response is None:
         return []

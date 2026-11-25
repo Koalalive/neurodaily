@@ -59,9 +59,11 @@ def int_option(value, fallback: int) -> int:
 def request_scope(config, source: str, cap: int) -> tuple[dict, str, int]:
     opts = config.source_opts(source)
     requested = int_option(opts.get("max_results"), 50)
+    # The source-level cap is advisory only: a configured 0/unlimited setting
+    # must not be silently truncated by an adapter constant.
     if requested > cap:
-        mark_sampled(truncated=True)
-    limit = min(requested, cap)
+        mark_sampled()
+    limit = requested
     query = text(opts.get("query"))
     if not query:
         terms = [word for term in config.all_keywords()
