@@ -666,7 +666,8 @@ def create_app(config_path: str | None = None, *, desktop: bool = False,
 
         config = _cfg()
         data = config.to_dict()
-        data["sources"] = {**config.sources, **{name: config.source_opts(name) for name in OPTIONAL_SOURCES}}
+        # Expose the public 0 ("unlimited") setting, not the internal fetch ceiling.
+        data["sources"] = {**config.sources, **{name: {**OPTIONAL_SOURCES.get(name, {}), **config.sources.get(name, {})} for name in OPTIONAL_SOURCES}}
         return JSONResponse(data, headers=_config_headers(config))
 
     @app.get("/api/config/presets")
