@@ -127,3 +127,28 @@ footer {
   section { padding: 22px 0 20px !important; }
 }
 """
+
+# Primary action buttons live inside pages with their own IDs, so the generic
+# button reset above must be followed by an explicit primary treatment.
+UI_CSS += r"""
+#go, button.primary, .button-primary {
+  background: var(--accent) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: 1px !important;
+  color: #171207 !important;
+  font-weight: 700 !important;
+  padding: 9px 18px !important;
+  opacity: 1;
+}
+#go:hover, button.primary:hover, .button-primary:hover {
+  background: #ddc183 !important;
+  border-color: #ddc183 !important;
+  color: #171207 !important;
+}
+#go:disabled {
+  background: #2a261e !important;
+  border-color: #5d5547 !important;
+  color: #bdb5a5 !important;
+  opacity: 1;
+}
+"""
