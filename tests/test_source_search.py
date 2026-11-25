@@ -119,6 +119,15 @@ class LiteratureSourceTests(unittest.TestCase):
         self.assertEqual(items[0].doi, "")
         self.assertTrue(stats.as_dict(len(items))["truncated"])
 
+    def test_biorxiv_honors_large_max_results(self):
+        from neurodaily.config import DEFAULT_CONFIG
+        config = DEFAULT_CONFIG()
+        config.sources['biorxiv'].update(max_results=200, lookback_days=10)
+        # The source must not hard-clamp before the request loop.
+        from neurodaily.sources import biorxiv
+        with patch.object(biorxiv, 'get', return_value=None):
+            biorxiv.fetch(config)
+
     def test_biorxiv_pushes_exact_category_and_uses_latest_version(self):
         config = DEFAULT_CONFIG()
         config.search = {"query": "CAT=neuroscience AND PY=2024"}
