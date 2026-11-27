@@ -333,16 +333,6 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
     for item in industry[:limit] + trial_items[:limit] + conferences[:limit] + policy[:limit]:
         lines.append(f"- {item.title}" + (f"  {item.url}" if item.url else ""))
     text = "\n".join(lines)
-    # Keep the email body visually identical to the report, minus the
-    # interactive canvas sections and backend controls.
-    try:
-        from .render import render_html
-        from .ui_translations import localize_html
-        html = localize_html(email_safe_html(
-            render_html(result, config=getattr(result, "config", None), locale=language)
-        ), language)
-    except Exception:
-        logging.getLogger(__name__).exception("Could not render full report for email; using compact body")
     return subject_for(result, cfg, language), html, text
 
 
@@ -376,24 +366,27 @@ def email_safe_html(html: str) -> str:
     html = re.sub(r'<div\b[^>]*\bid=["\']nd-email-toc["\'][^>]*>[\s\S]*?</div>',
                   "", html, flags=re.I)
     toc = (
-        '<div id="nd-email-toc" style="margin:18px 24px 0;padding:11px 0;'
-        'border-top:1px solid #2b2b28;border-bottom:1px solid #2b2b28;'
+        '<div id="nd-email-toc" style="position:fixed;left:12px;right:12px;bottom:12px;'
+        'z-index:9999;display:flex;flex-wrap:wrap;gap:2px 0;box-sizing:border-box;'
+        'padding:8px;background:#0e1013;border:1px solid #2b2b28;'
         'font:13px/1.6 Georgia,\'Times New Roman\',serif;color:#979791">'
-        '<b style="font-weight:600;color:#c8a96b;letter-spacing:.08em">目录</b>　'
-        '<a href="#top" style="color:#979791;text-decoration:none">↑ 顶部</a> · '
-        '<a href="#ai-summary" style="color:#979791;text-decoration:none">AI 摘要</a> · '
-        '<a href="#on-this-day" style="color:#979791;text-decoration:none">历史上的今天</a> · '
-        '<a href="#papers" style="color:#979791;text-decoration:none">最新论文</a> · '
-        '<a href="#industry" style="color:#979791;text-decoration:none">产业与融资</a> · '
-        '<a href="#trials" style="color:#979791;text-decoration:none">临床试验</a> · '
-        '<a href="#conferences" style="color:#979791;text-decoration:none">学术会议</a> · '
-        '<a href="#policy" style="color:#979791;text-decoration:none">政策与新闻</a> · '
-        '<a href="#journals" style="color:#979791;text-decoration:none">期刊</a> · '
-        '<a href="#source-health" style="color:#979791;text-decoration:none">来源状态</a>'
+        '<b style="display:block;width:100%;margin:0 10px 4px;font-weight:600;color:#c8a96b;letter-spacing:.08em">目录</b>'
+        '<a href="#top" style="color:#979791;text-decoration:none;padding:5px 10px">↑ 顶部</a>'
+        '<a href="#ai-summary" style="color:#979791;text-decoration:none;padding:5px 10px">AI 摘要</a>'
+        '<a href="#on-this-day" style="color:#979791;text-decoration:none;padding:5px 10px">历史上的今天</a>'
+        '<a href="#papers" style="color:#979791;text-decoration:none;padding:5px 10px">最新论文</a>'
+        '<a href="#industry" style="color:#979791;text-decoration:none;padding:5px 10px">产业与融资</a>'
+        '<a href="#trials" style="color:#979791;text-decoration:none;padding:5px 10px">临床试验</a>'
+        '<a href="#conferences" style="color:#979791;text-decoration:none;padding:5px 10px">学术会议</a>'
+        '<a href="#policy" style="color:#979791;text-decoration:none;padding:5px 10px">政策与新闻</a>'
+        '<a href="#journals" style="color:#979791;text-decoration:none;padding:5px 10px">期刊</a>'
+        '<a href="#source-health" style="color:#979791;text-decoration:none;padding:5px 10px">来源状态</a>'
         '</div>'
     )
     if '<main class="wrap">' in html:
         html = html.replace('<main class="wrap">', toc + '\n<main class="wrap">', 1)
+    if '</head>' in html:
+        html = html.replace('</head>', '<style>body{padding-bottom:86px!important}</style></head>', 1)
     return html
 
 

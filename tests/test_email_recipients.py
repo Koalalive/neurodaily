@@ -30,7 +30,7 @@ class EmailRecipientTests(unittest.TestCase):
         self.assertEqual(configured[1]["language"], "ru")
 
     def test_email_subject_and_body_language(self):
-        for language, marker in (("zh", "最新论文"), ("en", "Latest Papers"),
+        for language, marker in (("zh", "最新论文"), ("en", "Latest papers"),
                                  ("ru", "Новые публикации")):
             subject, html, _ = mailer.render_email(result(), {"attach_report": False,
                                                                 "language": language},
@@ -48,13 +48,11 @@ class EmailRecipientTests(unittest.TestCase):
         self.assertIn("English summary", text)
         self.assertNotIn("中文摘要", html)
 
-    def test_email_html_is_report_style_without_canvas_or_backend_controls(self):
+    def test_email_body_is_compact_without_canvas_or_backend_controls(self):
         subject, html, _ = mailer.render_email(result(), {"attach_report": False}, language="zh")
         self.assertTrue(subject)
-        self.assertIn('href="#papers"', html)
-        for marker in ('id="research-activity"', 'id="topic-map"', 'id="prompt"'):
-            self.assertNotIn(marker, html)
-        for marker in ('id="runNow"', 'id="settingsLink"', 'id="histLink"'):
+        for marker in ('id="research-activity"', 'id="topic-map"', 'id="prompt"',
+                       'id="runNow"', 'id="settingsLink"', 'id="histLink"'):
             self.assertNotIn(marker, html)
 
     def test_future_push_time_is_queued(self):
