@@ -7,7 +7,8 @@ import smtplib
 from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from tempfile import TemporaryDirectory
+import re
 
 from . import delivery_receipts, history, mailer, webhooks
 from .config import DEFAULT_DIRS
@@ -50,31 +51,44 @@ def _increment(result: DigestResult, destination: str, limits: dict[str, int], t
     return replace(result, items=items, sections=sections, on_this_day=events), identities
 
 
+def _email_attachment_name(result: DigestResult) -> str:
+    """Build the recipient-facing HTML attachment name.
+
+    Format: <report time>_NeuroDaily_<profile>.html
+    """
+    raw_time = getattr(result, "generated_at", "") or ""
+    try:
+        stamp = datetime.fromisoformat(raw_time).strftime("%Y-%m-%d_%H%M%S")
+    except (TypeError, ValueError):
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    profile = str(getattr(result, "config_profile", "") or
+                  getattr(getattr(result, "config", None), "profile", "") or "default")
+    profile = re.sub(r'[^\w.\-]+', '-', profile, flags=re.UNICODE).strip("-_") or "default"
+    return f"{stamp}_NeuroDaily_{profile}.html"
+
+
 def _send_email(subset: DigestResult, result: DigestResult, report_path: str, email: dict,
                 address: str, *, attempts: int, language: str = "zh") -> None:
     subject, html, message = mailer.render_email(subset, email, language=language)
     attachments = None
-    temporary_attachment = None
+    temporary_directory = None
     if email.get("attach_report", True):
         # Keep the attachment consistent with the email-safe report: no
         # canvas-only map/topic sections and no backend control buttons.
         try:
             safe_report = mailer.email_safe_html(Path(report_path).read_text(encoding="utf-8"))
-            with NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".html", delete=False) as stream:
-                stream.write(safe_report)
-                temporary_attachment = stream.name
-            attachments = [temporary_attachment]
+            temporary_directory = TemporaryDirectory()
+            attachment = Path(temporary_directory.name) / _email_attachment_name(result)
+            attachment.write_text(safe_report, encoding="utf-8")
+            attachments = [str(attachment)]
         except (OSError, ValueError):
             attachments = [report_path]
     try:
         mailer.send_with_retry(subject, html, message, {**email, "to": [address]}, attachments,
                                attempts=attempts)
     finally:
-        if temporary_attachment:
-            try:
-                os.unlink(temporary_attachment)
-            except OSError:
-                pass
+        if temporary_directory is not None:
+            temporary_directory.cleanup()
 
 
 def _queue_path() -> Path:

@@ -43,6 +43,11 @@ class DeliveryReceiptTests(unittest.TestCase):
         date = self.result.generated_at
         return str(history.record_run("fixture", self.result.config_profile, "completed", date, date))
 
+    def test_email_attachment_name_has_time_brand_and_profile(self):
+        from neurodaily.delivery import _email_attachment_name
+        self.assertEqual(_email_attachment_name(self.result),
+                         "2026-11-21_120000_NeuroDaily_neuro.html")
+
     def test_accepted_and_refused_email_are_distinct_and_only_refused_email_is_retried(self):
         address = "researcher@example.test"
         self.email.update(enabled=True, to=["lab@example.test", address])
