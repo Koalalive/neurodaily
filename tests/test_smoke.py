@@ -635,9 +635,12 @@ class EmailSafeTests(unittest.TestCase):
         self.assertNotIn("<script", e)
         self.assertIn("Latest Papers", e)
         self.assertIn("目录", e)
-        self.assertIn('href="#trials_conferences"', e)
+        self.assertIn('href="#trials"', e)
+        self.assertIn('href="#conferences"', e)
         self.assertNotIn("<button", e)
         self.assertNotIn('class="sec-actions"', e)
+        self.assertEqual(e.count('id="nd-email-toc"'), 1)
+        self.assertEqual(e.count('目录'), 1)
 
 
 class SettingsEnglishTests(unittest.TestCase):

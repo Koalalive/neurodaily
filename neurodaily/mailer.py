@@ -371,18 +371,25 @@ def email_safe_html(html: str) -> str:
     html = re.sub(r'<a\b[^>]*\bhref=["\'][^"\']*/settings(?:[?#][^"\']*)?["\'][^>]*>[\s\S]*?</a>', "", html, flags=re.I)
     html = re.sub(r'<div class="sec-actions">[\s\S]*?</div>', "", html, flags=re.I)
     html = re.sub(r'<button\b[\s\S]*?</button>', "", html, flags=re.I)
+    # Keep exactly one email TOC. Calling this function twice (body + attachment)
+    # must not produce two differently styled directories.
+    html = re.sub(r'<div\b[^>]*\bid=["\']nd-email-toc["\'][^>]*>[\s\S]*?</div>',
+                  "", html, flags=re.I)
     toc = (
-        '<div style="margin:14px 0;padding:10px 14px;background:#f6f8fa;'
-        'border:1px solid #e5e7eb;border-radius:8px;'
-        'font:13px/1.7 -apple-system,Segoe UI,Roboto,sans-serif;color:#333">'
-        '<b>目录</b>：'
-        '<a href="#ai-summary" style="color:#0366d6;text-decoration:none">AI 摘要</a> · '
-        '<a href="#on-this-day" style="color:#0366d6;text-decoration:none">历史上的今天</a> · '
-        '<a href="#papers" style="color:#0366d6;text-decoration:none">最新论文</a> · '
-        '<a href="#industry" style="color:#0366d6;text-decoration:none">产业 / Funding</a> · '
-        '<a href="#trials_conferences" style="color:#0366d6;text-decoration:none">临床试验</a> · '
-        '<a href="#policy" style="color:#0366d6;text-decoration:none">政策 / 新闻</a> · '
-        '<a href="#journals" style="color:#0366d6;text-decoration:none">期刊</a>'
+        '<div id="nd-email-toc" style="margin:18px 24px 0;padding:11px 0;'
+        'border-top:1px solid #2b2b28;border-bottom:1px solid #2b2b28;'
+        'font:13px/1.6 Georgia,\'Times New Roman\',serif;color:#979791">'
+        '<b style="font-weight:600;color:#c8a96b;letter-spacing:.08em">目录</b>　'
+        '<a href="#top" style="color:#979791;text-decoration:none">↑ 顶部</a> · '
+        '<a href="#ai-summary" style="color:#979791;text-decoration:none">AI 摘要</a> · '
+        '<a href="#on-this-day" style="color:#979791;text-decoration:none">历史上的今天</a> · '
+        '<a href="#papers" style="color:#979791;text-decoration:none">最新论文</a> · '
+        '<a href="#industry" style="color:#979791;text-decoration:none">产业与融资</a> · '
+        '<a href="#trials" style="color:#979791;text-decoration:none">临床试验</a> · '
+        '<a href="#conferences" style="color:#979791;text-decoration:none">学术会议</a> · '
+        '<a href="#policy" style="color:#979791;text-decoration:none">政策与新闻</a> · '
+        '<a href="#journals" style="color:#979791;text-decoration:none">期刊</a> · '
+        '<a href="#source-health" style="color:#979791;text-decoration:none">来源状态</a>'
         '</div>'
     )
     if '<main class="wrap">' in html:
