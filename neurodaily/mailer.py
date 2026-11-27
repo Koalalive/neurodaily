@@ -383,7 +383,11 @@ def email_safe_html(html: str) -> str:
         '<a href="#source-health" style="color:#979791;text-decoration:none;padding:5px 10px">来源状态</a>'
         '</div>'
     )
-    if '<main class="wrap">' in html:
+    # Put the floating TOC at the end of the document. If an email client
+    # ignores position:fixed, it still falls back to the bottom of the content.
+    if '</body>' in html:
+        html = html.replace('</body>', toc + '\n</body>', 1)
+    elif '<main class="wrap">' in html:
         html = html.replace('<main class="wrap">', toc + '\n<main class="wrap">', 1)
     if '</head>' in html:
         html = html.replace('</head>', '<style>body{padding-bottom:86px!important}</style></head>', 1)
