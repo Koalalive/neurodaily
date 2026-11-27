@@ -47,6 +47,13 @@ class SearchReportTests(unittest.TestCase):
         self.assertNotIn('href="javascript:', html)
         self.assertNotIn("AB=&lt;b&gt;EEG&lt;/b&gt;", html)
 
+    def test_report_stats_link_to_sections_and_prompt_is_removed(self):
+        result = build_result()
+        html = render_html(result)
+        for target in ("#papers", "#trials", "#policy", "#industry", "#conferences"):
+            self.assertIn(f'href="{target}"', html)
+        self.assertNotIn('<section id="prompt"', html)
+
     def test_report_rejects_summary_refs_outside_actual_results(self):
         result = build_result()
         result.ai_summary = "证据（[错误引用](R1)）。"

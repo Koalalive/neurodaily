@@ -64,8 +64,9 @@ def _cfg_with_hours(cfg: Config, hours: int) -> Config:
     import math
     c = copy.deepcopy(cfg)
     w = dict(c.windows or {})
-    for key in ("daily_paper_hours", "manual_paper_hours", "trials_hours",
-                "funding_hours", "news_hours"):
+    # The Run-now override is a paper-window shortcut. Trials, funding and
+    # news keep their independently configured windows.
+    for key in ("daily_paper_hours", "manual_paper_hours"):
         w[key] = hours
     w["other_lookback_days"] = max(1, math.ceil(hours / 24))
     c.windows = w

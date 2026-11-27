@@ -7,6 +7,7 @@ import smtplib
 from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from . import delivery_receipts, history, mailer, webhooks
 from .config import DEFAULT_DIRS
@@ -53,12 +54,27 @@ def _send_email(subset: DigestResult, result: DigestResult, report_path: str, em
                 address: str, *, attempts: int, language: str = "zh") -> None:
     subject, html, message = mailer.render_email(subset, email, language=language)
     attachments = None
+    temporary_attachment = None
     if email.get("attach_report", True):
-        # Always attach the fully rendered report, including AI summary and
-        # the geography map. A limited email body must not downgrade it.
-        attachments = [report_path]
-    mailer.send_with_retry(subject, html, message, {**email, "to": [address]}, attachments,
-                           attempts=attempts)
+        # Keep the attachment consistent with the email-safe report: no
+        # canvas-only map/topic sections and no backend control buttons.
+        try:
+            safe_report = mailer.email_safe_html(Path(report_path).read_text(encoding="utf-8"))
+            with NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".html", delete=False) as stream:
+                stream.write(safe_report)
+                temporary_attachment = stream.name
+            attachments = [temporary_attachment]
+        except (OSError, ValueError):
+            attachments = [report_path]
+    try:
+        mailer.send_with_retry(subject, html, message, {**email, "to": [address]}, attachments,
+                               attempts=attempts)
+    finally:
+        if temporary_attachment:
+            try:
+                os.unlink(temporary_attachment)
+            except OSError:
+                pass
 
 
 def _queue_path() -> Path:

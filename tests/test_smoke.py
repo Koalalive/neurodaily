@@ -703,6 +703,7 @@ class EmailSummaryCleanTests(unittest.TestCase):
         r = build_result()
         r.ai_summary = "研究（[记忆改善](R1)）。另一项（）。"
         r.ai_summary_refs = {"R1": {"url": "https://example.com/x", "title": "X"}}
+        r.items[0].url = "https://example.com/x"
         _s, h, t = render_email(r, load_cfg())
         self.assertNotIn("（）", h)
         self.assertIn('href="https://example.com/x"', h)
@@ -855,9 +856,10 @@ class RunNowTests(unittest.TestCase):
                      "trials_hours": 36, "funding_hours": 36, "news_hours": 36,
                      "other_lookback_days": 7}
         c2 = _cfg_with_hours(c, 12)
-        for k in ("daily_paper_hours", "manual_paper_hours", "trials_hours",
-                  "funding_hours", "news_hours"):
+        for k in ("daily_paper_hours", "manual_paper_hours"):
             self.assertEqual(c2.windows[k], 12)
+        for k in ("trials_hours", "funding_hours", "news_hours"):
+            self.assertEqual(c2.windows[k], 36)
         self.assertEqual(c.windows["daily_paper_hours"], 36)
         self.assertEqual(c2.windows["other_lookback_days"], 1)
 

@@ -333,6 +333,16 @@ def render_email(result, cfg: dict | None = None, language: str | None = None) -
     for item in industry[:limit] + trial_items[:limit] + conferences[:limit] + policy[:limit]:
         lines.append(f"- {item.title}" + (f"  {item.url}" if item.url else ""))
     text = "\n".join(lines)
+    # Keep the email body visually identical to the report, minus the
+    # interactive canvas sections and backend controls.
+    try:
+        from .render import render_html
+        from .ui_translations import localize_html
+        html = localize_html(email_safe_html(
+            render_html(result, config=getattr(result, "config", None), locale=language)
+        ), language)
+    except Exception:
+        logging.getLogger(__name__).exception("Could not render full report for email; using compact body")
     return subject_for(result, cfg, language), html, text
 
 
@@ -342,13 +352,23 @@ def email_safe_html(html: str) -> str:
     """Strip interactive-only chrome (toolbar buttons, TOC, scripts) for email."""
     import re
     html = re.sub(r"<script\b[\s\S]*?</script>", "", html, flags=re.I)
+    # These visualizations depend on JavaScript/canvas and do not render in
+    # email clients. Remove the complete sections before sending.
+    for _section in ("research-activity", "topic-map", "prompt"):
+        html = re.sub(
+            rf'<section\b[^>]*\bid=["\']{re.escape(_section)}["\'][^>]*>[\s\S]*?</section>',
+            "", html, flags=re.I,
+        )
     html = re.sub(r'<nav class="toc"[\s\S]*?</nav>', "", html, flags=re.I)
     for _id in ("runNow", "settingsLink", "histLink", "promptLink", "runMsg"):
         html = re.sub(
             rf'<(?P<tag>button|a|span)[^>]*\bid="{_id}"[^>]*>[\s\S]*?</(?P=tag)>',
             "", html, flags=re.I,
         )
-    html = re.sub(r'<div class="toolbar">\s*</div>', "", html, flags=re.I)
+    html = re.sub(r'<div class="toolbar"[^>]*>[\s\S]*?</div>', "", html, flags=re.I)
+    # Some saved/report variants render Settings as a plain link rather than
+    # giving it an id; remove it by destination as a belt-and-braces measure.
+    html = re.sub(r'<a\b[^>]*\bhref=["\'][^"\']*/settings(?:[?#][^"\']*)?["\'][^>]*>[\s\S]*?</a>', "", html, flags=re.I)
     html = re.sub(r'<div class="sec-actions">[\s\S]*?</div>', "", html, flags=re.I)
     html = re.sub(r'<button\b[\s\S]*?</button>', "", html, flags=re.I)
     toc = (

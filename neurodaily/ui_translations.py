@@ -663,6 +663,27 @@ def _translation_script(language: str) -> str:
     return '<script id="nd-localizer">' + _TRANSLATOR.replace("CATALOG", payload, 1) + "</script>"
 
 
+def localize_html(html: str, language: str) -> str:
+    """Apply the same static catalog server-side for email/no-JS contexts."""
+    if language not in UI_LANGUAGES:
+        language = "zh"
+    index = UI_LANGUAGES.index(language)
+    choices_by_message = [line.split("|") for line in _MESSAGES.strip().splitlines()]
+    choices_by_message.extend(tuple(_BIBLIOMETRICS_LABELS[lang][key] for lang in UI_LANGUAGES)
+                              for key in _BIBLIOMETRICS_LABELS["zh"])
+    mapping = {}
+    for choices in choices_by_message:
+        target = choices[index]
+        for source in choices:
+            if source != target and len(source) > 1:
+                mapping[source] = target
+    # Replace longer labels first so a short label cannot split a longer one.
+    for source, target in sorted(mapping.items(), key=lambda item: len(item[0]), reverse=True):
+        if source in html:
+            html = html.replace(source, target)
+    return html
+
+
 def localize_document(html: str, language: str) -> str:
     """Apply a locale to one complete HTML document without rewriting its data."""
     if language not in UI_LANGUAGES:
