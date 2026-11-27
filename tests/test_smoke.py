@@ -856,10 +856,9 @@ class RunNowTests(unittest.TestCase):
                      "trials_hours": 36, "funding_hours": 36, "news_hours": 36,
                      "other_lookback_days": 7}
         c2 = _cfg_with_hours(c, 12)
-        for k in ("daily_paper_hours", "manual_paper_hours"):
+        for k in ("daily_paper_hours", "manual_paper_hours", "trials_hours",
+                  "funding_hours", "news_hours"):
             self.assertEqual(c2.windows[k], 12)
-        for k in ("trials_hours", "funding_hours", "news_hours"):
-            self.assertEqual(c2.windows[k], 36)
         self.assertEqual(c.windows["daily_paper_hours"], 36)
         self.assertEqual(c2.windows["other_lookback_days"], 1)
 

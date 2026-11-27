@@ -69,7 +69,7 @@ button:hover{border-color:var(--accent);color:var(--accent)}
   <section id="setup">
     <label for="hours">临时覆盖时间范围（小时，可选）</label>
     <input id="hours" type="number" min="1" max="8760" value="240" placeholder="默认 240；留空使用已保存设置">
-    <small>默认 240 小时（10 天）；可改为 36（最近 36 小时）等。只影响论文窗口，试验/融资/新闻使用设置中的独立窗口。</small>
+    <small>默认 240 小时（10 天）；可改为 36（最近 36 小时）等。手动填写后，论文、临床试验、融资、产业和新闻都会使用该窗口。</small>
     <div class="actions"><button id="cancel" type="button">返回设置</button><button id="go" type="button">▸ 开始检索</button></div>
   </section>
   <section id="live" class="run-live" hidden>
